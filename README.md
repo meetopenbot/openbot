@@ -1,6 +1,6 @@
 # 🤖 OpenBot
 
-The ultimate AI sidekick that lives in your terminal and your browser. Built with [Melony](https://github.com/melony-framework/melony), OpenBot can chat, browse the web, and manage files—giving you a powerful, real-time assistant for everything you do.
+The ultimate AI sidekick that lives in your terminal and your browser. Built with [Melony](https://github.com/ddaras/melony), OpenBot can chat, browse the web, and manage files—giving you a powerful, real-time assistant for everything you do.
 
 ## 🚀 Quick Start
 
