@@ -1,0 +1,10 @@
+dist
+node_modules
+*.log
+.DS_Store
+examples/**/node_modules
+.turbo
+.pnpm-store
+*.original
+
+.env

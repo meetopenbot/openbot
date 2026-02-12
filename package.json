@@ -1,0 +1,13 @@
+{
+  "name": "openbot-root",
+  "private": true,
+  "scripts": {
+    "install-all": "npm install --prefix server && npm install --prefix web",
+    "dev": "npx concurrently \"npm run dev --prefix server\" \"npm run dev --prefix web\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:web": "npm run dev --prefix web"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

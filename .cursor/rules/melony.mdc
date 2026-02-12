@@ -1,0 +1,132 @@
+---
+description: melony framework guide
+alwaysApply: false
+---
+# Melony Framework Guidelines
+
+Melony is an event-based framework for building AI agents and Server-Driven UI (SDUI) applications. It follows a minimal orchestration loop: `Event → Handler → Events`.
+
+## Core Packages
+
+- `melony`: Core runtime and builder API.
+- `@melony/react`: React hooks and providers for client-side integration.
+- `@melony/ui-kit`: Base contract and renderer for SDUI.
+- `@melony/ui-shadcn`: Pre-built UI components using Shadcn/Base UI.
+
+## Backend Development
+
+### Creating an Agent
+Use the `melony()` builder to define event handlers.
+
+```typescript
+import { melony } from "melony";
+
+export const agent = melony()
+  .on("user:text", async function* (event, { runtime }) {
+    // Logic here
+    yield { type: "assistant:text", data: { content: "Processing..." } };
+    
+    // Yield UI components
+    yield { 
+      type: "ui", 
+      data: { 
+        type: "card", 
+        props: { title: "Result" },
+        children: [{ type: "text", props: { content: "Done!" } }]
+      } 
+    };
+  });
+```
+
+### API Routes (Next.js)
+```typescript
+import { agent } from "./agent";
+
+export async function POST(req: Request) {
+  const { event } = await req.json();
+  return agent.streamResponse(event);
+}
+```
+
+## Frontend Development
+
+### Setup Providers
+Wrap your application with `MelonyProvider` and `MelonyUIProvider`.
+
+```tsx
+import { MelonyClient } from "melony/client";
+import { MelonyProvider } from "@melony/react";
+import { MelonyUIProvider } from "@melony/ui-kit";
+import { shadcnElements } from "@melony/ui-shadcn";
+
+const client = new MelonyClient({ url: "/api/chat" });
+
+export default function RootLayout({ children }) {
+  return (
+    <MelonyProvider client={client}>
+      <MelonyUIProvider components={shadcnElements}>
+        {children}
+      </MelonyUIProvider>
+    </MelonyProvider>
+  );
+}
+```
+
+### Using Hooks
+Use `useMelony` to interact with the agent stream.
+
+```tsx
+import { useMelony } from "@melony/react";
+import { MelonyRenderer } from "@melony/ui-kit";
+
+function Chat() {
+  const { messages, send, streaming } = useMelony();
+
+  return (
+    <div>
+      {messages.map(msg => (
+        <div key={msg.runId}>
+          {msg.content.map(event => (
+            event.type === "ui" ? <MelonyRenderer key={event.id} node={event.data} /> : null
+          ))}
+        </div>
+      ))}
+      <button onClick={() => send({ type: "user:text", data: { content: "Hi" } })}>
+        Send
+      </button>
+    </div>
+  );
+}
+```
+
+## Best Practices
+
+### Event Structure
+Events should follow this structure:
+```typescript
+interface Event {
+  type: string;
+  data: any;
+  meta?: {
+    id?: string;
+    runId?: string;
+    role?: "user" | "assistant" | "system";
+    // ...
+  };
+}
+```
+
+### Manager-Worker Pattern
+For complex agents, use a Manager agent that delegates to Worker plugins.
+- Use `delegateTask` tool in the Manager.
+- Workers should yield a completion event (e.g., `agent:os:output`).
+- The Manager's plugin should bridge this back to the tool result.
+
+### SDUI Conventions
+- Use the `ui` helper (from `@melony/ui-kit`) on the server to create type-safe UI nodes.
+- Prefer `card`, `row`, `col`, `text`, and `button` for standard layouts.
+- Use `MelonyRenderer` for recursive rendering of UI nodes.
+
+### State Management
+- Use `context.state` within handlers to persist information across events in a single run.
+- Use `suspend()` to halt execution for human-in-the-loop (HITL) scenarios.
