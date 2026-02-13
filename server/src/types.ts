@@ -18,6 +18,7 @@ export type AgentOutputEvent = ChatEventBase<`agent:${string}:output`, { content
 
 export type BrowserStatusEvent = ChatEventBase<"browser:status", { message: string; severity?: "info" | "success" | "error" }>;
 export type BrowserStateUpdateEvent = ChatEventBase<"browser:state-update", { url: string; title: string; screenshot?: string; pagesCount: number }>;
+export type UpdateSettingsEvent = ChatEventBase<"action:updateSettings", { model?: string; openai_api_key?: string; anthropic_api_key?: string }>;
 
 export type ChatEvent =
   | InitEvent
@@ -31,7 +32,8 @@ export type ChatEvent =
   | AgentInputEvent
   | AgentOutputEvent
   | BrowserStatusEvent
-  | BrowserStateUpdateEvent;
+  | BrowserStateUpdateEvent
+  | UpdateSettingsEvent;
 
 export interface ChatState {
   title?: string;

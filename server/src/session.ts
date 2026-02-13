@@ -153,11 +153,14 @@ export async function listSessions(): Promise<{ id: string; title?: string; mtim
             if (fs.existsSync(statePath)) {
               const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ChatState;
 
-              sessions.push({
-                id: subItem,
-                mtime: fs.statSync(statePath).birthtime, // sort by creation time
-                title: state.title ?? undefined,
-              });
+              // Only include sessions with messages or a title
+              if ((state.messages && state.messages.length > 0) || state.title) {
+                sessions.push({
+                  id: subItem,
+                  mtime: fs.statSync(statePath).birthtime, // sort by creation time
+                  title: state.title ?? undefined,
+                });
+              }
             }
           }
         } else {
@@ -166,11 +169,14 @@ export async function listSessions(): Promise<{ id: string; title?: string; mtim
           if (fs.existsSync(statePath)) {
             const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ChatState;
 
-            sessions.push({
-              id: item,
-              title: state.title ?? undefined,
-              mtime: fs.statSync(statePath).birthtime, // sort by creation time
-            });
+            // Only include sessions with messages or a title
+            if ((state.messages && state.messages.length > 0) || state.title) {
+              sessions.push({
+                id: item,
+                title: state.title ?? undefined,
+                mtime: fs.statSync(statePath).birthtime, // sort by creation time
+              });
+            }
           }
         }
       }

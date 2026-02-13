@@ -5,7 +5,7 @@ import { settingsUI } from "./settings.js";
 import { skillsUI } from "./skills.js";
 import { listSessions } from "../session.js";
 
-const tabs = {
+const tabs: Record<string, any> = {
   chat: threadUI,
   settings: settingsUI,
   skills: skillsUI,
@@ -13,10 +13,11 @@ const tabs = {
 
 export const layoutUI = async ({ tab, sessionId }: { tab: string; sessionId?: string }) => {
   const sessions = await listSessions();
+  const content = typeof tabs[tab] === "function" ? await tabs[tab]() : tabs[tab];
 
   return ui.row({ height: "full" }, [
     sidebarUI({ sessions, sessionId }),
-    tabs[tab as keyof typeof tabs]
+    content
   ]);
 };
 
@@ -27,5 +28,5 @@ export const sidebarOnlyUI = async ({ sessionId }: { sessionId?: string }) => {
 };
 
 export const tabOnlyUI = async ({ tab }: { tab: string }) => {
-  return tabs[tab as keyof typeof tabs];
+  return typeof tabs[tab] === "function" ? await tabs[tab]() : tabs[tab];
 };

@@ -10,6 +10,7 @@ import { llmPlugin } from "./plugins/llm/index.js";
 import { initHandler } from "./handlers/init.js";
 import { sessionChangeHandler } from "./handlers/session-change.js";
 import { tabChangeHandler } from "./handlers/tab-change.js";
+import { updateSettingsHandler } from "./handlers/settings.js";
 import { loadConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
 import { createModel } from "./models.js";
 import path from "node:path";
@@ -231,7 +232,8 @@ export async function createOpenBot(options?: {
   app
     .on("init", initHandler)
     .on("sessionChange", sessionChangeHandler)
-    .on("tabChange", tabChangeHandler);
+    .on("tabChange", tabChangeHandler)
+    .on("action:updateSettings", updateSettingsHandler);
 
   return app;
 }
