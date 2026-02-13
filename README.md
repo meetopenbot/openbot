@@ -23,6 +23,14 @@ Once your server is running, you can use the interactive web UI:
 npx openbot-web
 ```
 
+## 📖 Documentation
+
+Detailed documentation can be found in the [docs/](./docs/) folder:
+- [Architecture](./docs/architecture.md)
+- [CLI Reference](./docs/cli.md)
+- [Plugins](./docs/plugins.md)
+- [Agents](./docs/agents.md)
+
 ## 🏗️ Structure
 
 - `server/`: The core AI agent and API server.
