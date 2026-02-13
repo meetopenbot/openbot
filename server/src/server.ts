@@ -103,9 +103,6 @@ export async function startServer(options: ServerOptions = {}) {
     const state: ChatState = (await loadSession(sessionId)) ?? {};
     state.sessionId = sessionId;
 
-    // Log the incoming event
-    await logEvent(sessionId, runId, body.event as ChatEvent);
-
     const iterator = runtime.run(body.event as ChatEvent, {
       runId,
       state,

@@ -29,6 +29,7 @@ interface AgentYamlConfig {
   model?: string;
   plugins: string[];
   systemPrompt: string;
+  subscribe?: string[];
 }
 
 /**
@@ -88,6 +89,7 @@ export async function discoverYamlAgents(
           name: config.name,
           description: config.description,
           plugin,
+          subscribe: config.subscribe,
         });
 
         console.log(`[agents] Loaded: ${config.name} — ${config.description}${config.model ? ` (model: ${config.model})` : ""}`);

@@ -2,6 +2,7 @@ import { melony } from "melony";
 import { ChatEvent, ChatState } from "./types.js";
 import { osAgent } from "./agents/os-agent.js";
 import { browserAgent } from "./agents/browser-agent.js";
+import { topicAgent } from "./agents/topic-agent.js";
 import { browserUIPlugin } from "./plugins/browser/ui.js";
 import { brainPlugin, brainToolDefinitions, createBrainPromptBuilder } from "./plugins/brain/index.js";
 import { brainUIPlugin } from "./plugins/brain/ui.js";
@@ -100,6 +101,13 @@ export async function createOpenBot(options?: {
     }),
   });
 
+  agentRegistry.register({
+    name: "topic",
+    description: "Automatically titles threads",
+    plugin: topicAgent({ model: model as any }),
+    subscribe: ["manager:completion"],
+  });
+
   // Discover community / user agents from ~/.openbot/agents/
   const yamlAgents = await discoverYamlAgents(
     path.join(resolvedBaseDir, "agents"),
@@ -122,6 +130,27 @@ export async function createOpenBot(options?: {
   // 1. Register all agent plugins
   for (const agent of allAgents) {
     app.use(agent.plugin);
+
+    // Choreography bridge: Auto-wire subscriptions
+    if (agent.subscribe) {
+      for (const eventType of agent.subscribe) {
+        app.on(eventType as any, async function* (event, { state }) {
+          // Avoid self-triggering if the event has agent meta
+          if ((event as any).meta?.agent === agent.name) return;
+
+          yield {
+            type: `agent:${agent.name}:input`,
+            data: {
+              content: `Event observed: ${event.type}\nData: ${JSON.stringify(event.data)}`,
+            },
+            meta: { 
+              background: true,
+              agent: agent.name
+            },
+          };
+        });
+      }
+    }
   }
 
   // 2. Register global plugins (brain, UI, etc.)
@@ -149,6 +178,7 @@ export async function createOpenBot(options?: {
         ]);
         return `${brainPrompt}`;
       },
+      completionEventType: "manager:completion",
       toolDefinitions: {
         ...brainToolDefinitions,
         delegateTask: {

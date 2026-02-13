@@ -25,7 +25,7 @@ const logoSvg = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="26
 <path d="M0 0 C3.16115776 1.36983503 3.9927092 1.9890638 6 5 C5.67 5.99 5.34 6.98 5 8 C4.16382818 6.8562364 3.33113541 5.70992861 2.5 4.5625 C2.0359375 3.92441406 1.571875 3.28632812 1.09375 2.62890625 C0 1 0 1 0 0 Z " fill="#E1E3E2" transform="translate(91,44)"/>
 </svg>`;
 
-export const sidebarUI = ({ sessions, sessionId }: { sessions: { id: string; mtime: Date }[]; sessionId?: string }) =>
+export const sidebarUI = ({ sessions, sessionId }: { sessions: { id: string; title?: string; mtime: Date }[]; sessionId?: string }) =>
   ui.box(
     {
       width: 280,
@@ -69,7 +69,7 @@ export const sidebarUI = ({ sessions, sessionId }: { sessions: { id: string; mti
               background: session.id === sessionId ? "muted" : undefined,
             }, [
               ui.icon("MessageCircleIcon", { size: "sm" }),
-              ui.text(session.id.slice(0, 10), { size: "sm" })
+              ui.text(session.title ?? session.id.slice(0, 10), { size: "sm" })
             ]))
           ]),
         ]),
@@ -90,7 +90,7 @@ export const sidebarUI = ({ sessions, sessionId }: { sessions: { id: string; mti
                   },
                 },
                 [
-                  ui.icon("SettingsIcon", { size: "sm" }), 
+                  ui.icon("SettingsIcon", { size: "sm" }),
                   ui.text("Settings", { size: "sm" })
                 ]
               ),

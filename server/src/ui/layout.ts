@@ -22,6 +22,7 @@ export const layoutUI = async ({ tab, sessionId }: { tab: string; sessionId?: st
 
 export const sidebarOnlyUI = async ({ sessionId }: { sessionId?: string }) => {
   const sessions = await listSessions();
+
   return sidebarUI({ sessions, sessionId });
 };
 

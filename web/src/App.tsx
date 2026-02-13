@@ -3,7 +3,7 @@ import { MelonyRenderer, MelonyUIProvider, type UINode } from "@melony/ui-kit";
 import { shadcnElements, ThemeProvider } from "@melony/ui-shadcn";
 import { generateId, MelonyClient } from "melony/client";
 import { useEffect, useMemo, useState, useRef } from "react";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const BASE_URL = (window as any).MELONY_BASE_URL || "http://localhost:4001";
 
@@ -12,6 +12,7 @@ const melonyClient = new MelonyClient({
 })
 
 export function App() {
+  const queryClient = useQueryClient();
   const [context, setContext] = useState<Record<string, any>>({
     sidebarWidth: 240,
     isSidebarOpen: true,
@@ -59,8 +60,22 @@ export function App() {
           }
 
           const generator = client.send(event, { sessionId });
-          for await (const _ of generator) {
-            // Events are handled by the client subscription
+          const invalidateTags = new Set<string>();
+          for await (const chunk of generator) {
+            if (chunk?.type === "client:invalidate" && Array.isArray(chunk.data?.tags)) {
+              chunk.data.tags.forEach((tag: string) => invalidateTags.add(tag));
+            }
+          }
+
+          // Stream is done — server has saved state to disk by now
+          if (invalidateTags.size > 0) {
+            queryClient.invalidateQueries({
+              predicate: (query) => {
+                const queryTags = (query.meta as any)?.tags as string[] | undefined;
+                if (!queryTags) return false;
+                return queryTags.some((tag) => invalidateTags.has(tag));
+              },
+            });
           }
         },
       }}
@@ -89,19 +104,21 @@ export function AppContent({ sessionId, path }: { sessionId: string, path: strin
   const searchParams = new URLSearchParams(path);
   const tab = searchParams.get("tab") || "chat";
 
+  const isSessionChange = prevSessionIdRef.current !== sessionId;
+
   const { data, isLoading: loading, error } = useQuery({
     queryKey: ["view", sessionId, tab],
-    placeholderData: keepPreviousData,
+    meta: { tags: ["sessions"] },
     queryFn: async () => {
       const isFirstLoad = !prevTabRef.current;
-      const isSessionChange = prevSessionIdRef.current !== sessionId;
       const isTabChange = !isFirstLoad && !isSessionChange && prevTabRef.current !== tab;
 
       let type = "init";
       if (isSessionChange) type = "sessionChange";
       else if (isTabChange) type = "tabChange";
 
-      const history = !loadedSessions.has(sessionId);
+      // Always fetch history if it's a session change or first load
+      const history = isSessionChange || !loadedSessions.has(sessionId);
       const params = new URLSearchParams({
         type,
         data: JSON.stringify({
@@ -112,8 +129,7 @@ export function AppContent({ sessionId, path }: { sessionId: string, path: strin
         })
       });
       
-      // Update refs
-      prevSessionIdRef.current = sessionId;
+      // Update tab ref
       prevTabRef.current = tab;
 
       const response = await fetch(`${BASE_URL}/api/view?${params.toString()}`);
@@ -123,6 +139,19 @@ export function AppContent({ sessionId, path }: { sessionId: string, path: strin
       return response.json();
     }
   });
+
+  useEffect(() => {
+    // Update session ref AFTER useQuery has been called/evaluated for this render
+    prevSessionIdRef.current = sessionId;
+  }, [sessionId]);
+
+  useEffect(() => {
+    // Clear UI when session changes
+    if (isSessionChange) {
+      setSidebarUI(null);
+      setContentUI(null);
+    }
+  }, [isSessionChange]);
 
   useEffect(() => {
     if (data) {

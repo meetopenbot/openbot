@@ -26,7 +26,7 @@ function getSessionDir(sessionId: string): string {
     const stats = fs.statSync(legacyDir);
     const day = stats.mtime.toISOString().slice(0, 10);
     const newDir = path.join(SESSIONS_DIR, day, sessionId);
-    
+
     fs.mkdirSync(path.dirname(newDir), { recursive: true });
     try {
       fs.renameSync(legacyDir, newDir);
@@ -84,7 +84,7 @@ export async function loadSession(sessionId: string): Promise<ChatState | null> 
 
 export async function saveSession(sessionId: string, state: ChatState) {
   const sessionDir = getSessionDir(sessionId);
-  
+
   if (!fs.existsSync(sessionDir)) {
     fs.mkdirSync(sessionDir, { recursive: true });
   }
@@ -95,11 +95,11 @@ export async function saveSession(sessionId: string, state: ChatState) {
 
 export async function logEvent(sessionId: string, runId: string, event: ChatEvent) {
   const sessionDir = getSessionDir(sessionId);
-  
+
   if (!fs.existsSync(sessionDir)) {
     fs.mkdirSync(sessionDir, { recursive: true });
   }
-  
+
   const logPath = path.join(sessionDir, `events.jsonl`);
 
   const entry = JSON.stringify({
@@ -131,10 +131,10 @@ export async function loadEvents(sessionId: string): Promise<ChatEvent[]> {
   }
 }
 
-export async function listSessions(): Promise<{ id: string; mtime: Date }[]> {
+export async function listSessions(): Promise<{ id: string; title?: string; mtime: Date }[]> {
   if (!fs.existsSync(SESSIONS_DIR)) return [];
 
-  const sessions: { id: string; mtime: Date }[] = [];
+  const sessions: { id: string; mtime: Date; title?: string }[] = [];
 
   try {
     const items = fs.readdirSync(SESSIONS_DIR);
@@ -151,9 +151,12 @@ export async function listSessions(): Promise<{ id: string; mtime: Date }[]> {
             const sessionPath = path.join(itemPath, subItem);
             const statePath = path.join(sessionPath, "state.json");
             if (fs.existsSync(statePath)) {
+              const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ChatState;
+
               sessions.push({
                 id: subItem,
                 mtime: fs.statSync(statePath).birthtime, // sort by creation time
+                title: state.title ?? undefined,
               });
             }
           }
@@ -161,8 +164,11 @@ export async function listSessions(): Promise<{ id: string; mtime: Date }[]> {
           // It's a legacy session folder in root
           const statePath = path.join(itemPath, "state.json");
           if (fs.existsSync(statePath)) {
+            const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ChatState;
+
             sessions.push({
               id: item,
+              title: state.title ?? undefined,
               mtime: fs.statSync(statePath).birthtime, // sort by creation time
             });
           }

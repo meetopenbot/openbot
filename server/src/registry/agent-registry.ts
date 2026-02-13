@@ -11,6 +11,8 @@ export interface AgentRegistryEntry {
   description: string;
   /** The composed Melony plugin that powers this agent */
   plugin: MelonyPlugin<ChatState, ChatEvent>;
+  /** Optional: List of event types this agent reacts to automatically (choreography) */
+  subscribe?: string[];
 }
 
 /**
