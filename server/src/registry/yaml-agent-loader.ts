@@ -7,6 +7,28 @@ import { llmPlugin } from "../plugins/llm/index.js";
 import { PluginRegistry } from "./plugin-registry.js";
 import { AgentRegistryEntry } from "./agent-registry.js";
 import { createModel } from "../models.js";
+import { loadPluginsFromDir } from "./plugin-loader.js";
+import { resolvePath } from "../config.js";
+
+/**
+ * Recursively resolve tilde paths in a configuration object.
+ */
+function resolveConfigPaths(config: any): any {
+  if (typeof config === "string") {
+    return resolvePath(config);
+  }
+  if (Array.isArray(config)) {
+    return config.map(resolveConfigPaths);
+  }
+  if (config !== null && typeof config === "object") {
+    const resolved: any = {};
+    for (const [key, value] of Object.entries(config)) {
+      resolved[key] = resolveConfigPaths(value);
+    }
+    return resolved;
+  }
+  return config;
+}
 
 /**
  * Shape of an agent.yaml configuration file.
@@ -27,7 +49,7 @@ interface AgentYamlConfig {
   name: string;
   description: string;
   model?: string;
-  plugins: string[];
+  plugins: (string | { name: string; config?: any })[];
   systemPrompt: string;
   subscribe?: string[];
 }
@@ -67,6 +89,7 @@ export async function discoverYamlAgents(
       if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
 
       const yamlPath = path.join(agentsDir, entry.name, "agent.yaml");
+      const agentDir = path.join(agentsDir, entry.name);
 
       try {
         const content = await fs.readFile(yamlPath, "utf-8");
@@ -78,12 +101,28 @@ export async function discoverYamlAgents(
           continue;
         }
 
-        // Use agent-specific model if defined, otherwise use default
         const agentModel = config.model
           ? createModel({ ...options, model: config.model })
           : defaultModel;
 
-        const plugin = composeAgentFromYaml(config, pluginRegistry, agentModel as LanguageModel);
+        // 1. Load local plugins from agents/<name>/plugins/
+        const localPluginsDir = path.join(agentDir, "plugins");
+        const localPlugins = await loadPluginsFromDir(localPluginsDir);
+
+        // 2. Create a scoped registry for this agent: global + local
+        const scopedRegistry = new PluginRegistry();
+        
+        // Add all global plugins
+        for (const p of pluginRegistry.getAll()) {
+          scopedRegistry.register(p);
+        }
+        
+        // Add local plugins (overwriting globals if names conflict)
+        for (const p of localPlugins) {
+          scopedRegistry.register(p);
+        }
+
+        const plugin = composeAgentFromYaml(config, scopedRegistry, agentModel as LanguageModel);
 
         agents.push({
           name: config.name,
@@ -119,7 +158,12 @@ function composeAgentFromYaml(
   return (builder) => {
     const allToolDefinitions: Record<string, any> = {};
 
-    for (const pluginName of config.plugins) {
+    for (const pluginItem of config.plugins) {
+      const isString = typeof pluginItem === "string";
+      const pluginName = isString ? pluginItem : pluginItem.name;
+      const pluginConfig = isString ? {} : (pluginItem.config || {});
+      const resolvedConfig = resolveConfigPaths(pluginConfig);
+
       const entry = pluginRegistry.get(pluginName);
 
       if (!entry) {
@@ -128,12 +172,8 @@ function composeAgentFromYaml(
       }
 
       // Register the plugin's event handlers
-      builder.use(entry.factory());
-
-      // Register UI plugin if available
-      if (entry.uiFactory) {
-        builder.use(entry.uiFactory());
-      }
+      // We pass the agent-scoped model to the factory so plugins can use it
+      builder.use(entry.factory({ ...resolvedConfig, model }));
 
       // Collect tool definitions for the LLM
       Object.assign(allToolDefinitions, entry.toolDefinitions);

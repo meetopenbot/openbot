@@ -8,3 +8,5 @@ examples/**/node_modules
 *.original
 
 .env
+
+~/

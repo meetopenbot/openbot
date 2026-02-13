@@ -1,4 +1,5 @@
-import { MelonyPlugin, RuntimeContext } from "melony";
+import { MelonyPlugin, RuntimeContext, Event } from "melony";
+import { ui } from "@melony/ui-kit/server";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { BrainPluginOptions } from "./types.js";
@@ -13,6 +14,11 @@ export { buildBrainPrompt } from "./prompt.js";
 export type { BrainModules } from "./prompt.js";
 
 // --- Helpers ---
+
+export interface BrainStatusEvent extends Event {
+  type: "brain:status";
+  data: { message: string; severity?: "info" | "success" | "error" };
+}
 
 function expandPath(p: string): string {
   if (p.startsWith("~/")) {
@@ -307,6 +313,10 @@ export const brainPlugin = (
         },
       };
     }
+  });
+
+  builder.on("brain:status" as any, async function* (event: BrainStatusEvent) {
+    yield ui.event(ui.status(event.data.message, event.data.severity));
   });
 };
 

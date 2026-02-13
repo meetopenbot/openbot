@@ -1,4 +1,5 @@
-import { MelonyPlugin } from "melony";
+import { MelonyPlugin, Event } from "melony";
+import { ui } from "@melony/ui-kit/server";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import matter from "gray-matter";
@@ -9,6 +10,16 @@ export { skillsToolDefinitions } from "./types.js";
 export type { SkillMeta } from "./types.js";
 
 // --- Options ---
+
+export interface SkillsStatusEvent extends Event {
+  type: "skills:status";
+  data: { message: string; severity?: "info" | "success" | "error" };
+}
+
+export interface SkillsLoadedEvent extends Event {
+  type: "skills:loaded";
+  data: { skillId: string; title: string; instructions: string };
+}
 
 export interface SkillsPluginOptions {
   baseDir: string; // resolved path to the bot home (e.g., ~/.openbot)
@@ -346,6 +357,24 @@ export const skillsPlugin = (
       };
     }
   });
+
+  builder.on(
+    "skills:status" as any,
+    async function* (event: SkillsStatusEvent) {
+      yield ui.event(ui.status(event.data.message, event.data.severity));
+    }
+  );
+
+  builder.on(
+    "skills:loaded" as any,
+    async function* (event: SkillsLoadedEvent) {
+      yield ui.event(
+        ui.resourceCard(event.data.title, "", [
+          ui.text(event.data.instructions),
+        ])
+      );
+    }
+  );
 };
 
 export default skillsPlugin;

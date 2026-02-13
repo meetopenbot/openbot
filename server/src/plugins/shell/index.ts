@@ -1,4 +1,5 @@
 import { MelonyPlugin, Event } from "melony";
+import { ui } from "@melony/ui-kit/server";
 import { z } from "zod";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
@@ -119,5 +120,11 @@ export const shellPlugin = (options: ShellPluginOptions = {}): MelonyPlugin<any,
         data: { message: `Command failed: ${error.message}`, severity: "error" }
       } as ShellStatusEvent;
     }
+  });
+
+  builder.on("shell:status" as any, async function* (event: ShellStatusEvent) {
+    yield ui.event(
+      ui.status(event.data.message, event.data.severity)
+    );
   });
 };

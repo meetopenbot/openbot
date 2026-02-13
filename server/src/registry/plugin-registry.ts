@@ -20,9 +20,7 @@ export interface PluginRegistryEntry {
     inputSchema: z.ZodType<any>;
   }>;
   /** Creates a fresh plugin instance with event handlers */
-  factory: () => MelonyPlugin<any, any>;
-  /** Optional: creates the companion UI plugin for status events */
-  uiFactory?: () => MelonyPlugin<any, any>;
+  factory: (options?: any) => MelonyPlugin<any, any>;
 }
 
 /**

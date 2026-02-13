@@ -1,9 +1,7 @@
 import { MelonyPlugin } from "melony";
 import { llmPlugin } from "../plugins/llm/index.js";
 import { shellPlugin, shellToolDefinitions } from "../plugins/shell/index.js";
-import { shellUIPlugin } from "../plugins/shell/ui.js";
 import { fileSystemPlugin, fileSystemToolDefinitions } from "../plugins/file-system/index.js";
-import { fileSystemUIPlugin } from "../plugins/file-system/ui.js";
 import { LanguageModel } from "ai";
 import { ChatState, ChatEvent } from "../types.js";
 
@@ -24,9 +22,7 @@ export const osAgent = (options: OSAgentOptions): MelonyPlugin<ChatState, ChatEv
 
   builder
     .use(shellPlugin({ cwd }))
-    .use(shellUIPlugin())
     .use(fileSystemPlugin({ baseDir: "/" }))
-    .use(fileSystemUIPlugin())
     .use(llmPlugin({
       model,
       system: systemPrompt,

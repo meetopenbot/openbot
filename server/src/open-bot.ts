@@ -1,11 +1,8 @@
 import { melony } from "melony";
 import { ChatEvent, ChatState } from "./types.js";
 import { osAgent } from "./agents/os-agent.js";
-import { browserAgent } from "./agents/browser-agent.js";
 import { topicAgent } from "./agents/topic-agent.js";
-import { browserUIPlugin } from "./plugins/browser/ui.js";
 import { brainPlugin, brainToolDefinitions, createBrainPromptBuilder } from "./plugins/brain/index.js";
-import { brainUIPlugin } from "./plugins/brain/ui.js";
 import { llmPlugin } from "./plugins/llm/index.js";
 import { initHandler } from "./handlers/init.js";
 import { sessionChangeHandler } from "./handlers/session-change.js";
@@ -18,13 +15,10 @@ import { z } from "zod";
 
 // Plugin imports for the registry
 import { shellPlugin, shellToolDefinitions } from "./plugins/shell/index.js";
-import { shellUIPlugin } from "./plugins/shell/ui.js";
 import { fileSystemPlugin, fileSystemToolDefinitions } from "./plugins/file-system/index.js";
-import { fileSystemUIPlugin } from "./plugins/file-system/ui.js";
-import { browserPlugin, browserToolDefinitions } from "./plugins/browser/index.js";
 
 // Registry
-import { PluginRegistry, AgentRegistry, discoverYamlAgents } from "./registry/index.js";
+import { PluginRegistry, AgentRegistry, discoverYamlAgents, loadPluginsFromDir } from "./registry/index.js";
 
 /**
  * Create the OpenBot manager agent.
@@ -56,7 +50,6 @@ export async function createOpenBot(options?: {
     description: "Execute shell commands",
     toolDefinitions: shellToolDefinitions,
     factory: () => shellPlugin({ cwd: process.cwd() }),
-    uiFactory: () => shellUIPlugin(),
   });
 
   pluginRegistry.register({
@@ -64,21 +57,15 @@ export async function createOpenBot(options?: {
     description: "Read, write, list, and delete files",
     toolDefinitions: fileSystemToolDefinitions,
     factory: () => fileSystemPlugin({ baseDir: "/" }),
-    uiFactory: () => fileSystemUIPlugin(),
   });
 
-  pluginRegistry.register({
-    name: "browser",
-    description: "Browse the web and interact with pages",
-    toolDefinitions: browserToolDefinitions,
-    factory: () => browserPlugin({
-      headless: true,
-      userDataDir,
-      channel: "chrome",
-      model: model as any,
-    }),
-    uiFactory: () => browserUIPlugin(),
-  });
+  // ─── Shared Plugins ──────────────────────────────────────────────
+  // Load community/user plugins from ~/.openbot/plugins/
+  const sharedPlugins = await loadPluginsFromDir(path.join(resolvedBaseDir, "plugins"));
+  for (const p of sharedPlugins) {
+    pluginRegistry.register(p);
+    console.log(`[plugins] Loaded shared plugin: ${p.name}`);
+  }
 
   // ─── Agent Registry ──────────────────────────────────────────────
   // Register built-in agents, then discover YAML agents from ~/.openbot/agents/.
@@ -89,17 +76,6 @@ export async function createOpenBot(options?: {
     name: "os",
     description: "Handles shell commands and file system operations",
     plugin: osAgent({ model: model as any }),
-  });
-
-  agentRegistry.register({
-    name: "browser",
-    description: "Browses the web, extracts data, and interacts with pages",
-    plugin: browserAgent({
-      model: model as any,
-      headless: true,
-      userDataDir,
-      channel: "chrome",
-    }),
   });
 
   agentRegistry.register({
@@ -158,12 +134,10 @@ export async function createOpenBot(options?: {
   const buildBrainPrompt = createBrainPromptBuilder(baseDir);
 
   app
-    .use(browserUIPlugin())
     .use(brainPlugin({
       baseDir: resolvedBaseDir,
       allowSoulModification: false,
-    }))
-    .use(brainUIPlugin());
+    }));
 
   // 3. Build dynamic delegation tool from the agent registry
   const agentDescriptions = allAgents
