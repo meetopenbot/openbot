@@ -103,9 +103,17 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
 
     const usage = await result.usage;
 
-    yield ui.event(
-      ui.status(`Usage: ${usage.totalTokens} tokens`, "info")
-    );
+    if (!state.usage) {
+      state.usage = {
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+      };
+    }
+
+    state.usage.inputTokens += usage.inputTokens ?? 0;
+    state.usage.outputTokens += usage.outputTokens ?? 0;
+    state.usage.totalTokens += usage.totalTokens ?? 0;
 
     // Emit tool call events
     for (const call of toolCalls) {

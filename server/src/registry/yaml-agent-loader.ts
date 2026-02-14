@@ -122,12 +122,18 @@ export async function discoverYamlAgents(
           scopedRegistry.register(p);
         }
 
-        const plugin = composeAgentFromYaml(config, scopedRegistry, agentModel as LanguageModel);
+        const { plugin, toolDefinitions } = composeAgentFromYaml(config, scopedRegistry, agentModel as LanguageModel);
 
         agents.push({
           name: config.name,
           description: config.description,
           plugin,
+          capabilities: Object.fromEntries(
+            Object.entries(toolDefinitions).map(([name, def]) => [
+              name,
+              (def as any).description,
+            ])
+          ),
           subscribe: config.subscribe,
         });
 
@@ -154,29 +160,30 @@ function composeAgentFromYaml(
   config: AgentYamlConfig,
   pluginRegistry: PluginRegistry,
   model: LanguageModel,
-): MelonyPlugin<any, any> {
-  return (builder) => {
-    const allToolDefinitions: Record<string, any> = {};
+): { plugin: MelonyPlugin<any, any>; toolDefinitions: Record<string, any> } {
+  const allToolDefinitions: Record<string, any> = {};
+  const pluginFactories: { factory: any; config: any }[] = [];
 
-    for (const pluginItem of config.plugins) {
-      const isString = typeof pluginItem === "string";
-      const pluginName = isString ? pluginItem : pluginItem.name;
-      const pluginConfig = isString ? {} : (pluginItem.config || {});
-      const resolvedConfig = resolveConfigPaths(pluginConfig);
+  for (const pluginItem of config.plugins) {
+    const isString = typeof pluginItem === "string";
+    const pluginName = isString ? pluginItem : pluginItem.name;
+    const pluginConfig = isString ? {} : (pluginItem.config || {});
+    const resolvedConfig = resolveConfigPaths(pluginConfig);
 
-      const entry = pluginRegistry.get(pluginName);
+    const entry = pluginRegistry.get(pluginName);
 
-      if (!entry) {
-        console.warn(`[agents] "${config.name}": plugin "${pluginName}" not found in registry — skipping`);
-        continue;
-      }
+    if (!entry) {
+      console.warn(`[agents] "${config.name}": plugin "${pluginName}" not found in registry — skipping`);
+      continue;
+    }
 
-      // Register the plugin's event handlers
-      // We pass the agent-scoped model to the factory so plugins can use it
-      builder.use(entry.factory({ ...resolvedConfig, model }));
+    pluginFactories.push({ factory: entry.factory, config: resolvedConfig });
+    Object.assign(allToolDefinitions, entry.toolDefinitions);
+  }
 
-      // Collect tool definitions for the LLM
-      Object.assign(allToolDefinitions, entry.toolDefinitions);
+  const plugin: MelonyPlugin<any, any> = (builder) => {
+    for (const { factory, config: resolvedConfig } of pluginFactories) {
+      builder.use(factory({ ...resolvedConfig, model }));
     }
 
     // Wire up the LLM with agent-scoped event channels
@@ -189,4 +196,6 @@ function composeAgentFromYaml(
       completionEventType: `agent:${config.name}:output`,
     }));
   };
+
+  return { plugin, toolDefinitions: allToolDefinitions };
 }

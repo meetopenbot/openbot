@@ -11,17 +11,9 @@ interface ParsedModel {
 
 /**
  * Parse model string to extract provider and model ID
- * Supports formats: "provider:model", "provider/model", or just "model" (defaults to openai)
+ * Supports formats: "provider/model" or just "model" (defaults to openai)
  */
 export function parseModelString(modelString: string): ParsedModel {
-  // Check for provider:model format
-  if (modelString.includes(":")) {
-    const [provider, modelId] = modelString.split(":");
-    if (provider === "openai" || provider === "anthropic") {
-      return { provider: provider as Provider, modelId };
-    }
-  }
-
   // Check for provider/model format
   if (modelString.includes("/")) {
     const [provider, modelId] = modelString.split("/");

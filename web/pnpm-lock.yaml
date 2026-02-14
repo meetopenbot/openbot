@@ -12,11 +12,11 @@ importers:
         specifier: ^0.2.7
         version: 0.2.7(react@19.2.4)
       '@melony/ui-kit':
-        specifier: ^0.1.4
-        version: 0.1.4(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: ^0.1.5
+        version: 0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@melony/ui-shadcn':
-        specifier: ^0.1.6
-        version: 0.1.6(@melony/react@0.2.7(react@19.2.4))(@melony/ui-kit@0.1.4(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react@19.2.14)(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: ^0.1.7
+        version: 0.1.7(@melony/react@0.2.7(react@19.2.4))(@melony/ui-kit@0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react@19.2.14)(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@tailwindcss/vite':
         specifier: ^4.1.17
         version: 4.1.18(vite@7.3.1(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.30.2))
@@ -435,18 +435,18 @@ packages:
     peerDependencies:
       react: '>=18'
 
-  '@melony/ui-kit@0.1.4':
-    resolution: {integrity: sha512-c439OmohuOp0A8xorXmSkr4HWapeYoYioQTB+EMZNtm0/VurPn5N/KuI/WdBtsQ4iMTEu/Dn9IdwWUO2JedOog==}
+  '@melony/ui-kit@0.1.5':
+    resolution: {integrity: sha512-AyDRboBlj5ujAaikq57GRzsQUmmgk+/b1R7BpkRGQlUhVtoobaPAXYEXR2VLUgiojWVz3lyygIhV5isMGX9nMA==}
     peerDependencies:
       melony: 0.2.8
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
-  '@melony/ui-shadcn@0.1.6':
-    resolution: {integrity: sha512-wS/jETRQittTHjm/cMrYe99kDiTSTN+V9xp8XZlTg28wR7KBAko0AiorbC1sZKdjk0XvJnYnRijTz7d/rj1dgw==}
+  '@melony/ui-shadcn@0.1.7':
+    resolution: {integrity: sha512-BRBqoqd2g5+Ig2BVfpIGV7zxUanODyzTwI6eKQbs5giJpl8S6QvyHB28+nsHjvsxVYz7XBX++Q70QMSSCT9nqw==}
     peerDependencies:
       '@melony/react': 0.2.7
-      '@melony/ui-kit': 0.1.4
+      '@melony/ui-kit': 0.1.5
       melony: 0.2.8
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
@@ -2060,17 +2060,17 @@ snapshots:
       melony: 0.2.8
       react: 19.2.4
 
-  '@melony/ui-kit@0.1.4(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@melony/ui-kit@0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       melony: 0.2.8
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@melony/ui-shadcn@0.1.6(@melony/react@0.2.7(react@19.2.4))(@melony/ui-kit@0.1.4(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react@19.2.14)(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@melony/ui-shadcn@0.1.7(@melony/react@0.2.7(react@19.2.4))(@melony/ui-kit@0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react@19.2.14)(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@base-ui/react': 1.2.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@melony/react': 0.2.7(react@19.2.4)
-      '@melony/ui-kit': 0.1.4(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@melony/ui-kit': 0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
       lucide-react: 0.454.0(react@19.2.4)

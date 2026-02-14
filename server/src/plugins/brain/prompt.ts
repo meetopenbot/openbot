@@ -36,26 +36,26 @@ export async function buildBrainPrompt(
   // 1. Environment context
   const now = new Date();
   parts.push(`## Environment
-You are running as a global system agent.
+You are the **Manager Agent**, the central orchestrator of this system.
 - **Current Time**: ${now.toLocaleString()} (${Intl.DateTimeFormat().resolvedOptions().timeZone})
 - **Current Working Directory (CWD)**: ${currentCwd}
 - **System Access**: You have access to the entire file system (root: /).
 - **Bot Home (Internal State)**: ${baseDir}
 
+### Delegation Policy:
+You are designed to delegate specialized tasks to expert agents. Analyze the "Available Agents" list provided in your instructions and delegate whenever a user request matches an agent's expertise. You should not claim you cannot perform a task if a suitable agent is available.
+
 ### Path Rules:
 1. **Shell Commands**: All commands (executeCommand) run in the CWD: ${currentCwd}.
 2. **File Operations**: Relative paths in readFile, writeFile, listFiles, etc. resolve against the CWD.
-3. **Changing Directory**: Use \`cd <path>\` in executeCommand to move. Your CWD is persisted across turns.
-4. **Skills/Memory**: To access your own skills and memory, use absolute paths starting with "${baseDir}/".
-
-When you want to execute skill scripts, always use the full path to the skill directory.`);
+3. **Changing Directory**: Use \`cd <path>\` in executeCommand to move. Your CWD is persisted across turns.`);
 
   // 2. Identity (small, always included)
   const soul = await modules.identity.getSoul();
-  if (soul) parts.push(soul);
+  if (soul) parts.push(`<soul>\n${soul}\n</soul>`);
 
   const identity = await modules.identity.getIdentity();
-  if (identity) parts.push(identity);
+  if (identity) parts.push(`<identity>\n${identity}\n</identity>`);
 
   // 3. Recent memories (lean — just a few to keep context fresh)
   const recentFacts = await modules.memory.getRecentFacts(3);

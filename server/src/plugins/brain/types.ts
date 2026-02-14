@@ -73,7 +73,7 @@ export const brainToolDefinitions = {
   // Identity tools
   updateIdentity: {
     description:
-      "Update your identity file to refine your personality and traits.",
+      "Update your identity file to refine your personality and traits. Start it with # Identity.",
     inputSchema: z.object({
       content: z.string().describe("New content for IDENTITY.md"),
     }),

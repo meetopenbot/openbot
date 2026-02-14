@@ -15,8 +15,8 @@ importers:
         specifier: ^3.0.13
         version: 3.0.26(zod@4.3.6)
       '@melony/ui-kit':
-        specifier: ^0.1.4
-        version: 0.1.4(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: ^0.1.5
+        version: 0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@types/cors':
         specifier: ^2.8.19
         version: 2.8.19
@@ -250,8 +250,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@melony/ui-kit@0.1.4':
-    resolution: {integrity: sha512-c439OmohuOp0A8xorXmSkr4HWapeYoYioQTB+EMZNtm0/VurPn5N/KuI/WdBtsQ4iMTEu/Dn9IdwWUO2JedOog==}
+  '@melony/ui-kit@0.1.5':
+    resolution: {integrity: sha512-AyDRboBlj5ujAaikq57GRzsQUmmgk+/b1R7BpkRGQlUhVtoobaPAXYEXR2VLUgiojWVz3lyygIhV5isMGX9nMA==}
     peerDependencies:
       melony: 0.2.8
       react: ^18.0.0 || ^19.0.0
@@ -807,7 +807,7 @@ snapshots:
   '@esbuild/win32-x64@0.27.3':
     optional: true
 
-  '@melony/ui-kit@0.1.4(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@melony/ui-kit@0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       melony: 0.2.8
       react: 19.2.4

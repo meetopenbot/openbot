@@ -42,6 +42,12 @@ export interface ChatState {
   messages?: any[];
   cwd?: string;
   workspaceRoot?: string;
+  /** Accumulated LLM usage for the current session */
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
   /** Generic map of pending delegated tasks, keyed by agent name */
   pendingAgentTasks?: Record<string, { toolCallId: string }>;
 }

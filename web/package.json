@@ -16,15 +16,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "sirv": "^3.0.0",
     "@melony/react": "^0.2.7",
-    "@melony/ui-kit": "^0.1.4",
-    "@melony/ui-shadcn": "^0.1.6",
+    "@melony/ui-kit": "^0.1.5",
+    "@melony/ui-shadcn": "^0.1.7",
     "@tailwindcss/vite": "^4.1.17",
     "@tanstack/react-query": "^5.90.19",
     "melony": "^0.2.8",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "sirv": "^3.0.0",
     "tailwindcss": "^4.1.17"
   },
   "devDependencies": {

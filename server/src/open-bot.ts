@@ -38,8 +38,6 @@ export async function createOpenBot(options?: {
   const resolvedBaseDir = resolvePath(baseDir);
   const model = createModel(options);
 
-  const userDataDir = path.join(resolvedBaseDir, "browser-data");
-
   // ─── Plugin Registry ─────────────────────────────────────────────
   // Register built-in plugins so YAML agents can reference them by name.
 
@@ -75,6 +73,17 @@ export async function createOpenBot(options?: {
   agentRegistry.register({
     name: "os",
     description: "Handles shell commands and file system operations",
+    capabilities: {
+      ...Object.fromEntries(
+        Object.entries(shellToolDefinitions).map(([k, v]) => [k, v.description])
+      ),
+      ...Object.fromEntries(
+        Object.entries(fileSystemToolDefinitions).map(([k, v]) => [
+          k,
+          v.description,
+        ])
+      ),
+    },
     plugin: osAgent({ model: model as any }),
   });
 
@@ -120,7 +129,7 @@ export async function createOpenBot(options?: {
             data: {
               content: `Event observed: ${event.type}\nData: ${JSON.stringify(event.data)}`,
             },
-            meta: { 
+            meta: {
               background: true,
               agent: agent.name
             },
@@ -141,8 +150,16 @@ export async function createOpenBot(options?: {
 
   // 3. Build dynamic delegation tool from the agent registry
   const agentDescriptions = allAgents
-    .map((a) => `- ${a.name}: ${a.description}`)
-    .join("\n");
+    .map((a) => {
+      const tools = a.capabilities
+        ? Object.entries(a.capabilities)
+          .map(([name, desc]) => `    - ${name}: ${desc}`)
+          .join("\n")
+        : "";
+      return `- **${a.name}**: ${a.description}${tools ? `\n  Capabilities:\n${tools}` : ""
+        }`;
+    })
+    .join("\n\n");
 
   app.use(
     llmPlugin({
@@ -151,16 +168,32 @@ export async function createOpenBot(options?: {
         const [brainPrompt] = await Promise.all([
           buildBrainPrompt(context),
         ]);
-        return `${brainPrompt}`;
+
+        return `${brainPrompt}
+
+## Delegation & Specialized Agents
+You are the **Manager Agent**. Your primary role is to orchestrate tasks by delegating them to specialized agents when appropriate. 
+If a task falls outside your core capabilities (memory and orchestration), you **MUST** use the \`delegateTask\` tool.
+
+### Available Agents:
+${agentDescriptions}
+
+### Delegation Guidelines:
+1. **Choose the Best Expert**: Analyze the user's request and select the agent whose description most closely matches the required expertise.
+2. **Task Description**: When delegating, provide a clear and detailed task description. Include any context the agent might need to succeed.
+3. **No "I Can't"**: If an agent is available that can handle a request, do not tell the user you cannot do it. Simply delegate.
+4. **Summary**: Once an agent returns a result, summarize the findings or actions for the user.
+
+Example: If the user asks to "check the weather", and you see a 'browser' agent, delegate the task to it.`;
       },
       completionEventType: "manager:completion",
       toolDefinitions: {
         ...brainToolDefinitions,
         delegateTask: {
-          description: `Delegate a task to a specialized agent.\n\nAvailable agents:\n${agentDescriptions}`,
+          description: `Delegate a specialized task to another agent. Use this whenever a task matches the capabilities of one of the available agents.`,
           inputSchema: z.object({
             agent: z.enum(agentNames).describe("The specialized agent to use"),
-            task: z.string().describe("The task description"),
+            task: z.string().describe("The detailed task description for the agent"),
           }),
         },
       },
