@@ -7,7 +7,7 @@ import { llmPlugin } from "./plugins/llm/index.js";
 import { initHandler } from "./handlers/init.js";
 import { sessionChangeHandler } from "./handlers/session-change.js";
 import { tabChangeHandler } from "./handlers/tab-change.js";
-import { updateSettingsHandler } from "./handlers/settings.js";
+import { updateSettingsHandler, openAgentFolderHandler } from "./handlers/settings.js";
 import { loadConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
 import { createModel } from "./models.js";
 import path from "node:path";
@@ -240,7 +240,8 @@ Example: If the user asks to "check the weather", and you see a 'browser' agent,
     .on("init", initHandler)
     .on("sessionChange", sessionChangeHandler)
     .on("tabChange", tabChangeHandler)
-    .on("action:updateSettings", updateSettingsHandler);
+    .on("action:updateSettings", updateSettingsHandler)
+    .on("action:openAgentFolder", openAgentFolderHandler);
 
   return app;
 }

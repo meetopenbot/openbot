@@ -2,6 +2,8 @@ import { ChatEvent, ChatState, UpdateSettingsEvent } from "../types.js";
 import { saveConfig } from "../config.js";
 import { RuntimeContext } from "melony";
 import { tabOnlyUI } from "../ui/layout.js";
+import { exec } from "node:child_process";
+import os from "node:os";
 
 /**
  * Handle settings updates (like API keys)
@@ -37,5 +39,26 @@ export async function* updateSettingsHandler(
       },
       data: await tabOnlyUI({ tab: "settings" })
     } as unknown as ChatEvent;
+  }
+}
+
+/**
+ * Handle opening an agent's folder in the native file explorer
+ */
+export async function* openAgentFolderHandler(
+  event: any,
+): AsyncGenerator<ChatEvent, void, unknown> {
+  const { folder } = event.data;
+
+  if (folder) {
+    const command = os.platform() === "win32" ? `explorer "${folder}"` :
+      os.platform() === "darwin" ? `open "${folder}"` :
+        `xdg-open "${folder}"`;
+
+    exec(command, (error) => {
+      if (error) {
+        console.error(`Failed to open folder: ${error.message}`);
+      }
+    });
   }
 }

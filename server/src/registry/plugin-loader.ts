@@ -5,6 +5,31 @@ import { execSync } from "node:child_process";
 import { PluginRegistryEntry } from "./plugin-registry.js";
 
 /**
+ * Get metadata (name, description, version) from a plugin directory.
+ */
+export async function getPluginMetadata(pluginDir: string): Promise<{ name: string; description: string; version: string }> {
+  const pkgPath = path.join(pluginDir, "package.json");
+  const hasPackageJson = await fs.access(pkgPath).then(() => true).catch(() => false);
+  
+  let name = path.basename(pluginDir);
+  let description = "No description";
+  let version = "0.0.0";
+
+  if (hasPackageJson) {
+    try {
+      const pkg = JSON.parse(await fs.readFile(pkgPath, "utf-8"));
+      name = (pkg.name?.split("/").pop()) || name;
+      description = pkg.description || description;
+      version = pkg.version || version;
+    } catch {
+      // Fallback to defaults
+    }
+  }
+
+  return { name, description, version };
+}
+
+/**
  * Ensure a plugin is ready to run by installing dependencies and building if necessary.
  */
 export async function ensurePluginReady(pluginDir: string) {

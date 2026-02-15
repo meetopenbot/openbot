@@ -32,26 +32,64 @@ function resolveConfigPaths(config: any): any {
 
 /**
  * Shape of an agent.yaml configuration file.
- *
- * Example:
- * ```yaml
- * name: code-review
- * description: Reviews code for quality, bugs, and best practices
- * model: gpt-4o # Optional: specific model for this agent
- * plugins:
- *   - shell
- *   - file-system
- * systemPrompt: |
- *   You are a Code Review Agent...
- * ```
  */
-interface AgentYamlConfig {
+export interface AgentYamlConfig {
   name: string;
   description: string;
   model?: string;
   plugins: (string | { name: string; config?: any })[];
   systemPrompt: string;
   subscribe?: string[];
+}
+
+/**
+ * Read and parse an agent.yaml file from a directory.
+ */
+export async function readAgentConfig(agentDir: string): Promise<AgentYamlConfig> {
+  const yamlPath = path.join(agentDir, "agent.yaml");
+  const content = await fs.readFile(yamlPath, "utf-8");
+  return yaml.load(content) as AgentYamlConfig;
+}
+
+/**
+ * Discover YAML-defined agents from a directory without loading plugins.
+ *
+ * @param agentsDir  Absolute path to the agents directory (e.g. ~/.openbot/agents)
+ * @returns Array of agent metadata
+ */
+export async function listYamlAgents(
+  agentsDir: string,
+): Promise<{ name: string; description: string; folder: string }[]> {
+  const agents: { name: string; description: string; folder: string }[] = [];
+
+  try {
+    const entries = await fs.readdir(agentsDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
+
+      const agentDir = path.join(agentsDir, entry.name);
+
+      try {
+        const config = await readAgentConfig(agentDir);
+
+        if (config.name && config.description) {
+          agents.push({
+            name: config.name,
+            description: config.description,
+            folder: agentDir,
+          });
+        }
+      } catch {
+        // Skip invalid agents
+      }
+    }
+  } catch {
+    // Agents directory doesn't exist
+  }
+
+  return agents;
 }
 
 /**
@@ -92,8 +130,7 @@ export async function discoverYamlAgents(
       const agentDir = path.join(agentsDir, entry.name);
 
       try {
-        const content = await fs.readFile(yamlPath, "utf-8");
-        const config = yaml.load(content) as AgentYamlConfig;
+        const config = await readAgentConfig(agentDir);
 
         // Validate required fields
         if (!config.name || !config.description || !config.plugins?.length || !config.systemPrompt) {
