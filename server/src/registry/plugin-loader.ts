@@ -46,7 +46,7 @@ export async function ensurePluginReady(pluginDir: string) {
     // 1. Install dependencies if node_modules is missing
     if (!hasNodeModules) {
       console.log(`[plugins] Installing dependencies for ${path.basename(pluginDir)}...`);
-      execSync("npm install --production", { cwd: pluginDir, stdio: "inherit" });
+      execSync("npm install", { cwd: pluginDir, stdio: "inherit" });
     }
 
     // 2. Run build if dist is missing but build script exists
