@@ -4,6 +4,7 @@ import { shellPlugin, shellToolDefinitions } from "../plugins/shell/index.js";
 import { fileSystemPlugin, fileSystemToolDefinitions } from "../plugins/file-system/index.js";
 import { LanguageModel } from "ai";
 import { ChatState, ChatEvent } from "../types.js";
+import approvalPlugin from "../plugins/approval/index.js";
 
 export interface OSAgentOptions {
   model: LanguageModel;
@@ -23,12 +24,19 @@ export const osAgent = (options: OSAgentOptions): MelonyPlugin<ChatState, ChatEv
   builder
     .use(shellPlugin({ cwd }))
     .use(fileSystemPlugin({ baseDir: "/" }))
+    .use(approvalPlugin({
+      rules: [
+        { action: "action:executeCommand", message: "The agent wants to execute a terminal command. Please review carefully." },
+        { action: "action:writeFile", message: "The agent wants to write to a file." },
+        { action: "action:deleteFile", message: "The agent wants to delete a file." },
+      ],
+    }))
     .use(llmPlugin({
       model,
       system: systemPrompt,
       toolDefinitions: {
         ...shellToolDefinitions,
-        ...fileSystemToolDefinitions,
+        ...fileSystemToolDefinitions
       },
       promptInputType: "agent:os:input",
       actionResultInputType: "agent:os:result",

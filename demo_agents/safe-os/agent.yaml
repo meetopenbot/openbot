@@ -1,0 +1,17 @@
+name: safe-os
+description: "An OS agent that requires approval for shell commands and file modifications"
+plugins:
+  - name: shell
+  - name: file-system
+  - name: approval
+    config:
+      rules:
+        - action: "action:executeCommand"
+          message: "The agent wants to execute a terminal command. Please review carefully."
+        - action: "action:writeFile"
+          message: "The agent wants to write to a file."
+        - action: "action:deleteFile"
+          message: "The agent wants to delete a file."
+systemPrompt: |
+  You are an OS agent. You can execute shell commands and manage files.
+  Always explain what you are about to do before executing a command.

@@ -23,7 +23,7 @@
     "express": "^4.19.2",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.1",
-    "melony": "^0.2.8",
+    "melony": "^0.2.9",
     "zod": "^4.3.5"
   },
   "devDependencies": {

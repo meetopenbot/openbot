@@ -16,6 +16,7 @@ import { z } from "zod";
 // Plugin imports for the registry
 import { shellPlugin, shellToolDefinitions } from "./plugins/shell/index.js";
 import { fileSystemPlugin, fileSystemToolDefinitions } from "./plugins/file-system/index.js";
+import { approvalPlugin } from "./plugins/approval/index.js";
 
 // Registry
 import { PluginRegistry, AgentRegistry, discoverYamlAgents, loadPluginsFromDir } from "./registry/index.js";
@@ -55,6 +56,13 @@ export async function createOpenBot(options?: {
     description: "Read, write, list, and delete files",
     toolDefinitions: fileSystemToolDefinitions,
     factory: () => fileSystemPlugin({ baseDir: "/" }),
+  });
+
+  pluginRegistry.register({
+    name: "approval",
+    description: "Require user approval for specific actions",
+    toolDefinitions: {},
+    factory: (options) => approvalPlugin(options),
   });
 
   // ─── Shared Plugins ──────────────────────────────────────────────

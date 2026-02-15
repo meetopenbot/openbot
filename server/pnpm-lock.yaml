@@ -16,7 +16,7 @@ importers:
         version: 3.0.26(zod@4.3.6)
       '@melony/ui-kit':
         specifier: ^0.1.5
-        version: 0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 0.1.5(melony@0.2.9)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@types/cors':
         specifier: ^2.8.19
         version: 2.8.19
@@ -42,8 +42,8 @@ importers:
         specifier: ^4.1.1
         version: 4.1.1
       melony:
-        specifier: ^0.2.8
-        version: 0.2.8
+        specifier: ^0.2.9
+        version: 0.2.9
       zod:
         specifier: ^4.3.5
         version: 4.3.6
@@ -529,8 +529,8 @@ packages:
     resolution: {integrity: sha512-dq+qelQ9akHpcOl/gUVRTxVIOkAJ1wR3QAvb4RsVjS8oVoFjDGTc679wJYmUmknUF5HwMLOgb5O+a3KxfWapPQ==}
     engines: {node: '>= 0.6'}
 
-  melony@0.2.8:
-    resolution: {integrity: sha512-s08s8gbL1bN3Yz6plJb0f7cZJWhm7KuRGGNRHumb/2vE7fEqRPxoLSz25hQ2vbFwh5oPd0Ze2WaIiOG1x/unCA==}
+  melony@0.2.9:
+    resolution: {integrity: sha512-o72w5XB+Qt8eCSGUaNX6P++cgQWZfmwV7ryMMnxuNSwUImCDdQcKyfkzhDrpaoGTN9sVUgD0svZDRgsTLLjpKw==}
     hasBin: true
 
   merge-descriptors@1.0.3:
@@ -807,9 +807,9 @@ snapshots:
   '@esbuild/win32-x64@0.27.3':
     optional: true
 
-  '@melony/ui-kit@0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@melony/ui-kit@0.1.5(melony@0.2.9)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
-      melony: 0.2.8
+      melony: 0.2.9
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
@@ -1140,7 +1140,7 @@ snapshots:
 
   media-typer@0.3.0: {}
 
-  melony@0.2.8:
+  melony@0.2.9:
     dependencies:
       commander: 14.0.3
       dotenv: 16.6.1

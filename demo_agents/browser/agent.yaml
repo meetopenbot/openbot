@@ -1,0 +1,12 @@
+# Requires: openbot plugin install meetopenbot/plugin-browser-tools
+name: browser
+description: Browses the web, extracts data, and interacts with pages
+plugins:
+  - name: browser-tools
+    config:
+      headless: true
+      userDataDir: ~/.openbot/browser-data
+systemPrompt: |
+  You are a Browser Agent.
+  Your job is to help the user browse the web, extract information, and perform actions.
+  Always describe what you see and what you are doing.
