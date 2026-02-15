@@ -5,7 +5,7 @@ The `openbot` CLI is the primary way to interact with and configure your OpenBot
 ## Commands
 
 ### `configure`
-Interactive setup for choosing your default LLM (OpenAI or Anthropic).
+Interactive setup for choosing your default LLM (OpenAI or Anthropic). Model names follow the `provider/model` format (e.g., `openai/gpt-4o`).
 
 ```bash
 openbot configure

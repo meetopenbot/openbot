@@ -4,23 +4,26 @@ The ultimate AI sidekick that lives in your terminal and your browser. Built wit
 
 ## 🚀 Quick Start
 
+Get up and running in seconds:
+
 ```bash
-# Install the CLI
+# 1. Install OpenBot globally
 npm i -g openbot
 
-# Configure your model (OpenAI, Anthropic, etc.)
-openbot configure
-
-# Start the agent server
+# 2. Start the server
 openbot server
+
+# 3. Launch the web UI (in a new terminal)
+npx openbot-web
 ```
 
-## 🌐 Web Interface
+Once the web UI opens, you can **configure your model and API keys directly from the Settings tab**—no configuration files required! (Note: model names should follow the `provider/model` format, e.g., `openai/gpt-4o` or `anthropic/claude-3-5-sonnet-20240620`)
 
-Once your server is running, you can use the interactive web UI:
+### 🌍 Want to browse the web?
+Get started immediately by adding the official browser agent:
 
 ```bash
-npx openbot-web
+openbot add browser
 ```
 
 ## 📖 Documentation

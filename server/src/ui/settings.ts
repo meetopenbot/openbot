@@ -38,9 +38,9 @@ export const settingsUI = async () => {
             ui.heading("Model Configuration", 4),
             ui.col({ gap: "sm" }, [
               ui.input("model", undefined, {
-                placeholder: "e.g. gpt-4o-mini",
+                placeholder: "provider/model (e.g. openai/gpt-4o)",
                 width: "full",
-                defaultValue: config.model || "gpt-4o-mini"
+                defaultValue: config.model || "openai/gpt-4o-mini"
               }),
             ]),
           ]),
