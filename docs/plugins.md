@@ -14,7 +14,13 @@ Shared plugins are community-contributed or user-defined plugins that can be ins
 
 ### Installing a Plugin
 
-You can install plugins using the CLI:
+For official plugins, you can use the `add` command:
+
+```bash
+openbot add search
+```
+
+For community or custom plugins, you can use the `plugin install` command with a full GitHub repository path or local path:
 
 ```bash
 openbot plugin install openbot-ai/plugin-web-search

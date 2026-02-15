@@ -22,6 +22,17 @@ openbot server [options]
 - `--openai-api-key <key>`: OpenAI API Key (can also be set via `OPENAI_API_KEY` env var).
 - `--anthropic-api-key <key>`: Anthropic API Key (can also be set via `ANTHROPIC_API_KEY` env var).
 
+### `add <name>`
+Conveniently add an official agent or plugin. It auto-resolves names from the `meetopenbot` GitHub organization or official NPM registry.
+
+```bash
+# Add an agent (e.g. meetopenbot/agent-coder)
+openbot add coder
+
+# Add a plugin (e.g. meetopenbot/plugin-search)
+openbot add search
+```
+
 ### `plugin install <source>`
 Installs a shared plugin from a GitHub repository or local path.
 

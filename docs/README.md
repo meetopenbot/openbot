@@ -12,11 +12,15 @@ OpenBot is a powerful, extensible AI assistant framework built on top of the `me
 
 ## Getting Started
 
-To get started with OpenBot, you can use the CLI to configure your preferred LLM provider and start the server.
+To get started with OpenBot, you can use the CLI to configure your preferred LLM provider, add some agents/plugins, and start the server.
 
 ```bash
 # Configure the model
 openbot configure
+
+# Add the 'coder' agent and 'search' plugin
+openbot add coder
+openbot add search
 
 # Start the server
 openbot server --openai-api-key YOUR_KEY

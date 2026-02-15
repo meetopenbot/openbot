@@ -14,6 +14,16 @@ A background agent that observes completions from the Manager and automatically 
 
 You can define custom agents using YAML files in `~/.openbot/agents/`.
 
+### Installing Agents
+
+You can easily install official agents using the CLI:
+
+```bash
+openbot add coder
+```
+
+This will automatically download the agent from the official `meetopenbot` GitHub organization and install it into your local agents directory.
+
 Example `coder.yaml`:
 ```yaml
 name: coder
