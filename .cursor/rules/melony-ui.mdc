@@ -1,0 +1,53 @@
+---
+description: Guidelines for Melony SDUI and UI kit components
+alwaysApply: false
+---
+# Melony UI and SDUI Guidelines
+
+The `@melony/ui-kit` and `@melony/ui-shadcn` packages provide the contract and components for Server-Driven UI (SDUI) in Melony.
+
+## Base Contract (@melony/ui-kit)
+
+`@melony/ui-kit` defines the standard contract for UI nodes and provides the `MelonyRenderer` component for recursive rendering.
+
+### SDUI Conventions
+
+- Use the `ui` helper (from `@melony/ui-kit`) on the server to create type-safe UI nodes.
+- Prefer `card`, `row`, `col`, `text`, and `button` for standard layouts.
+- Use `MelonyRenderer` for recursive rendering of UI nodes.
+
+### Example Node Structure
+```json
+{
+  "type": "card",
+  "props": { "title": "Result" },
+  "children": [{ "type": "text", "props": { "content": "Done!" } }]
+}
+```
+
+## UI Kit (@melony/ui-shadcn)
+
+`@melony/ui-shadcn` provides pre-built UI components using Shadcn/Base UI that satisfy the `@melony/ui-kit` contract.
+
+### Setup
+
+Register the components in your `MelonyUIProvider`.
+
+```tsx
+import { MelonyUIProvider } from "@melony/ui-kit";
+import { shadcnElements } from "@melony/ui-shadcn";
+
+export default function App({ children }) {
+  return (
+    <MelonyUIProvider components={shadcnElements}>
+      {children}
+    </MelonyUIProvider>
+  );
+}
+```
+
+## Best Practices
+
+- Prefer composition of existing components over creating new ones when possible.
+- Ensure all custom components follow the UI kit node contract.
+- Use standard layout types (`row`, `col`) to ensure responsiveness.
