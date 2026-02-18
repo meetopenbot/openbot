@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="logo-black.png" width="200" alt="OpenBot Logo" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logo-white.svg">
+    <img src="logo-black.svg" width="200" alt="OpenBot Logo" />
+  </picture>
 </p>
 
 <h1 align="center">OpenBot: The Extensible, Multi-Agent AI Sidekick.</h1>
