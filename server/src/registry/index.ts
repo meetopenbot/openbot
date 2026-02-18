@@ -5,4 +5,5 @@ export { AgentRegistry } from "./agent-registry.js";
 export type { AgentRegistryEntry } from "./agent-registry.js";
 
 export { discoverYamlAgents, listYamlAgents } from "./yaml-agent-loader.js";
+export { discoverTsAgents } from "./ts-agent-loader.js";
 export { loadPluginsFromDir } from "./plugin-loader.js";

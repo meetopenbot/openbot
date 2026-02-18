@@ -76,7 +76,26 @@ systemPrompt: |
   Always cite your sources and provide a high-level summary.
 ```
 
-### 2. Custom Plugins
+### 2. TS Agent Packages (Advanced)
+For more complex agents that require custom logic beyond a prompt, you can create a full TypeScript package in `~/.openbot/agents/my-agent/`:
+
+```typescript
+// ~/.openbot/agents/my-agent/index.ts
+export const agent = {
+  name: "custom-agent",
+  description: "An agent with custom TS logic",
+  factory: ({ model }) => (builder) => {
+    // Compose plugins and add custom event handlers
+    builder.use(llmPlugin({
+      model,
+      system: "You are a specialized assistant...",
+      // ...
+    }));
+  }
+};
+```
+
+### 3. Custom Plugins
 For those who want even more control, you can extend the AI's toolbox with custom logic. A plugin defines new tools and reacts to system events.
 
 ```typescript

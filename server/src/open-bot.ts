@@ -19,7 +19,7 @@ import { fileSystemPlugin, fileSystemToolDefinitions } from "./plugins/file-syst
 import { approvalPlugin } from "./plugins/approval/index.js";
 
 // Registry
-import { PluginRegistry, AgentRegistry, discoverYamlAgents, loadPluginsFromDir } from "./registry/index.js";
+import { PluginRegistry, AgentRegistry, discoverYamlAgents, discoverTsAgents, loadPluginsFromDir } from "./registry/index.js";
 
 /**
  * Create the OpenBot manager agent.
@@ -103,14 +103,14 @@ export async function createOpenBot(options?: {
   });
 
   // Discover community / user agents from ~/.openbot/agents/
-  const yamlAgents = await discoverYamlAgents(
-    path.join(resolvedBaseDir, "agents"),
-    pluginRegistry,
-    model as any,
-    options,
-  );
+  const agentsDir = path.join(resolvedBaseDir, "agents");
 
-  for (const agent of yamlAgents) {
+  const [yamlAgents, tsAgents] = await Promise.all([
+    discoverYamlAgents(agentsDir, pluginRegistry, model as any, options),
+    discoverTsAgents(agentsDir, model as any, options),
+  ]);
+
+  for (const agent of [...yamlAgents, ...tsAgents]) {
     agentRegistry.register(agent);
   }
 

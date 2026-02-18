@@ -37,3 +37,43 @@ prompt: |
 ```
 
 YAML agents are automatically discovered and registered by OpenBot on startup.
+
+## TS Agents (Packages)
+
+For more advanced use cases, you can create a full TypeScript package as an agent. This is useful if you need custom logic, additional event handlers, or private plugins that you don't want to expose globally.
+
+Place these in `~/.openbot/agents/my-ts-agent/`.
+
+### Structure
+
+- `package.json`: Standard npm package configuration.
+- `index.ts`: The entry point that exports a `TSAgentDefinition`.
+
+### Example `index.ts`
+
+```typescript
+import { TSAgentDefinition } from "openbot";
+
+export const agent: TSAgentDefinition = {
+  name: "my-ts-agent",
+  description: "An agent with custom TypeScript logic.",
+  factory: ({ model }) => (builder) => {
+    // 1. You can use standard plugins
+    // 2. Or implement custom event handling logic here
+    // 3. Finally, wire up an LLM loop for it
+    builder.use(llmPlugin({
+      model,
+      system: "You are a specialized TS Agent...",
+      toolDefinitions: { /* custom tools */ },
+      promptInputType: "agent:my-ts-agent:input",
+      actionResultInputType: "agent:my-ts-agent:result",
+      completionEventType: "agent:my-ts-agent:output",
+    }));
+  },
+  capabilities: {
+    "do_something": "Performs a custom TS-driven action"
+  }
+};
+```
+
+TS agents are automatically compiled and loaded on startup.
