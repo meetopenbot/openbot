@@ -21,7 +21,7 @@ OpenBot is a monorepo consisting of:
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/ddaras/openbot.git
+    git clone https://github.com/meetopenbot/openbot.git
     cd openbot
     ```
 
@@ -41,7 +41,7 @@ OpenBot is a monorepo consisting of:
 ## 🛠️ How to Contribute
 
 ### Reporting Bugs or Requesting Features
-- Check the [Issues](https://github.com/ddaras/openbot/issues) to see if it's already being discussed.
+- Check the [Issues](https://github.com/meetopenbot/openbot/issues) to see if it's already being discussed.
 - If not, feel free to open a new issue with a clear description and steps to reproduce.
 
 ### Submitting a Pull Request
@@ -60,7 +60,7 @@ OpenBot is a monorepo consisting of:
   ```bash
   npm run lint --prefix web
   ```
-- **Functional & Event-Driven**: Since OpenBot is built on the [Melony](https://github.com/ddaras/melony) framework, try to stick to event-driven patterns when extending core functionality.
+- **Functional & Event-Driven**: Since OpenBot is built on the [Melony](https://github.com/meetopenbot/melony) framework, try to stick to event-driven patterns when extending core functionality.
 
 ## 🧩 Extending OpenBot
 

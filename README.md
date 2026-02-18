@@ -2,19 +2,19 @@
   <img src="logo-black.png" width="200" alt="OpenBot Logo" />
 </p>
 
-<h1 align="center">OpenBot: The Extensible, Multi-Agent AI Sidekick for Everyone.</h1>
+<h1 align="center">OpenBot: The Extensible, Multi-Agent AI Sidekick.</h1>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/openbot"><img src="https://img.shields.io/npm/v/openbot" alt="npm version" /></a>
-  <a href="https://github.com/ddaras/openbot/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ddaras/openbot" alt="license" /></a>
-  <a href="https://github.com/ddaras/openbot/stargazers"><img src="https://img.shields.io/github/stars/ddaras/openbot?style=social" alt="github stars" /></a>
-  <a href="https://github.com/ddaras/openbot/network/members"><img src="https://img.shields.io/github/forks/ddaras/openbot?style=social" alt="github forks" /></a>
+  <a href="https://github.com/meetopenbot/openbot/blob/main/LICENSE"><img src="https://img.shields.io/github/license/meetopenbot/openbot" alt="license" /></a>
+  <a href="https://github.com/meetopenbot/openbot/stargazers"><img src="https://img.shields.io/github/stars/meetopenbot/openbot?style=social" alt="github stars" /></a>
+  <a href="https://github.com/meetopenbot/openbot/network/members"><img src="https://img.shields.io/github/forks/meetopenbot/openbot?style=social" alt="github forks" /></a>
   <a href="https://www.npmjs.com/package/openbot"><img src="https://img.shields.io/npm/dt/openbot" alt="npm downloads" /></a>
 </p>
 
-OpenBot is more than just a chatbot. It's an orchestrator that lives in your terminal and browser, delegating complex tasks to specialized agents. Built on the [Melony](https://github.com/ddaras/melony) framework, it's designed to be local-first, event-driven, and infinitely extensible.
+OpenBot is more than just a chatbot. It's an orchestrator that lives in your terminal and browser, delegating complex tasks to specialized agents. Built on the [Melony](https://github.com/meetopenbot/melony) framework, it's designed to be local-first, event-driven, and infinitely extensible.
 
-![OpenBot Banner](https://raw.githubusercontent.com/ddaras/openbot/main/docs/banner.png)
+![OpenBot Banner](https://raw.githubusercontent.com/meetopenbot/openbot/main/docs/banner.png)
 
 ## 🧠 The "Manager-Agent" Philosophy
 
@@ -112,4 +112,4 @@ We love contributors! Whether it's adding a new plugin, a specialized agent, or 
 
 ---
 
-Built with ❤️ using [Melony](https://github.com/ddaras/melony).
+Built with ❤️ using [Melony](https://github.com/meetopenbot/melony).
