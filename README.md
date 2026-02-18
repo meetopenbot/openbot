@@ -14,7 +14,7 @@
 
 OpenBot is more than just a chatbot. It's an orchestrator that lives in your terminal and browser, delegating complex tasks to specialized agents. It's designed to be local-first, event-driven, and infinitely extensible.
 
-![OpenBot Banner](./screen-j-dilla.png)
+![OpenBot Banner](./screen-j-dilla-2.png)
 
 ## 🧠 The "Manager-Agent" Philosophy
 
