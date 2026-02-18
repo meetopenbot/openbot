@@ -107,7 +107,7 @@ export const myPlugin = () => (builder) => {
 };
 ```
 
-### 3. Direct Command Routing
+### Direct Command Routing
 Skip the manager's reasoning and talk directly to an agent using prefixes:
 - `/os list files in current directory`
 - `/browser search for local weather`
