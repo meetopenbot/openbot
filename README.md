@@ -1,8 +1,39 @@
-# 🤖 OpenBot
+<p align="center">
+  <img src="logo-black.png" width="200" alt="OpenBot Logo" />
+</p>
 
-The ultimate AI sidekick that lives in your terminal and your browser. Built with [Melony](https://github.com/ddaras/melony), OpenBot can chat, browse the web, and manage files—giving you a powerful, real-time assistant for everything you do.
+<h1 align="center">🤖 OpenBot</h1>
 
-![OpenBot Screenshot](screen.png)
+<p align="center">
+  <a href="https://www.npmjs.com/package/openbot"><img src="https://img.shields.io/npm/v/openbot" alt="npm version" /></a>
+  <a href="https://github.com/ddaras/openbot/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ddaras/openbot" alt="license" /></a>
+  <a href="https://github.com/ddaras/openbot/stargazers"><img src="https://img.shields.io/github/stars/ddaras/openbot?style=social" alt="github stars" /></a>
+  <a href="https://github.com/ddaras/openbot/network/members"><img src="https://img.shields.io/github/forks/ddaras/openbot?style=social" alt="github forks" /></a>
+  <a href="https://www.npmjs.com/package/openbot"><img src="https://img.shields.io/npm/dt/openbot" alt="npm downloads" /></a>
+</p>
+
+<p align="center">
+  <strong>The Extensible, Multi-Agent AI Sidekick for Everyone.</strong>
+</p>
+
+OpenBot is more than just a chatbot. It's an orchestrator that lives in your terminal and browser, delegating complex tasks to specialized agents. Built on the [Melony](https://github.com/ddaras/melony) framework, it's designed to be local-first, event-driven, and infinitely extensible.
+
+![OpenBot Banner](https://raw.githubusercontent.com/ddaras/openbot/main/docs/banner.png)
+
+## 🧠 The "Manager-Agent" Philosophy
+
+OpenBot follows a **Delegate by Default** pattern. 
+
+1.  **The Manager Agent**: Your primary interface. It analyzes your intent, manages long-term memory (via the `brain` plugin), and orchestrates specialized workers.
+2.  **Specialized Agents**: Workers dedicated to specific domains like `os` (shell & files), `browser` (web automation), or any custom agent you define.
+3.  **Melony Event Bus**: All communication happens asynchronously via events, allowing for complex multi-agent choreography and real-time UI updates.
+
+### 💭 Persistent Brain & Memory
+Unlike most chatbots, OpenBot has a long-term memory. It can:
+- **`remember`**: Store facts, snippets, or preferences for later.
+- **`recall`**: Search its past experiences to provide context for new tasks.
+- **`updateIdentity`**: Maintain its own persona and "soul" in a markdown file.
+- **`journal`**: Keep a daily log of activities and insights.
 
 ## 🚀 Quick Start
 
@@ -19,28 +50,70 @@ openbot server
 npx openbot-web
 ```
 
-Once the web UI opens, you can **configure your model and API keys directly from the Settings tab**—no configuration files required! (Note: model names should follow the `provider/model` format, e.g., `openai/gpt-4o` or `anthropic/claude-3-5-sonnet-20240620`)
+Once the UI is open, head to the **Settings** tab to configure your AI providers (OpenAI, Anthropic, etc.). No configuration files required.
 
 ### 🌍 Want to browse the web?
-Get started immediately by adding the official browser agent:
-
+Add the official browser agent:
 ```bash
 openbot add browser
 ```
 
-## 📖 Documentation
+## 🛠️ Built to be Extended
 
-Detailed documentation can be found in the [docs/](./docs/) folder:
-- [Architecture](./docs/architecture.md)
-- [CLI Reference](./docs/cli.md)
-- [Plugins](./docs/plugins.md)
-- [Agents](./docs/agents.md)
+OpenBot is designed for power users and builders who want to create their own custom AI workflows without the complexity of building from scratch.
 
-## 🏗️ Structure
+### 1. YAML Agents (No Coding Required)
+Create specialized agents just by writing a simple YAML file in `~/.openbot/agents/researcher/agent.yaml`:
 
-- `server/`: The core AI agent and API server.
-- `web/`: The React-based dashboard for interacting with your bots.
+```yaml
+name: researcher
+description: A specialized agent for gathering information and summarizing articles.
+model: anthropic/claude-3-5-sonnet-20240620
+plugins:
+  - name: browser
+  - name: file-system
+    config:
+      baseDir: ~/Documents/Research
+systemPrompt: |
+  You are an expert researcher. 
+  Use the browser to gather information and the file-system to save detailed reports.
+  Always cite your sources and provide a high-level summary.
+```
+
+### 2. Custom Melony Plugins
+For those who want even more control, you can extend the AI's toolbox with custom logic. A plugin defines new tools and reacts to system events.
+
+```typescript
+export const myPlugin = () => (builder) => {
+  builder.on("action:myTool", async function* (event, { state }) {
+    // Perform custom logic or interact with other systems
+    yield { type: "action:taskResult", data: { result: "Done!" } };
+  });
+};
+```
+
+### 3. Direct Command Routing
+Skip the manager's reasoning and talk directly to an agent using prefixes:
+- `/os list files in current directory`
+- `/browser search for local weather`
+
+## 🏗️ Core Architecture
+
+- **`Manager`**: Central brain, handles `/remember` and `/recall`.
+- **`Plugin Registry`**: Centralized tool discovery.
+- **`Agent Registry`**: Dynamic loading of built-in and user-defined agents.
+- **`SDUI (Server-Driven UI)`**: Plugins can emit UI components (cards, logs, status updates) that render directly in the web dashboard.
+
+## 📂 Project Structure
+
+- `/server`: Core assistant logic and API server.
+- `/web`: Interactive dashboard for your bots.
+- `/docs`: Detailed guides on [Architecture](./docs/architecture.md), [Plugins](./docs/plugins.md), and [Agents](./docs/agents.md).
+
+## 🤝 Contributing
+
+We love contributors! Whether it's adding a new plugin, a specialized agent, or improving the core orchestrator, check out our [Contribution Guide](./CONTRIBUTING.md).
 
 ---
 
-Built with ❤️ by the OpenBot team.
+Built with ❤️ using [Melony](https://github.com/ddaras/melony).

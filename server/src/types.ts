@@ -7,6 +7,7 @@ export type InitEvent = ChatEventBase<"init", { platform: string; version?: stri
 export type SessionChangeEvent = ChatEventBase<"sessionChange", { platform: string; tab?: string; sessionId: string }>;
 export type TabChangeEvent = ChatEventBase<"tabChange", { platform: string; tab: string; sessionId: string }>;
 export type UserTextEvent = ChatEventBase<"user:text", { content: string }>;
+export type ManagerInputEvent = ChatEventBase<"manager:input", { content: string }>;
 export type AssistantTextEvent = ChatEventBase<"assistant:text", { content: string }>;
 
 export type ActionTaskResultEvent = ChatEventBase<"action:taskResult", { action: string; result: any; toolCallId?: string; error?: string }>;
@@ -25,6 +26,7 @@ export type ChatEvent =
   | SessionChangeEvent
   | TabChangeEvent
   | UserTextEvent
+  | ManagerInputEvent
   | AssistantTextEvent
   | UIEvent
   | ActionTaskResultEvent
@@ -50,6 +52,8 @@ export interface ChatState {
   };
   /** Generic map of pending delegated tasks, keyed by agent name */
   pendingAgentTasks?: Record<string, { toolCallId: string }>;
+  /** The name of the last agent contacted directly via prefix (for tool result routing) */
+  lastDirectAgent?: string;
 }
 
 export interface ChatRequest {

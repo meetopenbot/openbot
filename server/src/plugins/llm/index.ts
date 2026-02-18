@@ -39,12 +39,12 @@ export interface LLMPluginOptions {
  * It can also automatically trigger events based on tool calls.
  */
 export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => (builder) => {
-  const { 
-    model, 
-    system, 
-    toolDefinitions = {}, 
-    actionEventPrefix = "action:", 
-    promptInputType = "user:text", 
+  const {
+    model,
+    system,
+    toolDefinitions = {},
+    actionEventPrefix = "action:",
+    promptInputType = "user:text",
     actionResultInputType = "action:taskResult",
     completionEventType
   } = options;
@@ -65,12 +65,12 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     // Evaluate dynamic system prompt if it's a function
     const systemPrompt = typeof system === "function" ? await system(context) : system;
 
+    const recentMessages = getRecentHistory(state.messages, 20);
+    
     const result = streamText({
       model,
       system: systemPrompt,
-      messages: getRecentHistory(state.messages, 20).map(m =>
-        m.role === "system" ? { role: "user", content: `System: ${m.content}` } : m
-      ) as any,
+      messages: recentMessages,
       tools: toolDefinitions,
     });
 
@@ -139,6 +139,6 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
   builder.on(actionResultInputType, async function* (event, context) {
     const { action, result } = event.data as any;
     const summary = typeof result === "string" ? result : JSON.stringify(result);
-    yield* routeToLLM({ role: "user", content: `System: Action "${action}" completed: ${summary}` }, context);
+    yield* routeToLLM({ role: "system", content: `System: Action "${action}" completed: ${summary}` }, context);
   });
 };

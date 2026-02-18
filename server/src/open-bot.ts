@@ -169,6 +169,72 @@ export async function createOpenBot(options?: {
     })
     .join("\n\n");
 
+  // 2.5 Command Prefix Router
+  // Allows bypassing the manager using "/agent task" (e.g. "/os list files")
+  app.on("user:text", async function* (event, { state }) {
+    const content = event.data.content.trim();
+    if (content.startsWith("/")) {
+      const firstSpace = content.indexOf(" ");
+      const prefix = firstSpace === -1 ? content.slice(1) : content.slice(1, firstSpace);
+      const task = firstSpace === -1 ? "" : content.slice(firstSpace + 1).trim();
+
+      if (agentNames.includes(prefix as any)) {
+        // Direct route to specialized agent
+        state.lastDirectAgent = prefix;
+        yield {
+          type: `agent:${prefix}:input`,
+          data: { content: task },
+        } as ChatEvent;
+        return;
+      }
+    }
+
+    // Default: send to manager for reasoning/delegation
+    state.lastDirectAgent = undefined;
+    yield { type: "manager:input", data: event.data } as ChatEvent;
+  });
+
+  // 2.6 Global Tool Result Dispatcher
+  // Routes tool results to the appropriate agent's internal loop.
+  // taskResult means that the loop is complete.
+  app.on("action:taskResult", async function* (event, { state, suspend }) {
+    const s = state as ChatState;
+
+    // 1. Direct route (prefix command)
+    if (s.lastDirectAgent) {
+      // suspend not to go to infinite loop
+      // suspend({
+      //   type: `agent:${s.lastDirectAgent}:result`,
+      //   data: event.data,
+      // } as ChatEvent);
+
+      yield {
+        type: `agent:${s.lastDirectAgent}:result`,
+        data: event.data,
+      } as ChatEvent;
+    }
+
+    // 2. Delegation route (manager-led)
+    // Find which agent has a pending task
+    const pendingAgentName = Object.keys(s.pendingAgentTasks || {}).find(
+      (name) => s.pendingAgentTasks![name]
+    );
+
+    if (pendingAgentName) {
+      yield {
+        type: `agent:${pendingAgentName}:result`,
+        data: event.data,
+      } as ChatEvent;
+      return;
+    }
+
+    // 3. Manager route (brain tools, etc.)
+    yield {
+      type: "manager:result",
+      data: event.data,
+    } as ChatEvent;
+  });
+
   app.use(
     llmPlugin({
       model: model as any,
@@ -179,21 +245,23 @@ export async function createOpenBot(options?: {
 
         return `${brainPrompt}
 
-## Delegation & Specialized Agents
-You are the **Manager Agent**. Your primary role is to orchestrate tasks by delegating them to specialized agents when appropriate. 
-If a task falls outside your core capabilities (memory and orchestration), you **MUST** use the \`delegateTask\` tool.
+## Core Role: Manager Agent
+You are the **Manager Agent**. You have exactly two jobs:
+1. **Task Delegation**: Orchestrate tasks by delegating them to specialized agents.
+2. **Memory & Identity**: Manage your long-term memory and identity using your core brain tools (\`remember\`, \`recall\`, \`updateIdentity\`, etc.).
+
+### Delegation & Reporting Guidelines:
+- **Delegate by Default**: If a task requires capabilities outside of memory/identity management (like shell access, file operations, web browsing), you **MUST** delegate to the appropriate agent.
+- **Be Concise**: When a sub-agent completes a task, provide a **nice, concise summary**. Sub-agents provide detailed outputs in the background; your response should be a brief, high-level answer to the user. Do not repeat details unless necessary.
+- **Detailed Delegation**: When calling \`delegateTask\`, provide a thorough description of the task so the sub-agent has full context.
 
 ### Available Agents:
 ${agentDescriptions}
 
-### Delegation Guidelines:
-1. **Choose the Best Expert**: Analyze the user's request and select the agent whose description most closely matches the required expertise.
-2. **Task Description**: When delegating, provide a clear and detailed task description. Include any context the agent might need to succeed.
-3. **No "I Can't"**: If an agent is available that can handle a request, do not tell the user you cannot do it. Simply delegate.
-4. **Summary**: Once an agent returns a result, summarize the findings or actions for the user.
-
-Example: If the user asks to "check the weather", and you see a 'browser' agent, delegate the task to it.`;
+Remember: You are the orchestrator. Let the specialized agents do the work, and you provide the concise final answer.`;
       },
+      promptInputType: "manager:input",
+      actionResultInputType: "manager:result",
       completionEventType: "manager:completion",
       toolDefinitions: {
         ...brainToolDefinitions,
@@ -229,15 +297,23 @@ Example: If the user asks to "check the weather", and you see a 'browser' agent,
       const pending = s.pendingAgentTasks?.[agent.name];
 
       if (pending) {
+        // This was a delegated task — bridge back to the manager's tool call
         delete s.pendingAgentTasks![agent.name];
 
         yield {
-          type: "action:taskResult",
+          type: "manager:result",
           data: {
             action: "delegateTask",
             toolCallId: pending.toolCallId,
             result: event.data.content,
           },
+        } as ChatEvent;
+      } else {
+        // This was a direct command (prefix) — show output directly as assistant text
+        yield {
+          type: "assistant:text",
+          data: { content: event.data.content },
+          meta: { agent: agent.name }
         };
       }
     });
