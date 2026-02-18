@@ -20,9 +20,35 @@ OpenBot is more than just a chatbot. It's an orchestrator that lives in your ter
 
 OpenBot follows a **Delegate by Default** pattern. 
 
-1.  **The Manager Agent**: Your primary interface. It analyzes your intent, manages long-term memory (via the `brain` plugin), and orchestrates specialized workers.
-2.  **Specialized Agents**: Workers dedicated to specific domains like `os` (shell & files), `browser` (web automation), or any custom agent you define.
-3.  **Event Bus**: All communication happens asynchronously via events, allowing for complex multi-agent choreography and real-time UI updates.
+- **The Manager Agent**: Your primary interface. It analyzes your intent, manages long-term memory (via the `brain` plugin), and orchestrates specialized workers.
+- **Specialized Agents**: Workers dedicated to specific domains like `os` (shell & files), `browser` (web automation), or any custom agent you define.
+- **Event Bus**: All communication happens asynchronously via events, allowing for complex multi-agent choreography and real-time UI updates.
+
+## 🤖 Meet the Agents
+
+### 🧠 Manager Agent (The Orchestrator)
+The central "brain" of the OpenBot ecosystem. It analyzes user intent, manages long-term memory (via the `brain` plugin), and coordinates other agents using the `delegateTask` tool. It provides you with a concise summary of the results once the specialists finish their work.
+
+### 🐚 OS Agent (`os`)
+Your specialized terminal and file system companion. It has full access to your local machine (within the boundaries you set). It can execute shell commands, create/read/edit files, manage directories, and handle system-level operations like git commands or script execution.
+
+### 🌐 Browser Agent (`browser`) <mark>Stagehand</mark>
+A powerful web automation specialist based on **[Stagehand](https://github.com/browserbase/stagehand)**. It can navigate the internet exactly like a human would—browsing websites, clicking buttons, filling forms, and extracting data.
+*Note: We also plan to introduce a parallel agent based on **[browser-use](https://github.com/browser-use/browser-use)** for alternative autonomous web navigation strategies.*
+
+### 🏷️ Topic Agent (`topic`)
+A background utility that works silently to keep your workspace organized. It automatically analyzes the first few messages of a new conversation and generates a concise (3-5 word) title for the thread.
+
+## 🗺️ Roadmap: Planned Agents
+
+We are constantly expanding the OpenBot ecosystem with specialized agents:
+
+- **`browser-use` Agent**: A high-level web agent leveraging the `browser-use` library for more autonomous, multi-step web tasks and complex reasoning.
+- **`coder` Agent**: A specialized software engineer agent with deep understanding of project structures, refactoring patterns, and test-driven development.
+- **`researcher` Agent**: An information-gathering specialist that can browse multiple sources, synthesize long-form reports, and cite its findings.
+- **`devops` Agent**: Focused on CI/CD pipelines, container orchestration (Docker/K8s), and cloud infrastructure management.
+- **`data-scientist` Agent**: Capable of running local notebooks, performing statistical analysis, and generating visualizations.
+- **`social` Agent**: Designed to manage social media interactions, schedule posts, and monitor mentions.
 
 ### 💭 Persistent Brain & Memory
 Unlike most chatbots, OpenBot has a long-term memory. It can:
