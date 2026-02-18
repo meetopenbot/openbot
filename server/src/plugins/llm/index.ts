@@ -139,6 +139,6 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
   builder.on(actionResultInputType, async function* (event, context) {
     const { action, result } = event.data as any;
     const summary = typeof result === "string" ? result : JSON.stringify(result);
-    yield* routeToLLM({ role: "system", content: `System: Action "${action}" completed: ${summary}` }, context);
+    yield* routeToLLM({ role: "user", content: `System: Action "${action}" completed: ${summary}` }, context);
   });
 };
