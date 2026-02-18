@@ -12,7 +12,7 @@
   <a href="https://www.npmjs.com/package/openbot"><img src="https://img.shields.io/npm/dt/openbot" alt="npm downloads" /></a>
 </p>
 
-OpenBot is more than just a chatbot. It's an orchestrator that lives in your terminal and browser, delegating complex tasks to specialized agents. Built on the [Melony](https://github.com/meetopenbot/melony) framework, it's designed to be local-first, event-driven, and infinitely extensible.
+OpenBot is more than just a chatbot. It's an orchestrator that lives in your terminal and browser, delegating complex tasks to specialized agents. It's designed to be local-first, event-driven, and infinitely extensible.
 
 ![OpenBot Banner](https://raw.githubusercontent.com/meetopenbot/openbot/main/docs/banner.png)
 
@@ -22,7 +22,7 @@ OpenBot follows a **Delegate by Default** pattern.
 
 1.  **The Manager Agent**: Your primary interface. It analyzes your intent, manages long-term memory (via the `brain` plugin), and orchestrates specialized workers.
 2.  **Specialized Agents**: Workers dedicated to specific domains like `os` (shell & files), `browser` (web automation), or any custom agent you define.
-3.  **Melony Event Bus**: All communication happens asynchronously via events, allowing for complex multi-agent choreography and real-time UI updates.
+3.  **Event Bus**: All communication happens asynchronously via events, allowing for complex multi-agent choreography and real-time UI updates.
 
 ### 💭 Persistent Brain & Memory
 Unlike most chatbots, OpenBot has a long-term memory. It can:
@@ -76,7 +76,7 @@ systemPrompt: |
   Always cite your sources and provide a high-level summary.
 ```
 
-### 2. Custom Melony Plugins
+### 2. Custom Plugins
 For those who want even more control, you can extend the AI's toolbox with custom logic. A plugin defines new tools and reacts to system events.
 
 ```typescript
@@ -111,5 +111,3 @@ Skip the manager's reasoning and talk directly to an agent using prefixes:
 We love contributors! Whether it's adding a new plugin, a specialized agent, or improving the core orchestrator, check out our [Contribution Guide](./CONTRIBUTING.md).
 
 ---
-
-Built with ❤️ using [Melony](https://github.com/meetopenbot/melony).
