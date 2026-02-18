@@ -10,6 +10,9 @@ The OS agent is responsible for low-level system interactions. It uses the `shel
 ### Topic Agent (`topic`)
 A background agent that observes completions from the Manager and automatically generates concise titles for chat threads.
 
+### Codex Agent (`codex`)
+A world-class software engineer and coding assistant powered by OpenAI. It helps with high-level architectural decisions, code refactoring, complex logic implementation, and debugging. It has access to the shell and file system to explore and modify your codebase.
+
 ## YAML Agents
 
 You can define custom agents using YAML files in `~/.openbot/agents/`.
@@ -19,14 +22,14 @@ You can define custom agents using YAML files in `~/.openbot/agents/`.
 You can easily install official agents using the CLI:
 
 ```bash
-openbot add coder
+openbot add codex
 ```
 
 This will automatically download the agent from the official `meetopenbot` GitHub organization and install it into your local agents directory.
 
-Example `coder.yaml`:
+Example `codex.yaml`:
 ```yaml
-name: coder
+name: codex
 description: "A specialized agent for writing and refactoring code"
 plugins:
   - name: file-system

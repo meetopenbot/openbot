@@ -42,12 +42,22 @@ A powerful web automation specialist based on **[Stagehand](https://github.com/b
 ### 🏷️ Topic Agent (`topic`)
 A background utility that works silently to keep your workspace organized. It automatically analyzes the first few messages of a new conversation and generates a concise (3-5 word) title for the thread.
 
+### 💻 Codex Agent (`codex`)
+A world-class software engineer and coding assistant powered by OpenAI. It helps with high-level architectural decisions, code refactoring, complex logic implementation, and debugging. It has access to the shell and file system to explore and modify your codebase.
+
+## 📱 OpenBot Mobile (Coming Soon)
+
+We're bringing the power of OpenBot to your pocket! The upcoming mobile app will feature:
+- **HITL (Human-In-The-Loop)**: Review and approve sensitive actions on the go.
+- **Real-time Notifications**: Get notified when long-running tasks or agent operations complete.
+- **Always-on Agents**: Your specialized coding and OS agents, always accessible from anywhere.
+- **Multi-modal Interaction**: Seamlessly switch between text, voice, and file uploads.
+
 ## 🗺️ Roadmap: Planned Agents
 
 We are constantly expanding the OpenBot ecosystem with specialized agents:
 
 - **`browser-use` Agent**: A high-level web agent leveraging the `browser-use` library for more autonomous, multi-step web tasks and complex reasoning.
-- **`coder` Agent**: A specialized software engineer agent with deep understanding of project structures, refactoring patterns, and test-driven development.
 - **`researcher` Agent**: An information-gathering specialist that can browse multiple sources, synthesize long-form reports, and cite its findings.
 - **`devops` Agent**: Focused on CI/CD pipelines, container orchestration (Docker/K8s), and cloud infrastructure management.
 - **`data-scientist` Agent**: Capable of running local notebooks, performing statistical analysis, and generating visualizations.
