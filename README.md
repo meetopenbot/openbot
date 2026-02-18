@@ -168,4 +168,12 @@ Skip the manager's reasoning and talk directly to an agent using prefixes:
 
 We love contributors! Whether it's adding a new plugin, a specialized agent, or improving the core orchestrator, check out our [Contribution Guide](./CONTRIBUTING.md).
 
----
+## ⭐️ Star History
+
+<a href="https://star-history.com/#meetopenbot/openbot&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=meetopenbot/openbot&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=meetopenbot/openbot&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=meetopenbot/openbot&type=Date" />
+ </picture>
+</a>

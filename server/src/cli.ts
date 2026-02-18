@@ -15,7 +15,7 @@ const program = new Command();
 program
   .name("openbot")
   .description("OpenBot CLI - Secure and easy configuration")
-  .version("0.1.28");
+  .version("0.1.29");
 
 /**
  * Check if a GitHub repository exists.
