@@ -289,7 +289,7 @@ Always remain professional and efficient. You manage the big picture; let the ag
         delegateTask: {
           description: `Delegate a specialized task to another agent. Use this whenever a task matches the capabilities of one of the available agents.`,
           inputSchema: z.object({
-            agent: z.enum(agentNames as any).describe("The specialized agent to use"),
+            agent: z.enum(agentNames).describe("The specialized agent to use"),
             task: z.string().describe("The detailed task description for the agent"),
           }),
         },
