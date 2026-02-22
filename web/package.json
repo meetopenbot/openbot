@@ -17,8 +17,8 @@
   },
   "dependencies": {
     "@melony/react": "^0.2.7",
-    "@melony/ui-kit": "^0.1.5",
-    "@melony/ui-shadcn": "^0.1.7",
+    "@melony/ui-kit": "^0.1.30",
+    "@melony/ui-shadcn": "^0.1.32",
     "@tailwindcss/vite": "^4.1.17",
     "@tanstack/react-query": "^5.90.19",
     "melony": "^0.2.8",

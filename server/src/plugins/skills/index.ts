@@ -4,6 +4,8 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import matter from "gray-matter";
 import { SkillMeta } from "./types.js";
+import { statusWidget } from "../../ui/widgets/status.js";
+import { resourceCardWidget } from "../../ui/widgets/resource-card.js";
 
 // Re-exports
 export { skillsToolDefinitions } from "./types.js";
@@ -361,7 +363,7 @@ export const skillsPlugin = (
   builder.on(
     "skills:status" as any,
     async function* (event: SkillsStatusEvent) {
-      yield ui.event(ui.status(event.data.message, event.data.severity));
+      yield ui.event(statusWidget(event.data.message, event.data.severity));
     }
   );
 
@@ -369,7 +371,7 @@ export const skillsPlugin = (
     "skills:loaded" as any,
     async function* (event: SkillsLoadedEvent) {
       yield ui.event(
-        ui.resourceCard(event.data.title, "", [
+        resourceCardWidget(event.data.title, "", [
           ui.text(event.data.instructions),
         ])
       );

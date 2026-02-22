@@ -2,12 +2,9 @@ import { melony } from "melony";
 import { ChatEvent, ChatState } from "./types.js";
 import { osAgent } from "./agents/os-agent.js";
 import { topicAgent } from "./agents/topic-agent.js";
+import { agentCreatorAgent } from "./agents/agent-creator.js";
 import { brainPlugin, brainToolDefinitions, createBrainPromptBuilder } from "./plugins/brain/index.js";
 import { llmPlugin } from "./plugins/llm/index.js";
-import { initHandler } from "./handlers/init.js";
-import { sessionChangeHandler } from "./handlers/session-change.js";
-import { tabChangeHandler } from "./handlers/tab-change.js";
-import { updateSettingsHandler, openAgentFolderHandler } from "./handlers/settings.js";
 import { loadConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
 import { createModel } from "./models.js";
 import path from "node:path";
@@ -102,6 +99,17 @@ export async function createOpenBot(options?: {
     subscribe: ["manager:completion"],
   });
 
+  agentRegistry.register({
+    name: "agent-creator",
+    description: "Helps the user create and configure new custom OpenBot agents via natural language.",
+    capabilities: {
+      ...Object.fromEntries(
+        Object.entries(fileSystemToolDefinitions).map(([k, v]) => [k, v.description])
+      ),
+    },
+    plugin: agentCreatorAgent({ model: model as any }),
+  });
+
   // Discover community / user agents from ~/.openbot/agents/
   const agentsDir = path.join(resolvedBaseDir, "agents");
 
@@ -117,6 +125,7 @@ export async function createOpenBot(options?: {
   // ─── Compose the Melony App ──────────────────────────────────────
 
   const allAgents = agentRegistry.getAll();
+
   const agentNames = agentRegistry.getNames();
 
   const app = melony<ChatState, ChatEvent>();
@@ -164,8 +173,10 @@ export async function createOpenBot(options?: {
           .map(([name, desc]) => `    - ${name}: ${desc}`)
           .join("\n")
         : "";
-      return `- **${a.name}**: ${a.description}${tools ? `\n  Capabilities:\n${tools}` : ""
-        }`;
+      return `<agent name="${a.name}">
+  <description>${a.description}</description>
+${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ""}
+</agent>`;
     })
     .join("\n\n");
 
@@ -173,7 +184,7 @@ export async function createOpenBot(options?: {
   // Allows bypassing the manager using "/agent task" (e.g. "/os list files")
   app.on("user:text", async function* (event, { state }) {
     const content = event.data.content.trim();
-    if (content.startsWith("/")) {
+    if (content.startsWith("/") || content.startsWith("@")) {
       const firstSpace = content.indexOf(" ");
       const prefix = firstSpace === -1 ? content.slice(1) : content.slice(1, firstSpace);
       const task = firstSpace === -1 ? "" : content.slice(firstSpace + 1).trim();
@@ -239,26 +250,36 @@ export async function createOpenBot(options?: {
     llmPlugin({
       model: model as any,
       system: async (context) => {
-        const [brainPrompt] = await Promise.all([
-          buildBrainPrompt(context),
-        ]);
+        const brainPrompt = await buildBrainPrompt(context);
 
-        return `${brainPrompt}
+        const systemPrompt = `${brainPrompt}
 
-## Core Role: Manager Agent
-You are the **Manager Agent**. You have exactly two jobs:
-1. **Task Delegation**: Orchestrate tasks by delegating them to specialized agents.
-2. **Memory & Identity**: Manage your long-term memory and identity using your core brain tools (\`remember\`, \`recall\`, \`updateIdentity\`, etc.).
+<manager_core>
+<role>
+Your role is to be the central orchestrator of this system. Your primary goal is to solve user requests by managing your persistent memory and delegating tasks to expert sub-agents.
+</role>
 
-### Delegation & Reporting Guidelines:
-- **Delegate by Default**: If a task requires capabilities outside of memory/identity management (like shell access, file operations, web browsing), you **MUST** delegate to the appropriate agent.
-- **Be Concise**: When a sub-agent completes a task, provide a **nice, concise summary**. Sub-agents provide detailed outputs in the background; your response should be a brief, high-level answer to the user. Do not repeat details unless necessary.
-- **Detailed Delegation**: When calling \`delegateTask\`, provide a thorough description of the task so the sub-agent has full context.
+<operating_principles>
+1. **Delegate by Default**: If a task requires specialized expertise (shell, files, browser, etc.), you **must** delegate to an expert agent via \`delegateTask\`.
+2. **Context-Rich Delegation**: When calling \`delegateTask\`, provide a thorough, context-rich task description so the sub-agent can work independently.
+3. **Concise Reporting**: After a sub-agent finishes, provide a high-level, concise summary to the user. Do not repeat technical details unless requested.
+4. **Memory Management**: Use your brain tools (\`remember\`, \`recall\`, \`journal\`, etc.) to maintain continuity and preferences across sessions.
+</operating_principles>
+</manager_core>
 
-### Available Agents:
+<specialized_agents>
 ${agentDescriptions}
+</specialized_agents>
 
-Remember: You are the orchestrator. Let the specialized agents do the work, and you provide the concise final answer.`;
+<final_guidance>
+Always remain professional and efficient. You manage the big picture; let the agents do the work.
+</final_guidance>`;
+
+        console.log("--------------------------------");
+        console.log(systemPrompt);
+        console.log("--------------------------------");
+
+        return systemPrompt;
       },
       promptInputType: "manager:input",
       actionResultInputType: "manager:result",
@@ -268,7 +289,7 @@ Remember: You are the orchestrator. Let the specialized agents do the work, and 
         delegateTask: {
           description: `Delegate a specialized task to another agent. Use this whenever a task matches the capabilities of one of the available agents.`,
           inputSchema: z.object({
-            agent: z.enum(agentNames).describe("The specialized agent to use"),
+            agent: z.enum(agentNames as any).describe("The specialized agent to use"),
             task: z.string().describe("The detailed task description for the agent"),
           }),
         },
@@ -318,14 +339,6 @@ Remember: You are the orchestrator. Let the specialized agents do the work, and 
       }
     });
   }
-
-  // 6. Init handlers
-  app
-    .on("init", initHandler)
-    .on("sessionChange", sessionChangeHandler)
-    .on("tabChange", tabChangeHandler)
-    .on("action:updateSettings", updateSettingsHandler)
-    .on("action:openAgentFolder", openAgentFolderHandler);
 
   return app;
 }

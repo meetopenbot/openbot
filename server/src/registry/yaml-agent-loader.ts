@@ -175,9 +175,11 @@ export async function discoverYamlAgents(
         });
 
         console.log(`[agents] Loaded: ${config.name} — ${config.description}${config.model ? ` (model: ${config.model})` : ""}`);
-      } catch (err) {
-        // Invalid or missing agent.yaml — silently skip
-        console.warn(`[agents] Error loading "${entry.name}/agent.yaml":`, err);
+      } catch (err: any) {
+        // Invalid or missing agent.yaml — silently skip if missing, warn if invalid
+        if (err.code !== 'ENOENT') {
+          console.warn(`[agents] Error loading "${entry.name}/agent.yaml":`, err);
+        }
       }
     }
   } catch {

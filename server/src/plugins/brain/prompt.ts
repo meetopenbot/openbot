@@ -35,30 +35,21 @@ export async function buildBrainPrompt(
 
   // 1. Environment context
   const now = new Date();
-  parts.push(`## Environment
-You are the **Manager Agent**, the central orchestrator of this system.
-- **Current Time**: ${now.toLocaleString()} (${Intl.DateTimeFormat().resolvedOptions().timeZone})
-- **Current Working Directory (CWD)**: ${currentCwd}
-- **System Access**: You have access to the entire file system (root: /).
-- **Bot Home (Internal State)**: ${baseDir}
-
-### Delegation Policy:
-You are designed to delegate specialized tasks to expert agents. Analyze the "Available Agents" list provided in your instructions and delegate whenever a user request matches an agent's expertise. You should not claim you cannot perform a task if a suitable agent is available.
-
-### Path Rules:
-1. **Shell Commands**: All commands (executeCommand) run in the CWD: ${currentCwd}.
-2. **File Operations**: Relative paths in readFile, writeFile, listFiles, etc. resolve against the CWD.
-3. **Changing Directory**: Use \`cd <path>\` in executeCommand to move. Your CWD is persisted across turns.`);
+  parts.push(`<environment>
+- Time: ${now.toLocaleString()} (${Intl.DateTimeFormat().resolvedOptions().timeZone})
+- CWD: ${currentCwd}
+- Bot Home: ${baseDir}
+</environment>`);
 
   // 2. Identity (small, always included)
-  const soul = await modules.identity.getSoul();
-  if (soul) parts.push(`<soul>\n${soul}\n</soul>`);
-
   const identity = await modules.identity.getIdentity();
   if (identity) parts.push(`<identity>\n${identity}\n</identity>`);
 
+  const soul = await modules.identity.getSoul();
+  if (soul) parts.push(`<soul>\n${soul}\n</soul>`);
+
   // 3. Recent memories (lean — just a few to keep context fresh)
-  const recentFacts = await modules.memory.getRecentFacts(3);
+  const recentFacts = await modules.memory.getRecentFacts(5);
   if (recentFacts.length > 0) {
     const factsList = recentFacts
       .map(
@@ -66,23 +57,19 @@ You are designed to delegate specialized tasks to expert agents. Analyze the "Av
           `- ${f.content}${f.tags.length > 0 ? ` [${f.tags.join(", ")}]` : ""}`
       )
       .join("\n");
-    parts.push(`## Recent Memory
-
-These are your most recent memories. Use \`recall\` to search for more specific information.
-
-${factsList}`);
+    parts.push(`<recent_memories>\n${factsList}\n</recent_memories>`);
   }
 
   // 4. Brain capabilities
-  parts.push(`## Brain Capabilities
+  parts.push(`<brain_tools>
+Use these to manage your persistent state:
+- \`remember(content, tags)\`: Store facts/preferences
+- \`recall(query, tags)\`: Search long-term memory
+- \`forget(memoryId)\`: Remove outdated info
+- \`journal(content)\`: Record session reflections
+- \`updateIdentity(content)\`: Refine your persona
+- \`readIdentity(file)\`: Inspect SOUL.md or IDENTITY.md
+</brain_tools>`);
 
-You have a brain with long-term memory:
-- Use \`remember\` to store important facts, user preferences, or learned context
-- Use \`recall\` to search your memory when you need past information
-- Use \`forget\` to remove outdated or incorrect memories
-- Use \`journal\` to record session notes and reflections
-- Use \`updateIdentity\` to refine your personality in IDENTITY.md
-- SOUL.md contains your core values and is protected from modification`);
-
-  return parts.join("\n\n");
+  return `\n${parts.join("\n\n")}\n`;
 }

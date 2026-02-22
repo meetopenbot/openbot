@@ -1,197 +1,101 @@
-import { MelonyProvider, useMelony } from "@melony/react";
-import { MelonyRenderer, MelonyUIProvider, type UINode } from "@melony/ui-kit";
+import { MelonyProvider } from "@melony/react";
+import { MelonyUIProvider } from "@melony/ui-kit";
 import { shadcnElements, ThemeProvider } from "@melony/ui-shadcn";
-import { generateId, MelonyClient } from "melony/client";
-import { useEffect, useMemo, useState, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-
-const BASE_URL = (window as any).MELONY_BASE_URL || "http://localhost:4001";
+import { MelonyClient } from "melony/client";
+import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSession } from "./hooks/use-session";
+import { useConfig } from "./hooks/use-config";
+import { AppLayout, AppLayoutProvider } from "./components/layout/AppLayout";
+import { ChatPage } from "./components/pages/ChatPage";
+import { SettingsPage } from "./components/pages/SettingsPage";
+import { Onboarding } from "./components/Onboarding";
+import { Thread } from "./components/Thread";
+import { Composer } from "./components/Composer";
+import { BASE_URL } from "./lib/api";
 
 const melonyClient = new MelonyClient({
   url: `${BASE_URL}/api/chat`,
-})
+});
 
 export function App() {
   const queryClient = useQueryClient();
-  const [context, setContext] = useState<Record<string, any>>({
-    sidebarWidth: 240,
-    isSidebarOpen: true,
-  });
-  const [path, setPath] = useState(window.location.search);
+  const { sessionId, path, navigate, ensureSessionInUrl } = useSession();
+  const { data: config, isLoading: configLoading } = useConfig();
 
-  const sessionId = useMemo(() => {
-    const params = new URLSearchParams(path);
-    return params.get("sessionId") || `ses_${generateId()}`;
+  const tab = useMemo(() => {
+    return new URLSearchParams(path).get("tab") || "chat";
   }, [path]);
 
-  useEffect(() => {
-    const handlePopState = () => {
-      setPath(window.location.search);
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+  const eventHandlers = useMemo(
+    () => ({
+      "user:text": async (event: any, { client }: any) => {
+        ensureSessionInUrl();
+        const generator = client.send(event, { sessionId });
+        const invalidateTags = new Set<string>();
+
+        for await (const chunk of generator) {
+          if (chunk?.type === "client:invalidate" && Array.isArray(chunk.data?.tags)) {
+            chunk.data.tags.forEach((tag: string) => invalidateTags.add(tag));
+          }
+        }
+
+        invalidateTags.add("sessions");
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            const queryTags = (query.meta as any)?.tags as string[] | undefined;
+            return queryTags?.some((tag) => invalidateTags.has(tag)) ?? false;
+          },
+        });
+      },
+    }),
+    [sessionId, queryClient, ensureSessionInUrl]
+  );
+
+  const providerBody = useMemo(() => ({ sessionId }), [sessionId]);
+
+  const components = useMemo(
+    () => ({
+      ...shadcnElements,
+      thread: Thread,
+      composer: Composer,
+    }),
+    []
+  );
+
+  if (configLoading) return <LoadingScreen />;
+  if (config && !config.configured) return <ThemeProvider><Onboarding /></ThemeProvider>;
 
   return (
     <MelonyProvider
       client={melonyClient}
-      initialAdditionalBody={{
-        sessionId
-      }}
-      eventHandlers={{
-        "client:navigate": (event) => {
-          console.log("Navigating to:", event.data.path);
-          // push without reloading the page
-          window.history.pushState({}, "", event.data.path);
-          setPath(window.location.search);
-          return;
-        },
-        "client:set-context": (event) => {
-          setContext({ ...context, ...event.data });
-          return;
-        },
-        "user:text": async (event, { client }) => {
-          const params = new URLSearchParams(window.location.search);
-          if (!params.has("sessionId")) {
-            params.set("sessionId", sessionId);
-            const newUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
-            window.history.replaceState({}, "", newUrl);
-            setPath(window.location.search);
-          }
-
-          const generator = client.send(event, { sessionId });
-          const invalidateTags = new Set<string>();
-          for await (const chunk of generator) {
-            if (chunk?.type === "client:invalidate" && Array.isArray(chunk.data?.tags)) {
-              chunk.data.tags.forEach((tag: string) => invalidateTags.add(tag));
-            }
-          }
-
-          // Stream is done — server has saved state to disk by now
-          if (invalidateTags.size > 0) {
-            queryClient.invalidateQueries({
-              predicate: (query) => {
-                const queryTags = (query.meta as any)?.tags as string[] | undefined;
-                if (!queryTags) return false;
-                return queryTags.some((tag) => invalidateTags.has(tag));
-              },
-            });
-          }
-        },
-      }}
+      initialAdditionalBody={providerBody}
+      eventHandlers={eventHandlers}
     >
-      <MelonyUIProvider components={{ ...shadcnElements }}>
+      <MelonyUIProvider components={components}>
         <ThemeProvider>
-          <AppContent sessionId={sessionId} path={path} />
+          <AppLayoutProvider>
+            <AppLayout
+              sessionId={sessionId}
+              currentTab={tab}
+              onNavigate={navigate}
+            >
+              {tab === "chat" && <ChatPage sessionId={sessionId} />}
+              {tab === "settings" && <SettingsPage />}
+            </AppLayout>
+          </AppLayoutProvider>
         </ThemeProvider>
       </MelonyUIProvider>
     </MelonyProvider>
-  )
-}
-
-export function AppContent({ sessionId, path }: { sessionId: string, path: string }) {
-  const { reset } = useMelony();
-  const [loadedSessions, setLoadedSessions] = useState<Set<string>>(new Set());
-  
-  // Stable UI parts
-  const [sidebarUI, setSidebarUI] = useState<UINode | null>(null);
-  const [contentUI, setContentUI] = useState<UINode | null>(null);
-
-  // Track previous values to determine event type
-  const prevSessionIdRef = useRef<string>(sessionId);
-  const prevTabRef = useRef<string | undefined>(undefined);
-
-  const searchParams = new URLSearchParams(path);
-  const tab = searchParams.get("tab") || "chat";
-
-  const isSessionChange = prevSessionIdRef.current !== sessionId;
-
-  const { data, isLoading: loading, error } = useQuery({
-    queryKey: ["view", sessionId, tab],
-    meta: { tags: ["sessions"] },
-    queryFn: async () => {
-      const isFirstLoad = !prevTabRef.current;
-      const isTabChange = !isFirstLoad && !isSessionChange && prevTabRef.current !== tab;
-
-      let type = "init";
-      if (isSessionChange) type = "sessionChange";
-      else if (isTabChange) type = "tabChange";
-
-      // Always fetch history if it's a session change or first load
-      const history = isSessionChange || !loadedSessions.has(sessionId);
-      const params = new URLSearchParams({
-        type,
-        data: JSON.stringify({
-          sessionId,
-          history,
-          platform: "web",
-          tab,
-        })
-      });
-      
-      // Update tab ref
-      prevTabRef.current = tab;
-
-      const response = await fetch(`${BASE_URL}/api/view?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch view: ${response.statusText}`);
-      }
-      return response.json();
-    }
-  });
-
-  useEffect(() => {
-    // Update session ref AFTER useQuery has been called/evaluated for this render
-    prevSessionIdRef.current = sessionId;
-  }, [sessionId]);
-
-  useEffect(() => {
-    // Clear UI when session changes
-    if (isSessionChange) {
-      setSidebarUI(null);
-      setContentUI(null);
-    }
-  }, [isSessionChange]);
-
-  useEffect(() => {
-    if (data) {
-      if (data.initialEvents) {
-        reset(data.initialEvents);
-        setLoadedSessions(prev => new Set(prev).add(sessionId));
-      }
-      
-      // Update UI parts independently
-      if (data.sidebar) setSidebarUI(data.sidebar);
-      if (data.content) setContentUI(data.content);
-      
-      // Fallback for full layout
-      if (data.ui && !data.sidebar && !data.content) {
-        setContentUI(data.ui);
-      }
-    }
-  }, [data, sessionId, reset]);
-
-  if (loading && !sidebarUI && !contentUI) {
-    return <div style={{ fontSize: "11px", fontWeight: "bold", height: "100%", width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>Loading...</div>;
-  }
-
-  if (error && !sidebarUI && !contentUI) {
-    return <div style={{ fontSize: "11px", fontWeight: "bold", height: "100%", width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>Failed to load UI</div>;
-  }
-
-  return (
-    <div style={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}>
-      {sidebarUI && (
-        <MelonyRenderer node={sidebarUI} />
-      )}
-      <div style={{ flex: 1, height: "100%", overflow: "hidden" }}>
-        {contentUI && (
-          <MelonyRenderer node={contentUI} />
-        )}
-      </div>
-    </div>
   );
 }
 
+const LoadingScreen = () => (
+  <div className="flex h-screen w-screen items-center justify-center">
+    <div className="flex flex-col items-center gap-4 animate-fade-in">
+      <div className="size-8 rounded-full border-2 border-foreground/10 border-t-foreground/60 animate-[spin-slow_0.8s_linear_infinite]" />
+    </div>
+  </div>
+);
 
-export default App
+export default App;

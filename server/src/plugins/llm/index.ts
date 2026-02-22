@@ -1,7 +1,6 @@
 import { MelonyPlugin, Event, RuntimeContext } from "melony";
 import { streamText, LanguageModel } from "ai";
 import { z } from "zod";
-import { ui } from "@melony/ui-kit";
 
 interface SimpleMessage {
   role: "system" | "user" | "assistant";
@@ -51,7 +50,8 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
 
   async function* routeToLLM(
     newMessage: SimpleMessage,
-    context: RuntimeContext
+    context: RuntimeContext,
+    silent: boolean = false
   ): AsyncGenerator<Event, void, unknown> {
     const state = context.state as any;
 
@@ -67,6 +67,10 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
 
     const recentMessages = getRecentHistory(state.messages, 20);
     
+    // Initialize an empty assistant message to be populated as we stream
+    const assistantMessage: SimpleMessage = { role: "assistant", content: "" };
+    state.messages.push(assistantMessage);
+
     const result = streamText({
       model,
       system: systemPrompt,
@@ -74,26 +78,26 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
       tools: toolDefinitions,
     });
 
-    let assistantText = "";
     for await (const delta of result.textStream) {
-      assistantText += delta;
-      yield {
-        type: "assistant:text-delta",
-        data: { delta },
-      } as Event;
+      assistantMessage.content += delta;
+      if (!silent) {
+        yield {
+          type: "assistant:text-delta",
+          data: { delta, content: assistantMessage.content },
+        } as Event;
+      }
     }
+
+    const assistantText = assistantMessage.content;
 
     // Wait for tool calls to complete
     const toolCalls = await result.toolCalls;
 
-    // Store assistant response as simple text
-    if (assistantText) {
-      state.messages.push({
-        role: "assistant",
-        content: assistantText,
-      });
-
-      if (completionEventType) {
+    // Remove the message if it's empty (e.g. only tool calls)
+    if (!assistantText) {
+      state.messages = state.messages.filter((m: SimpleMessage) => m !== assistantMessage);
+    } else {
+      if (completionEventType && !silent) {
         yield {
           type: completionEventType,
           data: { content: assistantText },

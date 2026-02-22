@@ -1,5 +1,4 @@
 ---
-description: Guidelines for building Melony plugins (event-based backend extensions)
 alwaysApply: false
 ---
 # Melony Plugin Development Guidelines
@@ -88,5 +87,5 @@ Plugins in `~/.openbot/plugins/` are automatically loaded if they export a `plug
 - **Atomic Actions**: Each tool should perform one clear task.
 - **Informative Status**: Yield status events (`my:status`) during long operations.
 - **Error Boundaries**: Wrap plugin logic in try/catch and return a failed `taskResult`.
-- **UI Events**: Use `ui.event(ui.status(...))` for visual feedback.
+- **UI Events**: Use `ui.event(ui.text(...))` for visual feedback.
 - **State**: Use `context.state` for persistence across the stream.

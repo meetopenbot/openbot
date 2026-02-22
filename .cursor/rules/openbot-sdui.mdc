@@ -1,0 +1,48 @@
+---
+alwaysApply: false
+---
+# OpenBot Server-Driven UI (SDUI)
+
+In OpenBot, dynamic UI widgets in conversations are powered by **Melony's Server-Driven UI (SDUI)**. This allows the backend to send rich, interactive components directly to the chat thread without requiring frontend-specific code for every new feature.
+
+## 🎯 Core Scope
+- **Conversations Only**: SDUI should only be used to generate dynamic widgets *inside* the chat history (e.g., status updates, data summaries, interactive cards).
+- **Not for Layout**: Do NOT use SDUI for the main application layout (sidebar, header, etc.). Use React components in `/web` for that.
+
+## 🏗️ Technical Implementation
+
+### 1. Widget Creation
+All reusable UI widgets should be defined as functions returning `UINode` (from `@melony/ui-kit`) in `server/src/ui/widgets/`.
+
+```typescript:server/src/ui/widgets/my-widget.ts
+import { ui, UINode } from '@melony/ui-kit';
+
+export const myWidget = (title: string, data: any): UINode =>
+  ui.card({ title }, [
+    ui.text(`Info: ${data.info}`, { size: 'sm', color: 'muted' }),
+    ui.button('Action', { action: 'myAction', data: { id: data.id } })
+  ]);
+```
+
+### 2. Emitting UI in Plugins
+Plugins should use `yield ui.event(widget(...))` to send UI to the frontend.
+
+```typescript:server/src/plugins/my-plugin/index.ts
+import { ui } from '@melony/ui-kit';
+import { myWidget } from '../../ui/widgets/my-widget.js';
+
+builder.on("my:event", async function* (event) {
+  // Emit a dynamic widget in the conversation
+  yield ui.event(myWidget(event.data.title, event.data));
+});
+```
+
+## 🛠️ Components & Contracts
+- **`@melony/ui-kit`**: Provides the `ui` helper and standard `UINode` types.
+- **`@melony/ui-shadcn`**: Backend-to-frontend component registry (Shadcn-based).
+- **Refer to `melony-ui.mdc`**: For detailed SDUI component guidelines and recursive rendering rules.
+
+## 💡 Best Practices
+- **Compose**: Use standard layout nodes (`ui.row`, `ui.col`, `ui.box`) instead of custom components where possible.
+- **Type-Safe**: Always use the `ui` helper to ensure the generated JSON matches the Melony UI contract.
+- **Interactive**: Use `ui.button` with `action` props to trigger plugin events from the UI.

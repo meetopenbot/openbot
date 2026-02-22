@@ -14,7 +14,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.33",
     "@ai-sdk/openai": "^3.0.13",
-    "@melony/ui-kit": "^0.1.5",
+    "@melony/ui-kit": "^0.1.30",
     "@types/cors": "^2.8.19",
     "ai": "^6.0.42",
     "commander": "^14.0.2",

@@ -3,6 +3,7 @@ import { ui } from "@melony/ui-kit/server";
 import { z } from "zod";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { statusWidget } from "../../ui/widgets/status.js";
 
 export const fileSystemToolDefinitions = {
   readFile: {
@@ -188,7 +189,7 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
 
   builder.on("file-system:status" as any, async function* (event: FileSystemStatusEvent) {
     yield ui.event(
-      ui.status(event.data.message, event.data.severity)
+      statusWidget(event.data.message, event.data.severity)
     );
   });
 };

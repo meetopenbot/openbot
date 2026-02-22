@@ -12,11 +12,11 @@ importers:
         specifier: ^0.2.7
         version: 0.2.7(react@19.2.4)
       '@melony/ui-kit':
-        specifier: ^0.1.5
-        version: 0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: ^0.1.30
+        version: 0.1.30(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@melony/ui-shadcn':
-        specifier: ^0.1.7
-        version: 0.1.7(@melony/react@0.2.7(react@19.2.4))(@melony/ui-kit@0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react@19.2.14)(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: ^0.1.32
+        version: 0.1.32(@melony/react@0.2.7(react@19.2.4))(@melony/ui-kit@0.1.30(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react@19.2.14)(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@tailwindcss/vite':
         specifier: ^4.1.17
         version: 4.1.18(vite@7.3.1(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.30.2))
@@ -435,19 +435,19 @@ packages:
     peerDependencies:
       react: '>=18'
 
-  '@melony/ui-kit@0.1.5':
-    resolution: {integrity: sha512-AyDRboBlj5ujAaikq57GRzsQUmmgk+/b1R7BpkRGQlUhVtoobaPAXYEXR2VLUgiojWVz3lyygIhV5isMGX9nMA==}
+  '@melony/ui-kit@0.1.30':
+    resolution: {integrity: sha512-dUSjaQkcLDDqEJ68abUwzh4iiGgrlc8d49ysB8aEh+IdZWCUPAAxnBBB9zPWkLHwltnk5/bK3eMV++VRLJWzzA==}
     peerDependencies:
-      melony: 0.2.8
+      melony: ^0.2.9
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
-  '@melony/ui-shadcn@0.1.7':
-    resolution: {integrity: sha512-BRBqoqd2g5+Ig2BVfpIGV7zxUanODyzTwI6eKQbs5giJpl8S6QvyHB28+nsHjvsxVYz7XBX++Q70QMSSCT9nqw==}
+  '@melony/ui-shadcn@0.1.32':
+    resolution: {integrity: sha512-VddG7xXRukije6u0JIkOKbxSN/BhiEE5/rkcgqqXLBYQUuZ2vZYUND5Gns0xS9+K44TWuDVhF4iIGx7Ook9Xdw==}
     peerDependencies:
-      '@melony/react': 0.2.7
-      '@melony/ui-kit': 0.1.5
-      melony: 0.2.8
+      '@melony/react': ^0.2.7
+      '@melony/ui-kit': ^0.1.30
+      melony: ^0.2.9
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
@@ -1278,8 +1278,8 @@ packages:
   mdast-util-find-and-replace@3.0.2:
     resolution: {integrity: sha512-Tmd1Vg/m3Xz43afeNxDIhWRtFZgM2VLyaf4vSTYwudTyeuTneoL3qtWMA5jeLyz/O1vDJmmV4QuScFCA2tBPwg==}
 
-  mdast-util-from-markdown@2.0.2:
-    resolution: {integrity: sha512-uZhTV/8NBuw0WHkPTrCqDOl0zVe1BIng5ZtHoDk49ME1qqcjYmmLmOf0gELgcRMxN4w2iuIeVso5/6QymSrgmA==}
+  mdast-util-from-markdown@2.0.3:
+    resolution: {integrity: sha512-W4mAWTvSlKvf8L6J+VN9yLSqQ9AOAAvHuoDAmPkz4dHf553m5gVj2ejadHJhoJmcmxEnOv6Pa8XJhpxE93kb8Q==}
 
   mdast-util-gfm-autolink-literal@2.0.1:
     resolution: {integrity: sha512-5HVP2MKaP6L+G6YaxPNjuL0BPrq9orG3TsrZ9YXbA3vDw/ACI4MEsnoDpn6ZNm7GnZgtAcONJyPhOP8tNJQavQ==}
@@ -1586,8 +1586,8 @@ packages:
   tabbable@6.4.0:
     resolution: {integrity: sha512-05PUHKSNE8ou2dwIxTngl4EzcnsCDZGJ/iCLtDflR/SHB/ny14rXc+qU5P4mG9JkusiV7EivzY9Mhm55AzAvCg==}
 
-  tailwind-merge@3.4.0:
-    resolution: {integrity: sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g==}
+  tailwind-merge@3.5.0:
+    resolution: {integrity: sha512-I8K9wewnVDkL1NTGoqWmVEIlUcB9gFriAEkXkfCjX5ib8ezGxtR3xD7iZIxrfArjEsH7F1CHD4RFUtxefdqV/A==}
 
   tailwindcss@4.1.18:
     resolution: {integrity: sha512-4+Z+0yiYyEtUVCScyfHCxOYP06L5Ne+JiHhY2IjR2KWMIWhJOYZKLSGZaP5HkZ8+bY0cxfzwDE5uOmzFXyIwxw==}
@@ -2060,17 +2060,17 @@ snapshots:
       melony: 0.2.8
       react: 19.2.4
 
-  '@melony/ui-kit@0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@melony/ui-kit@0.1.30(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       melony: 0.2.8
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@melony/ui-shadcn@0.1.7(@melony/react@0.2.7(react@19.2.4))(@melony/ui-kit@0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react@19.2.14)(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@melony/ui-shadcn@0.1.32(@melony/react@0.2.7(react@19.2.4))(@melony/ui-kit@0.1.30(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react@19.2.14)(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@base-ui/react': 1.2.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@melony/react': 0.2.7(react@19.2.4)
-      '@melony/ui-kit': 0.1.5(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@melony/ui-kit': 0.1.30(melony@0.2.8)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
       lucide-react: 0.454.0(react@19.2.4)
@@ -2080,7 +2080,7 @@ snapshots:
       react-markdown: 10.1.0(@types/react@19.2.14)(react@19.2.4)
       remark-breaks: 4.0.0
       remark-gfm: 4.0.1
-      tailwind-merge: 3.4.0
+      tailwind-merge: 3.5.0
     transitivePeerDependencies:
       - '@types/react'
       - supports-color
@@ -2862,7 +2862,7 @@ snapshots:
       unist-util-is: 6.0.1
       unist-util-visit-parents: 6.0.2
 
-  mdast-util-from-markdown@2.0.2:
+  mdast-util-from-markdown@2.0.3:
     dependencies:
       '@types/mdast': 4.0.4
       '@types/unist': 3.0.3
@@ -2891,7 +2891,7 @@ snapshots:
     dependencies:
       '@types/mdast': 4.0.4
       devlop: 1.1.0
-      mdast-util-from-markdown: 2.0.2
+      mdast-util-from-markdown: 2.0.3
       mdast-util-to-markdown: 2.1.2
       micromark-util-normalize-identifier: 2.0.1
     transitivePeerDependencies:
@@ -2900,7 +2900,7 @@ snapshots:
   mdast-util-gfm-strikethrough@2.0.0:
     dependencies:
       '@types/mdast': 4.0.4
-      mdast-util-from-markdown: 2.0.2
+      mdast-util-from-markdown: 2.0.3
       mdast-util-to-markdown: 2.1.2
     transitivePeerDependencies:
       - supports-color
@@ -2910,7 +2910,7 @@ snapshots:
       '@types/mdast': 4.0.4
       devlop: 1.1.0
       markdown-table: 3.0.4
-      mdast-util-from-markdown: 2.0.2
+      mdast-util-from-markdown: 2.0.3
       mdast-util-to-markdown: 2.1.2
     transitivePeerDependencies:
       - supports-color
@@ -2919,14 +2919,14 @@ snapshots:
     dependencies:
       '@types/mdast': 4.0.4
       devlop: 1.1.0
-      mdast-util-from-markdown: 2.0.2
+      mdast-util-from-markdown: 2.0.3
       mdast-util-to-markdown: 2.1.2
     transitivePeerDependencies:
       - supports-color
 
   mdast-util-gfm@3.1.0:
     dependencies:
-      mdast-util-from-markdown: 2.0.2
+      mdast-util-from-markdown: 2.0.3
       mdast-util-gfm-autolink-literal: 2.0.1
       mdast-util-gfm-footnote: 2.1.0
       mdast-util-gfm-strikethrough: 2.0.0
@@ -2942,7 +2942,7 @@ snapshots:
       '@types/hast': 3.0.4
       '@types/mdast': 4.0.4
       devlop: 1.1.0
-      mdast-util-from-markdown: 2.0.2
+      mdast-util-from-markdown: 2.0.3
       mdast-util-to-markdown: 2.1.2
     transitivePeerDependencies:
       - supports-color
@@ -2955,7 +2955,7 @@ snapshots:
       '@types/unist': 3.0.3
       ccount: 2.0.1
       devlop: 1.1.0
-      mdast-util-from-markdown: 2.0.2
+      mdast-util-from-markdown: 2.0.3
       mdast-util-to-markdown: 2.1.2
       parse-entities: 4.0.2
       stringify-entities: 4.0.4
@@ -2970,7 +2970,7 @@ snapshots:
       '@types/hast': 3.0.4
       '@types/mdast': 4.0.4
       devlop: 1.1.0
-      mdast-util-from-markdown: 2.0.2
+      mdast-util-from-markdown: 2.0.3
       mdast-util-to-markdown: 2.1.2
     transitivePeerDependencies:
       - supports-color
@@ -3330,7 +3330,7 @@ snapshots:
   remark-parse@11.0.0:
     dependencies:
       '@types/mdast': 4.0.4
-      mdast-util-from-markdown: 2.0.2
+      mdast-util-from-markdown: 2.0.3
       micromark-util-types: 2.0.2
       unified: 11.0.5
     transitivePeerDependencies:
@@ -3428,7 +3428,7 @@ snapshots:
 
   tabbable@6.4.0: {}
 
-  tailwind-merge@3.4.0: {}
+  tailwind-merge@3.5.0: {}
 
   tailwindcss@4.1.18: {}
 

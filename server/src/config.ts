@@ -38,6 +38,11 @@ export function saveConfig(config: Partial<MelonyConfig>) {
   fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), { mode: 0o600 });
 }
 
+export function isConfigured(): boolean {
+  const configPath = path.join(os.homedir(), ".openbot", "config.json");
+  return fs.existsSync(configPath);
+}
+
 export function resolvePath(p: string) {
   return p.startsWith("~/") ? path.join(os.homedir(), p.slice(2)) : path.resolve(p);
 }

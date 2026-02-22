@@ -6,6 +6,7 @@ import { BrainPluginOptions } from "./types.js";
 import { createIdentityModule } from "./identity.js";
 import { createMemoryModule } from "./memory.js";
 import { buildBrainPrompt, BrainModules } from "./prompt.js";
+import { statusWidget } from "../../ui/widgets/status.js";
 
 // Re-exports
 export { brainToolDefinitions } from "./types.js";
@@ -316,7 +317,7 @@ export const brainPlugin = (
   });
 
   builder.on("brain:status" as any, async function* (event: BrainStatusEvent) {
-    yield ui.event(ui.status(event.data.message, event.data.severity));
+    yield ui.event(statusWidget(event.data.message, event.data.severity));
   });
 };
 
