@@ -2,9 +2,18 @@ import { MelonyPlugin, Event, RuntimeContext } from "melony";
 import { streamText, LanguageModel } from "ai";
 import { z } from "zod";
 
+interface AttachmentRef {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  url: string;
+}
+
 interface SimpleMessage {
   role: "system" | "user" | "assistant";
   content: string;
+  attachments?: AttachmentRef[];
 }
 
 /**
@@ -13,6 +22,46 @@ interface SimpleMessage {
  */
 function getRecentHistory(messages: SimpleMessage[], maxMessages: number): SimpleMessage[] {
   return messages.slice(-maxMessages);
+}
+
+async function buildMessageContent(message: SimpleMessage): Promise<any> {
+  if (!message.attachments?.length) return message.content;
+
+  const parts: any[] = [];
+  const trimmed = message.content.trim();
+  if (trimmed) {
+    parts.push({ type: "text", text: trimmed });
+  }
+
+  for (const attachment of message.attachments) {
+    if (!attachment?.mimeType?.startsWith("image/")) continue;
+    if (!attachment.url) continue;
+
+    try {
+      const response = await fetch(attachment.url);
+      if (!response.ok) continue;
+      const bytes = await response.arrayBuffer();
+      parts.push({
+        type: "image",
+        image: Buffer.from(bytes),
+        mimeType: attachment.mimeType,
+      });
+    } catch {
+      // Best-effort multimodal handling: skip failed image fetches.
+    }
+  }
+
+  return parts.length > 0 ? parts : message.content;
+}
+
+async function toModelMessages(messages: SimpleMessage[]): Promise<any[]> {
+  const built = await Promise.all(
+    messages.map(async (message) => ({
+      role: message.role,
+      content: await buildMessageContent(message),
+    }))
+  );
+  return built;
 }
 
 export interface LLMPluginOptions {
@@ -74,6 +123,7 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     const systemPrompt = typeof system === "function" ? await system(context) : system;
 
     const recentMessages = getRecentHistory(state.messages, 20);
+    const modelMessages = await toModelMessages(recentMessages);
     
     // Initialize an empty assistant message to be populated as we stream
     const assistantMessage: SimpleMessage = { role: "assistant", content: "" };
@@ -82,7 +132,7 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     const result = streamText({
       model,
       system: systemPrompt,
-      messages: recentMessages,
+      messages: modelMessages,
       tools: toolDefinitions,
     });
 
@@ -164,8 +214,9 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
 
   // Handle user text input
   builder.on(promptInputType, async function* (event, context) {
-    const content = event.data.content;
-    yield* routeToLLM({ role: "user", content }, context);
+    const content = typeof event.data?.content === "string" ? event.data.content : "";
+    const attachments = Array.isArray(event.data?.attachments) ? event.data.attachments : undefined;
+    yield* routeToLLM({ role: "user", content, attachments }, context);
   });
 
   // Feed action results back to the LLM as user messages (with a System prefix)

@@ -2,7 +2,7 @@ import { useMelony } from "@melony/react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "../hooks/use-session";
-import { api } from "../lib/api";
+import { api, type AttachmentRef } from "../lib/api";
 import { AgentAvatar } from "./AgentAvatar";
 
 const BUILT_IN_AGENTS = [
@@ -16,7 +16,10 @@ export function Composer() {
   const { sessionId } = useSession();
   const [content, setContent] = useState("");
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [pendingImages, setPendingImages] = useState<Array<{ id: string; file: File; previewUrl: string }>>([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [popoverIndex, setPopoverIndex] = useState(0);
 
   const { data: customAgents = [] } = useQuery({
@@ -37,19 +40,79 @@ export function Composer() {
     }
   }, [agentQuery, showAgentPopover]);
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!content.trim() || streaming) return;
-
-    const finalContent = selectedAgent
-      ? `@${selectedAgent} ${content.trim()}`
-      : content.trim();
-
-    send({
-      type: "user:text",
-      data: { content: finalContent },
+  const clearPendingImages = () => {
+    setPendingImages((current) => {
+      current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      return [];
     });
+  };
+
+  const readFileAsBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const value = reader.result;
+        if (typeof value !== "string") {
+          reject(new Error("Failed to read image"));
+          return;
+        }
+        const marker = "base64,";
+        const markerIndex = value.indexOf(marker);
+        resolve(markerIndex >= 0 ? value.slice(markerIndex + marker.length) : value);
+      };
+      reader.onerror = () => reject(reader.error ?? new Error("Failed to read image"));
+      reader.readAsDataURL(file);
+    });
+
+  const uploadPendingImages = async (): Promise<AttachmentRef[]> => {
+    const uploads: AttachmentRef[] = [];
+    for (const image of pendingImages) {
+      const dataBase64 = await readFileAsBase64(image.file);
+      const uploaded = await api.uploadImage({
+        name: image.file.name,
+        mimeType: image.file.type,
+        dataBase64,
+      });
+      uploads.push(uploaded);
+    }
+    return uploads;
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if ((!content.trim() && pendingImages.length === 0) || streaming || uploadingImages) return;
+
+    const trimmed = content.trim();
+    const finalContent = selectedAgent
+      ? trimmed ? `@${selectedAgent} ${trimmed}` : `@${selectedAgent}`
+      : trimmed;
+
+    let attachments: AttachmentRef[] = [];
+
+    if (pendingImages.length > 0) {
+      try {
+        setUploadingImages(true);
+        attachments = await uploadPendingImages();
+      } catch (error) {
+        console.error("Image upload failed:", error);
+        setUploadingImages(false);
+        return;
+      } finally {
+        setUploadingImages(false);
+      }
+    }
+
+    send(attachments.length > 0
+      ? {
+        type: "user:multimodal",
+        data: { content: finalContent, attachments },
+      }
+      : {
+        type: "user:text",
+        data: { content: finalContent },
+      });
     setContent("");
+    clearPendingImages();
     // Do NOT reset selectedAgent here, so it sticks between messages!
   };
 
@@ -65,6 +128,32 @@ export function Composer() {
 
   const handleRemoveAgent = () => {
     setSelectedAgent(null);
+  };
+
+  const handleAttachImageClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) return;
+
+    const newItems = imageFiles.map((file) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+    setPendingImages((prev) => [...prev, ...newItems]);
+    e.target.value = "";
+  };
+
+  const removePendingImage = (id: string) => {
+    setPendingImages((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((item) => item.id !== id);
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -101,6 +190,7 @@ export function Composer() {
   useEffect(() => {
     setContent("");
     setSelectedAgent(null);
+    clearPendingImages();
 
     // Check for pre-filled message in URL
     const params = new URLSearchParams(window.location.search);
@@ -123,6 +213,8 @@ export function Composer() {
       window.history.replaceState({}, "", newUrl);
     }
   }, [sessionId]);
+
+  useEffect(() => () => clearPendingImages(), []);
 
   useEffect(() => {
     const handleSetText = (e: Event) => {
@@ -167,7 +259,7 @@ export function Composer() {
     }
   }, [streaming, sessionId]);
 
-  const canSend = Boolean(content.trim()) && !streaming;
+  const canSend = (Boolean(content.trim()) || pendingImages.length > 0) && !streaming && !uploadingImages;
 
   const usageEvent = useMemo(() => {
     const eventsList = (events ?? []) as any[];
@@ -244,6 +336,32 @@ export function Composer() {
             </div>
           </div>
         )}
+        {pendingImages.length > 0 && (
+          <div className="px-3 pt-2">
+            <div className="flex flex-wrap gap-2">
+              {pendingImages.map((image) => (
+                <div key={image.id} className="relative">
+                  <img
+                    src={image.previewUrl}
+                    alt={image.file.name}
+                    className="h-14 w-14 rounded-lg border border-border/60 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePendingImage(image.id)}
+                    className="absolute -right-1.5 -top-1.5 rounded-full border border-border/70 bg-background p-0.5 text-muted-foreground hover:text-foreground"
+                    aria-label={`Remove ${image.file.name}`}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           value={content}
@@ -254,7 +372,29 @@ export function Composer() {
           rows={1}
         />
         <div className="flex items-center justify-between px-3 pb-2.5">
-          <div></div>
+          <div className="flex items-center">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileInputChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={handleAttachImageClick}
+              className="rounded-md p-1.5 text-muted-foreground/80 transition-colors hover:bg-muted/60 hover:text-foreground"
+              aria-label="Attach image"
+              title="Attach image"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="m21 15-5-5L5 21" />
+              </svg>
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
               {contextWindowTokens > 0 && (
@@ -323,7 +463,7 @@ export function Composer() {
                   ? "bg-foreground text-background hover:opacity-80"
                   : "cursor-not-allowed text-muted-foreground/30"
                   }`}
-                aria-label="Send message"
+                aria-label={uploadingImages ? "Uploading images" : "Send message"}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M5 12h14" />

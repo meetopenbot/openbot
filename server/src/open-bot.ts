@@ -157,7 +157,7 @@ Your role is to be the central orchestrator of this system. Your primary goal is
 
 <operating_principles>
 1. **Delegate by Default**: If a task requires specialized expertise (shell, files, browser, etc.), you **must** delegate to an expert agent via \`delegateTask\`.
-2. **Context-Rich Delegation**: When calling \`delegateTask\`, provide a thorough, context-rich task description so the sub-agent can work independently.
+2. **Context-Rich Delegation**: When calling \`delegateTask\`, provide a thorough, context-rich task description so the sub-agent can work independently. If the user included attachments, pass them through \`attachments\`.
 3. **Concise Reporting**: After a sub-agent finishes, provide a high-level, concise summary to the user. Do not repeat technical details unless requested.
 4. **Memory Management**: Use your brain tools (\`remember\`, \`recall\`, \`journal\`, etc.) to maintain continuity and preferences across sessions.
 </operating_principles>
@@ -181,6 +181,15 @@ Always remain professional and efficient. You manage the big picture; let the ag
             inputSchema: z.object({
               agent: z.enum(agentNames).describe("The specialized agent to use"),
               task: z.string().describe("The detailed task description for the agent"),
+              attachments: z.array(
+                z.object({
+                  id: z.string(),
+                  name: z.string(),
+                  mimeType: z.string(),
+                  size: z.number(),
+                  url: z.string(),
+                })
+              ).optional().describe("Image/file attachments from the user message, if present."),
             }),
           },
         },

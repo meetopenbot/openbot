@@ -24,6 +24,14 @@ export interface AppConfig {
   hasAnthropicKey: boolean;
 }
 
+export interface AttachmentRef {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  url: string;
+}
+
 export const api = {
   getConfig: () => request<AppConfig>("/api/config"),
 
@@ -62,5 +70,11 @@ export const api = {
     request<{ success: boolean }>("/api/actions/open-folder", {
       method: "POST",
       body: JSON.stringify({ folder }),
+    }),
+
+  uploadImage: (data: { name: string; mimeType: string; dataBase64: string }) =>
+    request<AttachmentRef>("/api/uploads/image", {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
 };

@@ -78,8 +78,12 @@ export class Orchestrator {
       return;
     }
 
-    if (event.type === "user:text") {
-      const content = (event.data as any).content?.trim() || "";
+    if (event.type === "user:text" || event.type === "user:multimodal") {
+      const rawContent = (event.data as any).content;
+      const content = typeof rawContent === "string" ? rawContent.trim() : "";
+      const attachments = Array.isArray((event.data as any).attachments)
+        ? (event.data as any).attachments
+        : undefined;
 
       if (content.startsWith("/") || content.startsWith("@")) {
         const firstSpace = content.indexOf(" ");
@@ -90,14 +94,14 @@ export class Orchestrator {
 
         if (this.agents.has(prefix)) {
           state.lastDirectAgent = prefix;
-          yield* this.runAgentDirect(prefix, task, state, runId);
+          yield* this.runAgentDirect(prefix, task, attachments, state, runId);
           return;
         }
       }
 
       state.lastDirectAgent = undefined;
       yield* this.runManagerLoop(
-        { type: "manager:input", data: event.data } as ChatEvent,
+        { type: "manager:input", data: { content, attachments } } as ChatEvent,
         state,
         runId
       );
@@ -121,7 +125,7 @@ export class Orchestrator {
 
     for await (const yielded of runtime.run(event, { state, runId })) {
       if (yielded.type === "action:delegateTask") {
-        const { agent: agentName, task, toolCallId } = (yielded as any).data;
+        const { agent: agentName, task, attachments, toolCallId } = (yielded as any).data;
 
         if (!this.agents.has(agentName)) {
           yield* this.runManagerLoop(
@@ -149,6 +153,7 @@ export class Orchestrator {
           for await (const agentEvent of this.runAgentInternal(
             agentName,
             task,
+            attachments,
             state,
             runId
           )) {
@@ -194,6 +199,7 @@ export class Orchestrator {
   private async *runAgentInternal(
     agentName: string,
     task: string,
+    attachments: any[] | undefined,
     sessionState: ChatState,
     runId: string
   ): AsyncGenerator<ChatEvent> {
@@ -203,7 +209,7 @@ export class Orchestrator {
 
     const inputEvent = {
       type: `agent:${agentName}:input`,
-      data: { content: task },
+      data: { content: task, attachments },
     } as ChatEvent;
 
     for await (const yielded of runtime.run(inputEvent, {
@@ -221,12 +227,14 @@ export class Orchestrator {
   private async *runAgentDirect(
     agentName: string,
     task: string,
+    attachments: any[] | undefined,
     sessionState: ChatState,
     runId: string
   ): AsyncGenerator<ChatEvent> {
     for await (const yielded of this.runAgentInternal(
       agentName,
       task,
+      attachments,
       sessionState,
       runId
     )) {

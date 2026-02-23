@@ -10,6 +10,7 @@ import { exec } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import type { ChatEvent, ChatRequest, ChatState } from "./types.js";
 
 export interface ServerOptions {
@@ -29,7 +30,30 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: "20mb" }));
+
+  const getUploadsDir = () => {
+    const cfg = loadConfig();
+    const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
+    const resolvedBaseDir = resolvePath(baseDir);
+    return path.join(resolvedBaseDir, "uploads");
+  };
+
+  const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+  const allowedMimeTypes = new Set([
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/gif",
+    "image/svg+xml",
+  ]);
+  const extensionByMimeType: Record<string, string> = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/svg+xml": ".svg",
+  };
 
   const PREDEFINED_MODELS = [
     { id: "openai/gpt-4o", label: "OpenAI GPT-4o" },
@@ -82,6 +106,68 @@ export async function startServer(options: ServerOptions = {}) {
       { label: "How can you help me?", icon: "sparkles" },
       { label: "What is the weather in Tokyo?", icon: "sun" },
     ]);
+  });
+
+  app.post("/api/uploads/image", async (req, res) => {
+    const { name, mimeType, dataBase64 } = req.body as {
+      name?: string;
+      mimeType?: string;
+      dataBase64?: string;
+    };
+
+    if (!mimeType || !allowedMimeTypes.has(mimeType)) {
+      return res.status(400).json({ error: "Unsupported image mime type" });
+    }
+
+    if (!dataBase64 || typeof dataBase64 !== "string") {
+      return res.status(400).json({ error: "Image payload is required" });
+    }
+
+    const bytes = Buffer.from(dataBase64, "base64");
+    if (!bytes.length) {
+      return res.status(400).json({ error: "Invalid image payload" });
+    }
+
+    if (bytes.length > MAX_IMAGE_BYTES) {
+      return res.status(413).json({ error: "Image too large (max 8MB)" });
+    }
+
+    try {
+      const ext = extensionByMimeType[mimeType] ?? ".bin";
+      const id = `${Date.now()}-${randomUUID()}${ext}`;
+      const uploadsDir = getUploadsDir();
+      await fs.mkdir(uploadsDir, { recursive: true });
+      await fs.writeFile(path.join(uploadsDir, id), bytes);
+
+      const origin = `${req.protocol}://${req.get("host")}`;
+      res.json({
+        id,
+        name: typeof name === "string" && name.trim() ? name.trim() : `image${ext}`,
+        mimeType,
+        size: bytes.length,
+        url: `${origin}/api/uploads/${encodeURIComponent(id)}`,
+      });
+    } catch (error) {
+      console.error("Image upload failed:", error);
+      res.status(500).json({ error: "Failed to store image" });
+    }
+  });
+
+  app.get("/api/uploads/:id", async (req, res) => {
+    const { id } = req.params;
+    if (!id || id.includes("/") || id.includes("\\")) {
+      return res.status(400).send("Invalid upload id");
+    }
+
+    const uploadsDir = getUploadsDir();
+    const filePath = path.join(uploadsDir, id);
+
+    try {
+      await fs.access(filePath);
+      res.sendFile(filePath);
+    } catch {
+      res.status(404).send("Upload not found");
+    }
   });
 
   app.get("/api/config", async (_req, res) => {

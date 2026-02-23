@@ -48,6 +48,25 @@ export function App() {
           },
         });
       },
+      "user:multimodal": async (event: any, { client }: any) => {
+        ensureSessionInUrl();
+        const generator = client.send(event, { sessionId });
+        const invalidateTags = new Set<string>();
+
+        for await (const chunk of generator) {
+          if (chunk?.type === "client:invalidate" && Array.isArray(chunk.data?.tags)) {
+            chunk.data.tags.forEach((tag: string) => invalidateTags.add(tag));
+          }
+        }
+
+        invalidateTags.add("sessions");
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            const queryTags = (query.meta as any)?.tags as string[] | undefined;
+            return queryTags?.some((tag) => invalidateTags.has(tag)) ?? false;
+          },
+        });
+      },
     }),
     [sessionId, queryClient, ensureSessionInUrl]
   );
