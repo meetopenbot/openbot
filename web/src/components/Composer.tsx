@@ -26,7 +26,7 @@ export function Composer() {
 
   const isTypingAgent = content.startsWith("@") && !content.includes(" ");
   const agentQuery = isTypingAgent ? content.slice(1).toLowerCase() : "";
-  
+
   const allAgents = [...BUILT_IN_AGENTS, ...customAgents];
   const filteredAgents = allAgents.filter(a => a.name.toLowerCase().includes(agentQuery));
   const showAgentPopover = isTypingAgent && filteredAgents.length > 0;
@@ -41,7 +41,7 @@ export function Composer() {
     e?.preventDefault();
     if (!content.trim() || streaming) return;
 
-    const finalContent = selectedAgent 
+    const finalContent = selectedAgent
       ? `@${selectedAgent} ${content.trim()}`
       : content.trim();
 
@@ -101,7 +101,7 @@ export function Composer() {
   useEffect(() => {
     setContent("");
     setSelectedAgent(null);
-    
+
     // Check for pre-filled message in URL
     const params = new URLSearchParams(window.location.search);
     const msg = params.get("msg");
@@ -110,14 +110,14 @@ export function Composer() {
         const firstSpace = msg.indexOf(" ");
         const prefix = msg.slice(1, firstSpace);
         const rest = msg.slice(firstSpace + 1).trim();
-        
+
         // Trust the prefix from the URL
         setSelectedAgent(prefix);
         setContent(rest);
       } else {
         setContent(msg);
       }
-      
+
       // Clean up the URL
       const newUrl = window.location.pathname + "?tab=" + (params.get("tab") || "chat");
       window.history.replaceState({}, "", newUrl);
@@ -133,7 +133,7 @@ export function Composer() {
           const firstSpace = msg.indexOf(" ");
           const prefix = msg.slice(1, firstSpace);
           const rest = msg.slice(firstSpace + 1).trim();
-          
+
           setSelectedAgent(prefix);
           setContent(rest);
         } else {
@@ -209,9 +209,8 @@ export function Composer() {
                 type="button"
                 onMouseEnter={() => setPopoverIndex(i)}
                 onClick={() => handleSelectAgent(agent.name)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
-                  i === popoverIndex ? "bg-muted/60" : "hover:bg-muted/40"
-                }`}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${i === popoverIndex ? "bg-muted/60" : "hover:bg-muted/40"
+                  }`}
               >
                 <AgentAvatar name={agent.name} className="w-8 h-8 rounded-lg" />
                 <div className="flex flex-col items-start gap-0.5">
@@ -255,82 +254,84 @@ export function Composer() {
           rows={1}
         />
         <div className="flex items-center justify-between px-3 pb-2.5">
-          <div className="flex items-center gap-1">
-            {contextWindowTokens > 0 && (
-              <div className="group relative">
-                <div
-                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground/80 transition-colors group-hover:bg-muted/60 group-hover:text-foreground"
-                  aria-label="Context usage"
-                >
-                  <svg width="20" height="20" viewBox="0 0 20 20" className="-rotate-90">
-                    <circle
-                      cx="10"
-                      cy="10"
-                      r={circleRadius}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className="opacity-20"
-                    />
-                    <circle
-                      cx="10"
-                      cy="10"
-                      r={circleRadius}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeDasharray={circleCircumference}
-                      strokeDashoffset={circleDashOffset}
-                      className="transition-all duration-300"
-                    />
-                  </svg>
-                </div>
-                <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 z-20 hidden min-w-[210px] rounded-lg border border-border/60 bg-background px-2.5 py-2 text-[11px] shadow-xl group-hover:block">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">Context</span>
-                    <span className="font-medium text-foreground">{contextPercent.toFixed(1)}%</span>
+          <div></div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              {contextWindowTokens > 0 && (
+                <div className="group relative">
+                  <div
+                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground/80 transition-colors group-hover:bg-muted/60 group-hover:text-foreground"
+                    aria-label="Context usage"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 20 20" className="-rotate-90">
+                      <circle
+                        cx="10"
+                        cy="10"
+                        r={circleRadius}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        className="opacity-20"
+                      />
+                      <circle
+                        cx="10"
+                        cy="10"
+                        r={circleRadius}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeDasharray={circleCircumference}
+                        strokeDashoffset={circleDashOffset}
+                        className="transition-all duration-300"
+                      />
+                    </svg>
                   </div>
-                  <div className="mt-1 text-muted-foreground">
-                    {formatInt(sessionTotalTokens)} / {formatInt(contextWindowTokens)} tokens
-                  </div>
-                  {usageModel && (
-                    <div className="mt-1 truncate text-muted-foreground/80">
-                      {usageModel}
+                  <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 hidden w-[160px] -translate-x-1/2 rounded-lg border border-border/60 bg-background px-2.5 py-2 text-[11px] shadow-xl group-hover:block">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">Context</span>
+                      <span className="font-medium text-foreground">{contextPercent.toFixed(1)}%</span>
                     </div>
-                  )}
+                    <div className="mt-1 text-muted-foreground">
+                      {formatInt(sessionTotalTokens)} / {formatInt(contextWindowTokens)} tokens
+                    </div>
+                    {usageModel && (
+                      <div className="mt-1 truncate text-muted-foreground/80">
+                        {usageModel}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-          {streaming ? (
-            <button
-              type="button"
-              onClick={handleStop}
-              className="rounded-lg bg-foreground p-1.5 text-background transition-all duration-150 hover:opacity-80"
-              aria-label="Stop generation"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="7" y="7" width="10" height="10" rx="1.5" />
-              </svg>
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={!canSend}
-              className={`rounded-lg p-1.5 transition-all duration-150 ${
-                canSend
+              )}
+            </div>
+            {streaming ? (
+              <button
+                type="button"
+                onClick={handleStop}
+                className="rounded-lg bg-foreground p-1.5 text-background transition-all duration-150 hover:opacity-80"
+                aria-label="Stop generation"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="7" y="7" width="10" height="10" rx="1.5" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!canSend}
+                className={`rounded-lg p-1.5 transition-all duration-150 ${canSend
                   ? "bg-foreground text-background hover:opacity-80"
                   : "cursor-not-allowed text-muted-foreground/30"
-              }`}
-              aria-label="Send message"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14" />
-                <path d="m12 5 7 7-7 7" />
-              </svg>
-            </button>
-          )}
+                  }`}
+                aria-label="Send message"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </form>
     </div>
