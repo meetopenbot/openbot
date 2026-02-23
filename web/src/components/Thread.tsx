@@ -2,6 +2,17 @@ import { useMelony } from "@melony/react";
 import { MelonyRenderer, type UINode } from "@melony/ui-kit";
 import { useEffect, useRef, type ReactNode } from "react";
 
+const TEXT_EVENT_TYPES = new Set([
+  "assistant:text",
+  "manager:completion",
+  "assistant:text-delta",
+  "user:text",
+]);
+
+function hasRenderableContent(message: { content: any[] }): boolean {
+  return message.content.some((event: any) => event.type === "ui" || TEXT_EVENT_TYPES.has(event.type));
+}
+
 function StreamingIndicator() {
   return (
     <div className="flex items-start w-full animate-fade-in">
@@ -23,12 +34,15 @@ export function Thread({
 }) {
   const { messages, streaming } = useMelony();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const visibleMessages = messages
+    .filter((m) => m.role !== "system")
+    .filter(hasRenderableContent);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streaming]);
+  }, [visibleMessages, streaming]);
 
-  if (messages.length === 0) {
+  if (visibleMessages.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] py-12 gap-8">
         <div className="flex flex-col gap-3">
@@ -41,7 +55,7 @@ export function Thread({
 
   return (
     <div className="flex flex-col flex-1 gap-5 w-full py-6 px-4">
-      {messages.filter(m => m.role !== 'system').map((msg, index) => (
+      {visibleMessages.map((msg, index) => (
         <div
           key={`${msg.runId}-${index}`}
           className={`flex flex-col w-full animate-fade-in ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
@@ -51,7 +65,6 @@ export function Thread({
             : ''
           }`}>
             {(() => {
-              const textEventTypes = ["assistant:text", "manager:completion", "assistant:text-delta", "user:text"];
               let lastText = "";
 
               return (
@@ -61,8 +74,8 @@ export function Thread({
                       return <MelonyRenderer key={`${msg.runId}-ui-${i}`} node={event.data} />;
                     }
 
-                    if (textEventTypes.includes(event.type)) {
-                      const isLastInSequence = !textEventTypes.includes(msg.content[i + 1]?.type);
+                    if (TEXT_EVENT_TYPES.has(event.type)) {
+                      const isLastInSequence = !TEXT_EVENT_TYPES.has(msg.content[i + 1]?.type);
                       if (!isLastInSequence) return null;
 
                       const fullText = event.data?.content || "";

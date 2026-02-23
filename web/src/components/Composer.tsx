@@ -1,5 +1,5 @@
 import { useMelony } from "@melony/react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "../hooks/use-session";
 import { api } from "../lib/api";
@@ -12,7 +12,7 @@ const BUILT_IN_AGENTS = [
 ];
 
 export function Composer() {
-  const { send, streaming } = useMelony();
+  const { send, streaming, stop, events } = useMelony();
   const { sessionId } = useSession();
   const [content, setContent] = useState("");
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
@@ -51,6 +51,10 @@ export function Composer() {
     });
     setContent("");
     // Do NOT reset selectedAgent here, so it sticks between messages!
+  };
+
+  const handleStop = () => {
+    stop();
   };
 
   const handleSelectAgent = (agentName: string) => {
@@ -163,7 +167,33 @@ export function Composer() {
     }
   }, [streaming, sessionId]);
 
-  const canSend = content.trim() && !streaming;
+  const canSend = Boolean(content.trim()) && !streaming;
+
+  const usageEvent = useMemo(() => {
+    const eventsList = (events ?? []) as any[];
+    for (let i = eventsList.length - 1; i >= 0; i -= 1) {
+      const event = eventsList[i];
+      if (event?.type === "usage:update" && event?.data?.scope === "manager") return event;
+    }
+    for (let i = eventsList.length - 1; i >= 0; i -= 1) {
+      const event = eventsList[i];
+      if (event?.type === "usage:update") return event;
+    }
+    return null;
+  }, [events]);
+
+  const usageData = usageEvent?.data;
+  const usageModel = usageData?.model as string | undefined;
+  const contextWindowTokens = Number(usageData?.contextWindowTokens ?? 0);
+  const sessionTotalTokens = Number(usageData?.session?.totalTokens ?? 0);
+  const contextPercent = contextWindowTokens > 0
+    ? Math.min((sessionTotalTokens / contextWindowTokens) * 100, 100)
+    : 0;
+  const circleRadius = 8;
+  const circleCircumference = 2 * Math.PI * circleRadius;
+  const circleDashOffset = circleCircumference - (circleCircumference * contextPercent) / 100;
+
+  const formatInt = (value: number) => new Intl.NumberFormat().format(Math.max(0, Math.floor(value)));
 
   return (
     <div className="relative w-full rounded-2xl border border-border/60 bg-background shadow-[0_2px_12px_rgba(0,0,0,0.04)] transition-all duration-200 focus-within:border-border focus-within:shadow-[0_2px_20px_rgba(0,0,0,0.06)]">
@@ -226,23 +256,81 @@ export function Composer() {
         />
         <div className="flex items-center justify-between px-3 pb-2.5">
           <div className="flex items-center gap-1">
-            {/* Future: attachment buttons */}
+            {contextWindowTokens > 0 && (
+              <div className="group relative">
+                <div
+                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground/80 transition-colors group-hover:bg-muted/60 group-hover:text-foreground"
+                  aria-label="Context usage"
+                >
+                  <svg width="20" height="20" viewBox="0 0 20 20" className="-rotate-90">
+                    <circle
+                      cx="10"
+                      cy="10"
+                      r={circleRadius}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className="opacity-20"
+                    />
+                    <circle
+                      cx="10"
+                      cy="10"
+                      r={circleRadius}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeDasharray={circleCircumference}
+                      strokeDashoffset={circleDashOffset}
+                      className="transition-all duration-300"
+                    />
+                  </svg>
+                </div>
+                <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 z-20 hidden min-w-[210px] rounded-lg border border-border/60 bg-background px-2.5 py-2 text-[11px] shadow-xl group-hover:block">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Context</span>
+                    <span className="font-medium text-foreground">{contextPercent.toFixed(1)}%</span>
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {formatInt(sessionTotalTokens)} / {formatInt(contextWindowTokens)} tokens
+                  </div>
+                  {usageModel && (
+                    <div className="mt-1 truncate text-muted-foreground/80">
+                      {usageModel}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-          <button
-            type="submit"
-            disabled={!canSend}
-            className={`rounded-lg p-1.5 transition-all duration-150 ${
-              canSend
-                ? "bg-foreground text-background hover:opacity-80"
-                : "cursor-not-allowed text-muted-foreground/30"
-            }`}
-            aria-label="Send message"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14" />
-              <path d="m12 5 7 7-7 7" />
-            </svg>
-          </button>
+          {streaming ? (
+            <button
+              type="button"
+              onClick={handleStop}
+              className="rounded-lg bg-foreground p-1.5 text-background transition-all duration-150 hover:opacity-80"
+              aria-label="Stop generation"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="7" y="7" width="10" height="10" rx="1.5" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!canSend}
+              className={`rounded-lg p-1.5 transition-all duration-150 ${
+                canSend
+                  ? "bg-foreground text-background hover:opacity-80"
+                  : "cursor-not-allowed text-muted-foreground/30"
+              }`}
+              aria-label="Send message"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+              </svg>
+            </button>
+          )}
         </div>
       </form>
     </div>

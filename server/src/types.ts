@@ -15,6 +15,22 @@ export type AgentOutputEvent = ChatEventBase<`agent:${string}:output`, { content
 
 export type BrowserStatusEvent = ChatEventBase<"browser:status", { message: string; severity?: "info" | "success" | "error" }>;
 export type BrowserStateUpdateEvent = ChatEventBase<"browser:state-update", { url: string; title: string; screenshot?: string; pagesCount: number }>;
+export type UsageUpdateEvent = ChatEventBase<"usage:update", {
+  scope?: string;
+  model?: string;
+  turn: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  session: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  contextWindowTokens: number;
+  contextUsedRatio: number;
+}>;
 
 export type ChatEvent =
   | UserTextEvent
@@ -26,7 +42,8 @@ export type ChatEvent =
   | AgentInputEvent
   | AgentOutputEvent
   | BrowserStatusEvent
-  | BrowserStateUpdateEvent;
+  | BrowserStateUpdateEvent
+  | UsageUpdateEvent;
 
 /**
  * Per-agent isolated state. Each agent runtime gets its own instance,

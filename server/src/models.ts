@@ -10,6 +10,22 @@ interface ParsedModel {
 }
 
 /**
+ * Approximate max context window by model family.
+ * Values are used for UI progress indication, not hard limits/enforcement.
+ */
+export function getModelContextWindowTokens(modelString: string): number {
+  const value = modelString.toLowerCase();
+
+  if (value.includes("claude")) return 200_000;
+  if (value.includes("gpt-5")) return 200_000;
+  if (value.includes("gpt-4o")) return 128_000;
+  if (value.includes("gpt-4.1")) return 128_000;
+  if (value.includes("o3") || value.includes("o4")) return 200_000;
+
+  return 128_000;
+}
+
+/**
  * Parse model string to extract provider and model ID
  * Supports formats: "provider/model" or just "model" (defaults to openai)
  */

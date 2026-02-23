@@ -80,9 +80,7 @@ export async function startServer(options: ServerOptions = {}) {
       { label: "Who are you?", icon: "user" },
       { label: "Who am I?", icon: "help-circle" },
       { label: "How can you help me?", icon: "sparkles" },
-      { label: "Run a shell command", icon: "terminal" },
-      { label: "Explain this codebase", icon: "code" },
-      { label: "Read some files", icon: "file" },
+      { label: "What is the weather in Tokyo?", icon: "sun" },
     ]);
   });
 

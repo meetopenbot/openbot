@@ -30,6 +30,10 @@ export interface LLMPluginOptions {
   promptInputType?: string;
   actionResultInputType?: string;
   completionEventType?: string;
+  usageEventType?: string;
+  usageScope?: string;
+  modelId?: string;
+  contextWindowTokens?: number;
 }
 
 /**
@@ -45,7 +49,11 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     actionEventPrefix = "action:",
     promptInputType = "user:text",
     actionResultInputType = "action:taskResult",
-    completionEventType
+    completionEventType,
+    usageEventType = "usage:update",
+    usageScope = "default",
+    modelId,
+    contextWindowTokens,
   } = options;
 
   async function* routeToLLM(
@@ -118,6 +126,29 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     state.usage.inputTokens += usage.inputTokens ?? 0;
     state.usage.outputTokens += usage.outputTokens ?? 0;
     state.usage.totalTokens += usage.totalTokens ?? 0;
+
+    if (!silent) {
+      const windowSize = contextWindowTokens ?? 0;
+      yield {
+        type: usageEventType,
+        data: {
+          scope: usageScope,
+          model: modelId,
+          turn: {
+            inputTokens: usage.inputTokens ?? 0,
+            outputTokens: usage.outputTokens ?? 0,
+            totalTokens: usage.totalTokens ?? 0,
+          },
+          session: {
+            inputTokens: state.usage.inputTokens,
+            outputTokens: state.usage.outputTokens,
+            totalTokens: state.usage.totalTokens,
+          },
+          contextWindowTokens: windowSize,
+          contextUsedRatio: windowSize > 0 ? Math.min(state.usage.totalTokens / windowSize, 1) : 0,
+        },
+      } as Event;
+    }
 
     // Emit tool call events
     for (const call of toolCalls) {
