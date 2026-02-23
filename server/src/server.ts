@@ -134,18 +134,25 @@ export async function startServer(options: ServerOptions = {}) {
 
     try {
       const ext = extensionByMimeType[mimeType] ?? ".bin";
-      const id = `${Date.now()}-${randomUUID()}${ext}`;
+      const now = new Date();
+      const y = now.getFullYear().toString();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const datePath = path.join(y, m);
+      const fileName = `${Date.now()}-${randomUUID()}${ext}`;
+      const id = path.posix.join(y, m, fileName);
       const uploadsDir = getUploadsDir();
-      await fs.mkdir(uploadsDir, { recursive: true });
-      await fs.writeFile(path.join(uploadsDir, id), bytes);
+      const datedDir = path.join(uploadsDir, datePath);
+      await fs.mkdir(datedDir, { recursive: true });
+      await fs.writeFile(path.join(datedDir, fileName), bytes);
 
       const origin = `${req.protocol}://${req.get("host")}`;
+      const encodedId = id.split("/").map(encodeURIComponent).join("/");
       res.json({
         id,
         name: typeof name === "string" && name.trim() ? name.trim() : `image${ext}`,
         mimeType,
         size: bytes.length,
-        url: `${origin}/api/uploads/${encodeURIComponent(id)}`,
+        url: `${origin}/api/uploads/${encodedId}`,
       });
     } catch (error) {
       console.error("Image upload failed:", error);
@@ -153,14 +160,19 @@ export async function startServer(options: ServerOptions = {}) {
     }
   });
 
-  app.get("/api/uploads/:id", async (req, res) => {
-    const { id } = req.params;
-    if (!id || id.includes("/") || id.includes("\\")) {
+  app.get("/api/uploads/*", async (req, res) => {
+    const rawPath = (req.params as any)[0];
+    if (!rawPath || rawPath.includes("\\")) {
+      return res.status(400).send("Invalid upload id");
+    }
+
+    const normalized = path.posix.normalize(rawPath);
+    if (normalized.startsWith("../") || normalized === "..") {
       return res.status(400).send("Invalid upload id");
     }
 
     const uploadsDir = getUploadsDir();
-    const filePath = path.join(uploadsDir, id);
+    const filePath = path.join(uploadsDir, normalized);
 
     try {
       await fs.access(filePath);
