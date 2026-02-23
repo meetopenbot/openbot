@@ -28,10 +28,26 @@ export type ChatEvent =
   | BrowserStatusEvent
   | BrowserStateUpdateEvent;
 
+/**
+ * Per-agent isolated state. Each agent runtime gets its own instance,
+ * stored in `ChatState.agentStates[agentName]`.
+ */
+export interface AgentState {
+  messages?: any[];
+  cwd?: string;
+  pendingApprovals?: Record<string, any>;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+}
+
 export interface ChatState {
   title?: string;
   sessionId?: string;
   lastUserMessage?: string;
+  /** Manager conversation history */
   messages?: any[];
   cwd?: string;
   workspaceRoot?: string;
@@ -42,6 +58,8 @@ export interface ChatState {
   };
   pendingAgentTasks?: Record<string, { toolCallId: string }>;
   lastDirectAgent?: string;
+  /** Isolated state per agent, keyed by agent name */
+  agentStates?: Record<string, AgentState>;
 }
 
 export interface ChatRequest {

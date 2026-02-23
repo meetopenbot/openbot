@@ -23,7 +23,7 @@ export async function startServer(options: ServerOptions = {}) {
   const PORT = Number(options.port ?? config.port ?? process.env.PORT ?? 4001);
   const app = express();
 
-  const openBotAgent = await createOpenBot({
+  const orchestrator = await createOpenBot({
     openaiApiKey: options.openaiApiKey,
     anthropicApiKey: options.anthropicApiKey,
   });
@@ -257,8 +257,6 @@ export async function startServer(options: ServerOptions = {}) {
     });
     res.flushHeaders?.();
 
-    const runtime = openBotAgent.build();
-
     const sessionId = body.sessionId ?? "default";
     const runId = body.runId ?? `run_${generateId()}`;
     const state: ChatState = (await loadSession(sessionId)) ?? {};
@@ -266,7 +264,7 @@ export async function startServer(options: ServerOptions = {}) {
     if (!state.cwd) state.cwd = process.cwd();
     if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
 
-    const iterator = runtime.run(body.event as ChatEvent, {
+    const iterator = orchestrator.run(body.event as ChatEvent, {
       runId,
       state,
     });
