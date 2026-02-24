@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import CodeMirror from "@uiw/react-codemirror";
+import { yaml as yamlLanguage } from "@codemirror/lang-yaml";
 import { useSession } from "../../hooks/use-session";
 import { api } from "../../lib/api";
 import { AgentAvatar } from "../AgentAvatar";
@@ -8,6 +10,7 @@ function EditAgentModal({ agentName, onClose }: { agentName: string; onClose: ()
   const [yaml, setYaml] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
     api.getAgentYaml(agentName)
@@ -18,6 +21,34 @@ function EditAgentModal({ agentName, onClose }: { agentName: string; onClose: ()
       })
       .finally(() => setLoading(false));
   }, [agentName]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+
+    const updateTheme = () => {
+      const hasDarkClass = root.classList.contains("dark");
+      const hasLightClass = root.classList.contains("light");
+      if (hasDarkClass) {
+        setIsDarkMode(true);
+      } else if (hasLightClass) {
+        setIsDarkMode(false);
+      } else {
+        setIsDarkMode(media.matches);
+      }
+    };
+
+    updateTheme();
+
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    media.addEventListener("change", updateTheme);
+
+    return () => {
+      observer.disconnect();
+      media.removeEventListener("change", updateTheme);
+    };
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -44,12 +75,20 @@ function EditAgentModal({ agentName, onClose }: { agentName: string; onClose: ()
         {loading ? (
           <div className="py-12 text-center text-muted-foreground">Loading...</div>
         ) : (
-          <textarea
-            value={yaml}
-            onChange={(e) => setYaml(e.target.value)}
-            className="min-h-[400px] w-full resize-y rounded-xl border border-border/60 bg-muted/30 p-4 font-mono text-[13px] text-foreground focus:border-foreground/20 focus:outline-none"
-            spellCheck="false"
-          />
+          <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/30">
+            <CodeMirror
+              value={yaml}
+              onChange={(value) => setYaml(value)}
+              extensions={[yamlLanguage()]}
+              theme={isDarkMode ? "dark" : "light"}
+              height="400px"
+              basicSetup={{
+                lineNumbers: true,
+                foldGutter: true,
+              }}
+              className="text-[13px]"
+            />
+          </div>
         )}
         <div className="flex justify-end gap-3">
           <button
