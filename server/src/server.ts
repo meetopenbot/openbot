@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import chokidar from "chokidar";
 import { generateId } from "melony";
 import { createOpenBot } from "./open-bot.js";
 import { loadConfig, saveConfig, isConfigured, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
@@ -27,9 +28,85 @@ export async function startServer(options: ServerOptions = {}) {
   const PORT = Number(options.port ?? config.port ?? process.env.PORT ?? 4001);
   const app = express();
 
-  const orchestrator = await createOpenBot({
+  const createOrchestrator = () => createOpenBot({
     openaiApiKey: options.openaiApiKey,
     anthropicApiKey: options.anthropicApiKey,
+  });
+  let orchestrator = await createOrchestrator();
+
+  let reloadTimer: NodeJS.Timeout | null = null;
+  let reloadInProgress = false;
+  let queuedReload = false;
+
+  const reloadOrchestrator = async () => {
+    if (reloadInProgress) {
+      queuedReload = true;
+      return;
+    }
+
+    reloadInProgress = true;
+    try {
+      const nextOrchestrator = await createOrchestrator();
+      orchestrator = nextOrchestrator;
+      console.log("[hot-reload] Orchestrator reloaded from ~/.openbot changes");
+    } catch (error) {
+      console.error("[hot-reload] Reload failed; keeping previous orchestrator", error);
+    } finally {
+      reloadInProgress = false;
+      if (queuedReload) {
+        queuedReload = false;
+        scheduleReload();
+      }
+    }
+  };
+
+  const scheduleReload = () => {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      reloadTimer = null;
+      void reloadOrchestrator();
+    }, 800);
+  };
+
+  const openBotDir = path.join(os.homedir(), ".openbot");
+  const watcher = chokidar.watch(
+    [
+      path.join(openBotDir, "config.json"),
+      path.join(openBotDir, "agents", "**", "*"),
+      path.join(openBotDir, "plugins", "**", "*"),
+    ],
+    {
+      ignoreInitial: true,
+      awaitWriteFinish: {
+        stabilityThreshold: 300,
+        pollInterval: 100,
+      },
+    }
+  );
+
+  watcher
+    .on("add", scheduleReload)
+    .on("change", scheduleReload)
+    .on("unlink", scheduleReload)
+    .on("addDir", scheduleReload)
+    .on("unlinkDir", scheduleReload)
+    .on("error", (error) => {
+      console.error("[hot-reload] Watcher error", error);
+    });
+
+  const cleanupWatcher = async () => {
+    if (reloadTimer) {
+      clearTimeout(reloadTimer);
+      reloadTimer = null;
+    }
+    await watcher.close();
+  };
+
+  process.once("SIGINT", () => {
+    void cleanupWatcher().finally(() => process.exit(0));
+  });
+  process.once("SIGTERM", () => {
+    void cleanupWatcher().finally(() => process.exit(0));
   });
 
   app.use(cors());
