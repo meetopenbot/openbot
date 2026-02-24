@@ -1,6 +1,7 @@
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { loadConfig } from "./config.js";
+import { DEFAULT_MODEL_ID } from "./model-defaults.js";
 
 type Provider = "openai" | "anthropic";
 
@@ -49,7 +50,7 @@ export function createModel(options?: {
     process.env.ANTHROPIC_API_KEY = anthropicKey;
   }
 
-  const { provider, modelId } = parseModelString(options?.model || config.model || "gpt-4o-mini");
+  const { provider, modelId } = parseModelString(options?.model || config.model || DEFAULT_MODEL_ID);
 
   if (provider === "anthropic") {
     if (!anthropicKey) {

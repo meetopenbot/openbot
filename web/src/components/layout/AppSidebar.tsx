@@ -79,6 +79,24 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
       {/* Footer */}
       <div className="p-2.5 mt-auto">
         <button
+          onClick={() => onNavigate("/?tab=agents")}
+          className={cn(
+            "flex items-center gap-2.5 w-full px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150",
+            currentTab === "agents"
+              ? "bg-background text-foreground font-medium shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+              : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+          )}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 4v4" />
+            <rect x="4" y="8" width="16" height="12" rx="3" />
+            <circle cx="9" cy="14" r="1" />
+            <circle cx="15" cy="14" r="1" />
+            <path d="M9 18h6" />
+          </svg>
+          <span>Agents</span>
+        </button>
+        <button
           onClick={() => onNavigate("/?tab=settings")}
           className={cn(
             "flex items-center gap-2.5 w-full px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150",

@@ -5,6 +5,7 @@ import { brainPlugin, brainToolDefinitions, createBrainPromptBuilder } from "./p
 import { llmPlugin } from "./plugins/llm/index.js";
 import { loadConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
 import { createModel, parseModelString } from "./models.js";
+import { DEFAULT_MODEL_ID } from "./model-defaults.js";
 import path from "node:path";
 import { z } from "zod";
 
@@ -31,7 +32,7 @@ export async function createOpenBot(options?: {
   const config = loadConfig();
   const baseDir = config.baseDir || DEFAULT_BASE_DIR;
   const resolvedBaseDir = resolvePath(baseDir);
-  const configuredModel = config.model || "openai/gpt-4o-mini";
+  const configuredModel = config.model || DEFAULT_MODEL_ID;
   const { provider, modelId } = parseModelString(configuredModel);
   const resolvedModelId = `${provider}/${modelId}`;
   const model = createModel(options);

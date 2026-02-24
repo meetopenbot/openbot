@@ -15,6 +15,7 @@ export function useUpdateConfig() {
     mutationFn: api.updateConfig,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config"] });
+      queryClient.invalidateQueries({ queryKey: ["models"] });
     },
   });
 }

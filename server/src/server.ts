@@ -12,6 +12,9 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type { ChatEvent, ChatRequest, ChatState } from "./types.js";
+import { fetchProviderModels, getModelCatalog } from "./model-catalog.js";
+import type { ModelProvider } from "./model-catalog.js";
+import { DEFAULT_MODEL_BY_PROVIDER, DEFAULT_MODEL_ID } from "./model-defaults.js";
 
 export interface ServerOptions {
   port?: string | number;
@@ -55,31 +58,38 @@ export async function startServer(options: ServerOptions = {}) {
     "image/svg+xml": ".svg",
   };
 
-  const PREDEFINED_MODELS = [
-    { id: "openai/gpt-4o", label: "OpenAI GPT-4o" },
-    { id: "openai/gpt-4o-mini", label: "OpenAI GPT-4o Mini" },
-    { id: "openai/gpt-4o-realtime-preview", label: "OpenAI GPT-4o Realtime" },
-    { id: "openai/gpt-4o-instruct", label: "OpenAI GPT-4o Instruct" },
-    { id: "anthropic/claude-3-7-sonnet-latest", label: "Claude 3.7 Sonnet" },
-    { id: "anthropic/claude-3-5-sonnet-latest", label: "Claude 3.5 Sonnet" },
-    { id: "anthropic/claude-3-5-haiku-latest", label: "Claude 3.5 Haiku" },
-    { id: "anthropic/claude-3-instant", label: "Claude 3 Instant" },
-  ];
-
-  // Return available models to the client. This is intentionally simple:
-  // - returns a predefined list and ensures the current configured model is present
-  // - later we can expand this to query provider APIs or read a registry file
+  // Return available models to the client.
+  // It prefers fresh provider APIs and falls back to bundled defaults.
   app.get("/api/models", async (_req, res) => {
     try {
-      const cfg = loadConfig();
-      const models = PREDEFINED_MODELS.slice();
-      if (cfg.model && !models.some((m) => m.id === cfg.model)) {
-        models.push({ id: cfg.model, label: cfg.model });
-      }
+      const models = await getModelCatalog();
       res.json(models);
     } catch (err) {
       console.error("Failed to load models:", err);
-      res.json(PREDEFINED_MODELS);
+      res.json([]);
+    }
+  });
+
+  app.post("/api/models/preview", async (req, res) => {
+    const { provider, apiKey } = req.body as {
+      provider?: string;
+      apiKey?: string;
+    };
+
+    if (provider !== "openai" && provider !== "anthropic") {
+      return res.status(400).json({ error: "Invalid provider" });
+    }
+
+    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+      return res.status(400).json({ error: "API key is required" });
+    }
+
+    try {
+      const models = await fetchProviderModels(provider as ModelProvider, apiKey.trim());
+      res.json(models);
+    } catch (err) {
+      console.error("Failed to preview models:", err);
+      res.status(502).json({ error: "Failed to fetch models from provider" });
     }
   });
 
@@ -186,7 +196,9 @@ export async function startServer(options: ServerOptions = {}) {
     const cfg = loadConfig();
     res.json({
       configured: isConfigured(),
-      model: cfg.model || "openai/gpt-4o-mini",
+      model: cfg.model || DEFAULT_MODEL_ID,
+      defaultModelId: DEFAULT_MODEL_ID,
+      defaultModels: DEFAULT_MODEL_BY_PROVIDER,
       hasOpenAIKey: !!cfg.openaiApiKey,
       hasAnthropicKey: !!cfg.anthropicApiKey,
     });

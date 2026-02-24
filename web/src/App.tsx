@@ -8,6 +8,7 @@ import { useSession } from "./hooks/use-session";
 import { useConfig } from "./hooks/use-config";
 import { AppLayout, AppLayoutProvider } from "./components/layout/AppLayout";
 import { ChatPage } from "./components/pages/ChatPage";
+import { AgentsPage } from "./components/pages/AgentsPage";
 import { SettingsPage } from "./components/pages/SettingsPage";
 import { Onboarding } from "./components/Onboarding";
 import { Thread } from "./components/Thread";
@@ -83,7 +84,16 @@ export function App() {
   );
 
   if (configLoading) return <LoadingScreen />;
-  if (config && !config.configured) return <ThemeProvider><Onboarding /></ThemeProvider>;
+  if (config && !config.configured) {
+    return (
+      <ThemeProvider>
+        <Onboarding
+          defaultModelId={config.defaultModelId}
+          defaultModels={config.defaultModels}
+        />
+      </ThemeProvider>
+    );
+  }
 
   return (
     <MelonyProvider
@@ -100,6 +110,7 @@ export function App() {
               onNavigate={navigate}
             >
               {tab === "chat" && <ChatPage sessionId={sessionId} />}
+              {tab === "agents" && <AgentsPage />}
               {tab === "settings" && <SettingsPage />}
             </AppLayout>
           </AppLayoutProvider>
