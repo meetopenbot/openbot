@@ -4,7 +4,7 @@ import { agentCreatorAgent } from "./agents/agent-creator.js";
 import { brainPlugin, brainToolDefinitions, createBrainPromptBuilder } from "./plugins/brain/index.js";
 import { llmPlugin } from "./plugins/llm/index.js";
 import { loadConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
-import { createModel, getModelContextWindowTokens, parseModelString } from "./models.js";
+import { createModel, parseModelString } from "./models.js";
 import path from "node:path";
 import { z } from "zod";
 
@@ -34,7 +34,6 @@ export async function createOpenBot(options?: {
   const configuredModel = config.model || "openai/gpt-4o-mini";
   const { provider, modelId } = parseModelString(configuredModel);
   const resolvedModelId = `${provider}/${modelId}`;
-  const contextWindowTokens = getModelContextWindowTokens(configuredModel);
   const model = createModel(options);
 
   // ─── Plugin Registry ─────────────────────────────────────────────
@@ -143,7 +142,6 @@ ${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ""}
       .use(llmPlugin({
         model: model as any,
         modelId: resolvedModelId,
-        contextWindowTokens,
         usageScope: "manager",
         system: async (context: any) => {
           const brainPrompt = await buildBrainPrompt(context);

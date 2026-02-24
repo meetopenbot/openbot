@@ -82,7 +82,6 @@ export interface LLMPluginOptions {
   usageEventType?: string;
   usageScope?: string;
   modelId?: string;
-  contextWindowTokens?: number;
 }
 
 /**
@@ -102,7 +101,6 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     usageEventType = "usage:update",
     usageScope = "default",
     modelId,
-    contextWindowTokens,
   } = options;
 
   async function* routeToLLM(
@@ -178,7 +176,6 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     state.usage.totalTokens += usage.totalTokens ?? 0;
 
     if (!silent) {
-      const windowSize = contextWindowTokens ?? 0;
       yield {
         type: usageEventType,
         data: {
@@ -194,8 +191,6 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
             outputTokens: state.usage.outputTokens,
             totalTokens: state.usage.totalTokens,
           },
-          contextWindowTokens: windowSize,
-          contextUsedRatio: windowSize > 0 ? Math.min(state.usage.totalTokens / windowSize, 1) : 0,
         },
       } as Event;
     }

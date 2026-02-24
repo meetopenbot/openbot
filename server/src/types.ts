@@ -46,8 +46,6 @@ export type UsageUpdateEvent = ChatEventBase<"usage:update", {
     outputTokens: number;
     totalTokens: number;
   };
-  contextWindowTokens: number;
-  contextUsedRatio: number;
 }>;
 
 export type ChatEvent =

@@ -18,8 +18,10 @@ export function Composer() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [pendingImages, setPendingImages] = useState<Array<{ id: string; file: File; previewUrl: string }>>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
+  const [showActionPopover, setShowActionPopover] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const actionPopoverRef = useRef<HTMLDivElement>(null);
   const [popoverIndex, setPopoverIndex] = useState(0);
 
   const { data: customAgents = [] } = useQuery({
@@ -131,6 +133,7 @@ export function Composer() {
   };
 
   const handleAttachImageClick = () => {
+    setShowActionPopover(false);
     fileInputRef.current?.click();
   };
 
@@ -259,6 +262,25 @@ export function Composer() {
     }
   }, [streaming, sessionId]);
 
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!actionPopoverRef.current) return;
+      if (actionPopoverRef.current.contains(event.target as Node)) return;
+      setShowActionPopover(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowActionPopover(false);
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
   const canSend = (Boolean(content.trim()) || pendingImages.length > 0) && !streaming && !uploadingImages;
 
   const usageEvent = useMemo(() => {
@@ -276,14 +298,9 @@ export function Composer() {
 
   const usageData = usageEvent?.data;
   const usageModel = usageData?.model as string | undefined;
-  const contextWindowTokens = Number(usageData?.contextWindowTokens ?? 0);
+  const turnInputTokens = Number(usageData?.turn?.inputTokens ?? 0);
+  const turnOutputTokens = Number(usageData?.turn?.outputTokens ?? 0);
   const sessionTotalTokens = Number(usageData?.session?.totalTokens ?? 0);
-  const contextPercent = contextWindowTokens > 0
-    ? Math.min((sessionTotalTokens / contextWindowTokens) * 100, 100)
-    : 0;
-  const circleRadius = 8;
-  const circleCircumference = 2 * Math.PI * circleRadius;
-  const circleDashOffset = circleCircumference - (circleCircumference * contextPercent) / 100;
 
   const formatInt = (value: number) => new Intl.NumberFormat().format(Math.max(0, Math.floor(value)));
 
@@ -372,7 +389,7 @@ export function Composer() {
           rows={1}
         />
         <div className="flex items-center justify-between px-3 pb-2.5">
-          <div className="flex items-center">
+          <div ref={actionPopoverRef} className="relative flex items-center">
             <input
               ref={fileInputRef}
               type="file"
@@ -383,57 +400,53 @@ export function Composer() {
             />
             <button
               type="button"
-              onClick={handleAttachImageClick}
+              onClick={() => setShowActionPopover((prev) => !prev)}
               className="rounded-md p-1.5 text-muted-foreground/80 transition-colors hover:bg-muted/60 hover:text-foreground"
-              aria-label="Attach image"
-              title="Attach image"
+              aria-label="Open actions"
+              title="Open actions"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="m21 15-5-5L5 21" />
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
               </svg>
             </button>
+            {showActionPopover && (
+              <div className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-44 overflow-hidden rounded-xl border border-border/60 bg-background p-1.5 shadow-xl animate-in fade-in slide-in-from-bottom-2">
+                <button
+                  type="button"
+                  onClick={handleAttachImageClick}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-muted/50"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="m21 15-5-5L5 21" />
+                  </svg>
+                  <span>Upload image</span>
+                </button>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
-              {contextWindowTokens > 0 && (
+              {usageData && (
                 <div className="group relative">
                   <div
-                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground/80 transition-colors group-hover:bg-muted/60 group-hover:text-foreground"
-                    aria-label="Context usage"
+                    className="rounded-md px-2 py-1 text-[11px] text-muted-foreground/80 transition-colors group-hover:bg-muted/60 group-hover:text-foreground"
+                    aria-label="Token usage"
                   >
-                    <svg width="20" height="20" viewBox="0 0 20 20" className="-rotate-90">
-                      <circle
-                        cx="10"
-                        cy="10"
-                        r={circleRadius}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        className="opacity-20"
-                      />
-                      <circle
-                        cx="10"
-                        cy="10"
-                        r={circleRadius}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeDasharray={circleCircumference}
-                        strokeDashoffset={circleDashOffset}
-                        className="transition-all duration-300"
-                      />
-                    </svg>
+                    {formatInt(turnInputTokens)} in / {formatInt(sessionTotalTokens)} total
                   </div>
                   <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 hidden w-[160px] -translate-x-1/2 rounded-lg border border-border/60 bg-background px-2.5 py-2 text-[11px] shadow-xl group-hover:block">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Context</span>
-                      <span className="font-medium text-foreground">{contextPercent.toFixed(1)}%</span>
+                      <span className="text-muted-foreground">Last prompt</span>
+                      <span className="font-medium text-foreground">{formatInt(turnInputTokens)}</span>
                     </div>
                     <div className="mt-1 text-muted-foreground">
-                      {formatInt(sessionTotalTokens)} / {formatInt(contextWindowTokens)} tokens
+                      Output: {formatInt(turnOutputTokens)} tokens
+                    </div>
+                    <div className="mt-1 text-muted-foreground">
+                      Session total: {formatInt(sessionTotalTokens)} tokens
                     </div>
                     {usageModel && (
                       <div className="mt-1 truncate text-muted-foreground/80">
