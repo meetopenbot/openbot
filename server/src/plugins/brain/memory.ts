@@ -159,7 +159,7 @@ export function createMemoryModule(baseDir: string): MemoryModule {
 
     async getRecentFacts(limit: number = 3): Promise<MemoryEntry[]> {
       const index = await loadIndex();
-      return index.entries.slice(-limit);
+      return (index?.entries ?? []).slice(-limit);
     },
   };
 }
