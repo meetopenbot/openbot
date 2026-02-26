@@ -455,11 +455,9 @@ export class Orchestrator {
       });
       yield executionStateEvent(trace);
     } else if (agentCompleted && state.lastDirectAgent === targetAgent) {
-      yield {
-        type: "assistant:text",
-        data: { content: agentOutput },
-        meta: { agent: targetAgent },
-      } as any;
+      // Direct-agent approval resumes already stream assistant:text-delta and
+      // agent output events from the agent runtime above; emitting an extra
+      // assistant:text here duplicates the final answer in the thread.
       const trace = setExecutionState(state, {
         state: "COMPLETED",
         currentStepId: undefined,
