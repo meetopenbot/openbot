@@ -15,6 +15,13 @@ export interface SessionInfo {
   id: string;
   title?: string;
   mtime: string;
+  execution?: {
+    traceId?: string;
+    state?: string;
+    currentStepId?: string;
+    error?: string;
+    updatedAt?: string;
+  };
 }
 
 export interface AppConfig {

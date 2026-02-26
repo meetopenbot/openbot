@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Thread } from "../Thread";
 import { Composer } from "../Composer";
+import { ExecutionSidebar } from "../ExecutionSidebar";
 import { api } from "../../lib/api";
 
 interface ChatPageProps {
@@ -10,7 +11,7 @@ interface ChatPageProps {
 }
 
 export function ChatPage({ sessionId }: ChatPageProps) {
-  const { reset } = useMelony();
+  const { reset, events: melonyEvents } = useMelony();
   const [loadedSessions, setLoadedSessions] = useState<Set<string>>(new Set());
   const prevSessionRef = useRef<string | null>(null);
 
@@ -30,15 +31,16 @@ export function ChatPage({ sessionId }: ChatPageProps) {
   }, [events, sessionId, reset, loadedSessions]);
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden">
-      <div className="flex-1 flex flex-col items-center overflow-auto w-full">
-        <div className="w-full max-w-[720px] flex flex-col flex-1 px-5">
+    <div className="flex h-full w-full overflow-hidden">
+      <div className="flex-1 flex flex-col h-full overflow-auto">
+        <div className="mx-auto w-full max-w-[820px] flex flex-col flex-1 px-5">
           <Thread placeholder={<ChatPlaceholder />} />
           <div className="sticky bottom-0 bg-linear-to-t from-background via-background to-transparent pt-4 pb-4">
             <Composer />
           </div>
         </div>
       </div>
+      <ExecutionSidebar events={(melonyEvents ?? []) as any[]} />
     </div>
   );
 }

@@ -296,7 +296,24 @@ export function Composer() {
     return null;
   }, [events]);
 
+  const executionEvent = useMemo(() => {
+    const eventsList = (events ?? []) as any[];
+    for (let i = eventsList.length - 1; i >= 0; i -= 1) {
+      const event = eventsList[i];
+      if (event?.type === "execution:state") return event;
+    }
+    return null;
+  }, [events]);
+
   const usageData = usageEvent?.data;
+  const executionData = executionEvent?.data as
+    | {
+      traceId?: string;
+      state?: string;
+      currentStepId?: string;
+      error?: string;
+    }
+    | undefined;
   const usageModel = usageData?.model as string | undefined;
   const turnInputTokens = Number(usageData?.turn?.inputTokens ?? 0);
   const turnOutputTokens = Number(usageData?.turn?.outputTokens ?? 0);
@@ -429,6 +446,24 @@ export function Composer() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
+              {executionData?.state && (
+                <div className="group relative">
+                  <div className="rounded-md px-2 py-1 text-[11px] text-muted-foreground/80 transition-colors group-hover:bg-muted/60 group-hover:text-foreground">
+                    {executionData.state}
+                    {executionData.currentStepId ? ` · ${executionData.currentStepId}` : ""}
+                  </div>
+                  <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 hidden w-[220px] -translate-x-1/2 rounded-lg border border-border/60 bg-background px-2.5 py-2 text-[11px] shadow-xl group-hover:block">
+                    <div className="text-muted-foreground">
+                      Trace: <span className="text-foreground/90">{executionData.traceId ?? "-"}</span>
+                    </div>
+                    {executionData.error && (
+                      <div className="mt-1 text-red-500/90">
+                        {executionData.error}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {usageData && (
                 <div className="group relative">
                   <div

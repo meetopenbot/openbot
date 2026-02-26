@@ -10,7 +10,9 @@ const TEXT_EVENT_TYPES = new Set([
 
 function hasRenderableContent(message: { content: any[] }): boolean {
   return message.content.some((event: any) => (
-    event.type === "ui" || TEXT_EVENT_TYPES.has(event.type) || event.type === "user:multimodal"
+    event.type === "ui" ||
+    TEXT_EVENT_TYPES.has(event.type) ||
+    event.type === "user:multimodal"
   ));
 }
 
@@ -42,7 +44,9 @@ export function Thread({
     msg.content
       .map((event: any, eventIndex: number) => ({ msg, msgIndex, event, eventIndex }))
       .filter(({ event }) => (
-        event.type === "ui" || TEXT_EVENT_TYPES.has(event.type) || event.type === "user:multimodal"
+        event.type === "ui" ||
+        TEXT_EVENT_TYPES.has(event.type) ||
+        event.type === "user:multimodal"
       ))
   );
 

@@ -1,10 +1,22 @@
 import { melony, MelonyPlugin, Runtime } from "melony";
 import { ChatEvent, ChatState, AgentState } from "./types.js";
+import { classifyIntent } from "./architecture/intent-classifier.js";
+import { createPlan } from "./architecture/planner.js";
+import {
+  executePlan,
+  setExecutionState,
+  executionStateEvent,
+} from "./architecture/execution-engine.js";
+import type { LanguageModel } from "ai";
 
 const AGENT_TEXT_TYPES = new Set(["assistant:text-delta", "assistant:text"]);
 
 function isAgentTextEvent(event: { type: string }): boolean {
   return AGENT_TEXT_TYPES.has(event.type);
+}
+
+function createTraceId(runId: string): string {
+  return `trace_${runId}_${Date.now()}`;
 }
 
 export interface OrchestratorAgent {
@@ -17,6 +29,7 @@ export interface OrchestratorAgent {
 export interface OrchestratorOptions {
   managerPlugin: MelonyPlugin<ChatState, ChatEvent>;
   agents: OrchestratorAgent[];
+  plannerModel?: LanguageModel;
 }
 
 /**
@@ -29,10 +42,12 @@ export interface OrchestratorOptions {
 export class Orchestrator {
   private managerPlugin: MelonyPlugin<ChatState, ChatEvent>;
   private agents: Map<string, OrchestratorAgent>;
+  private plannerModel?: LanguageModel;
 
   constructor(options: OrchestratorOptions) {
     this.managerPlugin = options.managerPlugin;
     this.agents = new Map(options.agents.map((a) => [a.name, a]));
+    this.plannerModel = options.plannerModel;
   }
 
   private buildManagerRuntime(): Runtime<any, any> {
@@ -74,6 +89,10 @@ export class Orchestrator {
     yield event;
 
     if (event.type === "action:approve" || event.type === "action:deny") {
+      const trace = setExecutionState(state, {
+        state: "EXECUTING",
+      });
+      yield executionStateEvent(trace);
       yield* this.routeApproval(event, state, runId);
       return;
     }
@@ -84,27 +103,74 @@ export class Orchestrator {
       const attachments = Array.isArray((event.data as any).attachments)
         ? (event.data as any).attachments
         : undefined;
+      const traceId = createTraceId(runId);
+      let trace = setExecutionState(state, {
+        traceId,
+        state: "RECEIVED",
+      });
+      yield executionStateEvent(trace);
 
-      if (content.startsWith("/") || content.startsWith("@")) {
-        const firstSpace = content.indexOf(" ");
-        const prefix =
-          firstSpace === -1 ? content.slice(1) : content.slice(1, firstSpace);
-        const task =
-          firstSpace === -1 ? "" : content.slice(firstSpace + 1).trim();
+      const intent = classifyIntent({
+        content,
+        knownAgents: new Set(this.agents.keys()),
+      });
 
-        if (this.agents.has(prefix)) {
-          state.lastDirectAgent = prefix;
-          yield* this.runAgentDirect(prefix, task, attachments, state, runId);
-          return;
-        }
-      }
+      trace = setExecutionState(state, {
+        traceId,
+        state: "CLASSIFIED",
+        intent,
+      });
+      yield executionStateEvent(trace);
 
-      state.lastDirectAgent = undefined;
-      yield* this.runManagerLoop(
-        { type: "manager:input", data: { content, attachments } } as ChatEvent,
-        state,
-        runId
+      const plan = await createPlan(
+        {
+          intent,
+          content,
+          attachments,
+          knownAgents: [...this.agents.keys()],
+        },
+        { model: this.plannerModel }
       );
+
+      trace = setExecutionState(state, {
+        traceId,
+        state: "PLANNED",
+        plan,
+      });
+      yield executionStateEvent(trace);
+
+      state.lastDirectAgent =
+        intent.type === "agent_direct" ? intent.targetAgent : undefined;
+
+      yield* executePlan({
+        traceId,
+        runId,
+        state,
+        plan,
+        policy: {
+          maxRetries: 1,
+          stepTimeoutMs: 60_000,
+        },
+        callbacks: {
+          runManager: (managerContent, managerAttachments, sessionState, sessionRunId) =>
+            this.runManagerLoop(
+              {
+                type: "manager:input",
+                data: { content: managerContent, attachments: managerAttachments },
+              } as ChatEvent,
+              sessionState,
+              sessionRunId
+            ),
+          runAgent: (agentName, task, agentAttachments, sessionState, sessionRunId) =>
+            this.runAgentDirect(
+              agentName,
+              task,
+              agentAttachments,
+              sessionState,
+              sessionRunId
+            ),
+        },
+      });
       return;
     }
 
@@ -314,12 +380,24 @@ export class Orchestrator {
         state,
         runId
       );
+      const trace = setExecutionState(state, {
+        state: "COMPLETED",
+        currentStepId: undefined,
+        error: undefined,
+      });
+      yield executionStateEvent(trace);
     } else if (agentCompleted && state.lastDirectAgent === targetAgent) {
       yield {
         type: "assistant:text",
         data: { content: agentOutput },
         meta: { agent: targetAgent },
       } as any;
+      const trace = setExecutionState(state, {
+        state: "COMPLETED",
+        currentStepId: undefined,
+        error: undefined,
+      });
+      yield executionStateEvent(trace);
     }
   }
 }

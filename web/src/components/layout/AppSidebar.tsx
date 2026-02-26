@@ -11,6 +11,21 @@ interface AppSidebarProps {
   onNavigate: (path: string) => void;
 }
 
+function executionDotClass(state?: string): string {
+  if (state === "COMPLETED") return "bg-emerald-500";
+  if (state === "FAILED") return "bg-red-500";
+  if (state === "WAITING_APPROVAL") return "bg-amber-500";
+  if (state === "EXECUTING") return "bg-sky-500";
+  return "bg-muted-foreground/25";
+}
+
+function executionBadge(state?: string): string | null {
+  if (state === "WAITING_APPROVAL") return "Approval";
+  if (state === "EXECUTING") return "Running";
+  if (state === "FAILED") return "Failed";
+  return null;
+}
+
 export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProps) {
   const { open } = useSidebar();
   const { data: sessions = [] } = useSessions();
@@ -58,18 +73,43 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
         <div className="flex flex-col gap-px">
           {sessions.map((session: SessionInfo) => {
             const isActive = session.id === sessionId && currentTab === "chat";
+            const execState = session.execution?.state;
+            const execStep = session.execution?.currentStepId;
+            const badge = executionBadge(execState);
+
             return (
               <button
                 key={session.id}
                 onClick={() => onNavigate(`/?sessionId=${session.id}`)}
                 className={cn(
-                  "flex items-center w-full px-2.5 py-[7px] rounded-lg text-[13px] text-left truncate transition-all duration-150",
+                  "flex items-center w-full px-2.5 py-[7px] rounded-lg text-[13px] text-left transition-all duration-150",
                   isActive
                     ? "bg-background text-foreground font-medium shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
                     : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
                 )}
               >
-                {session.title || session.id.slice(0, 12)}
+                <span
+                  className={cn(
+                    "mr-2 size-1.5 shrink-0 rounded-full",
+                    executionDotClass(execState),
+                    execState === "EXECUTING" ? "animate-pulse" : ""
+                  )}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">
+                    {session.title || session.id.slice(0, 12)}
+                  </span>
+                  {/* {(badge || execStep) && (
+                    <span className="mt-0.5 flex items-center gap-1.5 text-[10px] font-normal text-muted-foreground/80">
+                      {badge && (
+                        <span className="rounded border border-border/60 bg-muted/40 px-1 py-[1px] leading-none">
+                          {badge}
+                        </span>
+                      )}
+                      {execStep && <span className="truncate">{execStep}</span>}
+                    </span>
+                  )} */}
+                </span>
               </button>
             );
           })}

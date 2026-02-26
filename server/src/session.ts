@@ -131,10 +131,18 @@ export async function loadEvents(sessionId: string): Promise<ChatEvent[]> {
   }
 }
 
-export async function listSessions(): Promise<{ id: string; title?: string; mtime: Date }[]> {
+interface SessionExecutionSummary {
+  traceId?: string;
+  state?: string;
+  currentStepId?: string;
+  error?: string;
+  updatedAt?: string;
+}
+
+export async function listSessions(): Promise<{ id: string; title?: string; mtime: Date; execution?: SessionExecutionSummary }[]> {
   if (!fs.existsSync(SESSIONS_DIR)) return [];
 
-  const sessions: { id: string; mtime: Date; title?: string }[] = [];
+  const sessions: { id: string; mtime: Date; title?: string; execution?: SessionExecutionSummary }[] = [];
 
   try {
     const items = fs.readdirSync(SESSIONS_DIR);
@@ -159,6 +167,15 @@ export async function listSessions(): Promise<{ id: string; title?: string; mtim
                   id: subItem,
                   mtime: fs.statSync(statePath).birthtime, // sort by creation time
                   title: state.title ?? undefined,
+                  execution: state.execution
+                    ? {
+                      traceId: state.execution.traceId,
+                      state: state.execution.state,
+                      currentStepId: state.execution.currentStepId,
+                      error: state.execution.error,
+                      updatedAt: state.execution.updatedAt,
+                    }
+                    : undefined,
                 });
               }
             }
@@ -175,6 +192,15 @@ export async function listSessions(): Promise<{ id: string; title?: string; mtim
                 id: item,
                 title: state.title ?? undefined,
                 mtime: fs.statSync(statePath).birthtime, // sort by creation time
+                execution: state.execution
+                  ? {
+                    traceId: state.execution.traceId,
+                    state: state.execution.state,
+                    currentStepId: state.execution.currentStepId,
+                    error: state.execution.error,
+                    updatedAt: state.execution.updatedAt,
+                  }
+                  : undefined,
               });
             }
           }

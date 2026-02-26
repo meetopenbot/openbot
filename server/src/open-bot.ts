@@ -180,6 +180,12 @@ Always remain professional and efficient. You manage the big picture; let the ag
             inputSchema: z.object({
               agent: z.enum(agentNames).describe("The specialized agent to use"),
               task: z.string().describe("The detailed task description for the agent"),
+              successCriteria: z.string().optional().describe("How to determine task success."),
+              budget: z.object({
+                maxSteps: z.number().int().positive().optional(),
+                maxTokens: z.number().int().positive().optional(),
+              }).optional().describe("Optional execution budget constraints."),
+              correlationId: z.string().optional().describe("Optional trace/correlation identifier."),
               attachments: z.array(
                 z.object({
                   id: z.string(),
@@ -206,5 +212,6 @@ Always remain professional and efficient. You manage the big picture; let the ag
   return new Orchestrator({
     managerPlugin,
     agents: orchestratorAgents,
+    plannerModel: model as any,
   });
 }

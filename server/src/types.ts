@@ -1,5 +1,6 @@
 import type { Event } from "melony";
 import type { UIEvent } from "@melony/ui-kit";
+import type { ExecutionTrace } from "./architecture/contracts.js";
 
 type ChatEventBase<T extends string, D> = Event<D> & { type: T };
 
@@ -48,6 +49,15 @@ export type UsageUpdateEvent = ChatEventBase<"usage:update", {
   };
 }>;
 
+export type ExecutionStateEvent = ChatEventBase<"execution:state", {
+  traceId: string;
+  state: string;
+  currentStepId?: string;
+  error?: string;
+  intentType?: string;
+  planSteps?: number;
+}>;
+
 export type ChatEvent =
   | UserTextEvent
   | UserMultimodalEvent
@@ -60,7 +70,8 @@ export type ChatEvent =
   | AgentOutputEvent
   | BrowserStatusEvent
   | BrowserStateUpdateEvent
-  | UsageUpdateEvent;
+  | UsageUpdateEvent
+  | ExecutionStateEvent;
 
 /**
  * Per-agent isolated state. Each agent runtime gets its own instance,
@@ -92,6 +103,7 @@ export interface ChatState {
   };
   pendingAgentTasks?: Record<string, { toolCallId: string }>;
   lastDirectAgent?: string;
+  execution?: ExecutionTrace;
   /** Isolated state per agent, keyed by agent name */
   agentStates?: Record<string, AgentState>;
 }
