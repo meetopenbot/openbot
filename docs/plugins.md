@@ -24,12 +24,36 @@ plugins:
       rules:
         - action: "action:executeCommand"
           message: "The agent wants to execute a terminal command."
+          detailKeys: ["command", "cwd"]
+          hiddenKeys: ["env"]
         - action: "action:writeFile"
           message: "The agent wants to modify a file."
+          detailKeys: ["path"]
 ```
 
 - `action`: The event type prefix to intercept (e.g., `action:executeCommand`).
 - `message`: Optional custom message to display in the approval UI.
+- `detailKeys`: Optional ordered list of event data keys to show in the compact details block.
+- `hiddenKeys`: Optional list of keys to redact from details and full payload.
+
+### Approval UI Details Payload
+
+The approval card keeps the same visual widget but now renders structured details for clearer decisions.
+
+Payload shape sent to the widget:
+
+```ts
+{
+  summary: string;
+  details?: Array<{ label: string; value: string }>;
+  rawPayload?: string;
+}
+```
+
+What users now see before approving:
+- Action label and event type.
+- A compact details list based on `detailKeys` (or auto-derived keys if omitted).
+- A sanitized full action payload (sensitive keys are redacted and very large values are truncated).
 
 ## Shared Plugins
 

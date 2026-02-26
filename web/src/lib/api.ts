@@ -46,6 +46,20 @@ export interface ModelOption {
   label: string;
 }
 
+export interface AgentPluginConfig {
+  name: string;
+  config?: unknown;
+}
+
+export interface AgentConfig {
+  name: string;
+  description: string;
+  model?: string;
+  plugins: Array<string | AgentPluginConfig>;
+  systemPrompt: string;
+  subscribe?: string[];
+}
+
 export type ModelProvider = "openai" | "anthropic";
 
 export const api = {
@@ -81,6 +95,15 @@ export const api = {
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.text();
   },
+
+  getAgentConfig: (name: string) =>
+    request<AgentConfig>(`/api/agents/${encodeURIComponent(name)}/config`),
+
+  updateAgentConfig: (name: string, config: AgentConfig) =>
+    request<{ success: boolean }>(`/api/agents/${encodeURIComponent(name)}/config`, {
+      method: "PUT",
+      body: JSON.stringify(config),
+    }),
 
   updateAgentYaml: (name: string, yaml: string) =>
     request<{ success: boolean }>(`/api/agents/${encodeURIComponent(name)}/yaml`, {

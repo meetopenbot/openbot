@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import yaml from "js-yaml";
 import type { ChatEvent, ChatRequest, ChatState } from "./types.js";
 import { fetchProviderModels, getModelCatalog } from "./model-catalog.js";
 import type { ModelProvider } from "./model-catalog.js";
@@ -334,6 +335,128 @@ export async function startServer(options: ServerOptions = {}) {
       res.send(content);
     } catch {
       res.status(404).send("Agent not found or has no agent.yaml");
+    }
+  });
+
+  app.get("/api/agents/:name/config", async (req, res) => {
+    const { name } = req.params;
+    const cfg = loadConfig();
+    const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
+    const resolvedBaseDir = resolvePath(baseDir);
+    const yamlPath = path.join(resolvedBaseDir, "agents", name, "agent.yaml");
+
+    try {
+      const content = await fs.readFile(yamlPath, "utf-8");
+      const parsed = yaml.load(content) as any;
+
+      if (!parsed || typeof parsed !== "object") {
+        return res.status(400).json({ error: "Invalid agent.yaml format" });
+      }
+
+      res.json({
+        name: typeof parsed.name === "string" ? parsed.name : name,
+        description: typeof parsed.description === "string" ? parsed.description : "",
+        model: typeof parsed.model === "string" ? parsed.model : undefined,
+        plugins: Array.isArray(parsed.plugins) ? parsed.plugins : [],
+        systemPrompt: typeof parsed.systemPrompt === "string" ? parsed.systemPrompt : "",
+        subscribe: Array.isArray(parsed.subscribe)
+          ? parsed.subscribe.filter((item: unknown) => typeof item === "string")
+          : [],
+      });
+    } catch {
+      res.status(404).json({ error: "Agent not found or invalid YAML" });
+    }
+  });
+
+  app.put("/api/agents/:name/config", async (req, res) => {
+    const { name } = req.params;
+    const body = req.body as {
+      name?: string;
+      description?: string;
+      model?: string;
+      plugins?: Array<string | { name: string; config?: unknown }>;
+      systemPrompt?: string;
+      subscribe?: string[];
+    };
+
+    if (
+      typeof body.name !== "string" ||
+      typeof body.description !== "string" ||
+      typeof body.systemPrompt !== "string" ||
+      !Array.isArray(body.plugins)
+    ) {
+      return res.status(400).json({ error: "Invalid agent config payload" });
+    }
+
+    const normalizedPlugins: Array<string | { name: string; config?: unknown }> = [];
+    for (const plugin of body.plugins) {
+      if (typeof plugin === "string") {
+        const normalized = plugin.trim();
+        if (normalized) normalizedPlugins.push(normalized);
+        continue;
+      }
+
+      if (!plugin || typeof plugin !== "object" || typeof plugin.name !== "string") {
+        continue;
+      }
+
+      const normalizedName = plugin.name.trim();
+      if (!normalizedName) continue;
+
+      if (typeof plugin.config === "undefined") {
+        normalizedPlugins.push({ name: normalizedName });
+      } else {
+        normalizedPlugins.push({ name: normalizedName, config: plugin.config });
+      }
+    }
+
+    const normalizedName = body.name.trim();
+    const normalizedDescription = body.description.trim();
+    const normalizedSystemPrompt = body.systemPrompt;
+
+    if (!normalizedName || !normalizedDescription || !normalizedSystemPrompt.trim()) {
+      return res.status(400).json({ error: "name, description, and systemPrompt are required" });
+    }
+
+    const cfg = loadConfig();
+    const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
+    const resolvedBaseDir = resolvePath(baseDir);
+    const agentDir = path.join(resolvedBaseDir, "agents", name);
+    const yamlPath = path.join(agentDir, "agent.yaml");
+
+    const output: Record<string, unknown> = {
+      name: normalizedName,
+      description: normalizedDescription,
+      plugins: normalizedPlugins,
+      systemPrompt: normalizedSystemPrompt,
+    };
+
+    if (typeof body.model === "string" && body.model.trim()) {
+      output.model = body.model.trim();
+    }
+
+    if (Array.isArray(body.subscribe) && body.subscribe.length > 0) {
+      const normalizedSubscribe = body.subscribe
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (normalizedSubscribe.length > 0) {
+        output.subscribe = normalizedSubscribe;
+      }
+    }
+
+    try {
+      await fs.mkdir(agentDir, { recursive: true });
+      const yamlContent = yaml.dump(output, {
+        lineWidth: -1,
+        noRefs: true,
+        quotingType: '"',
+      });
+      await fs.writeFile(yamlPath, yamlContent, "utf-8");
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to write agent.yaml" });
     }
   });
 

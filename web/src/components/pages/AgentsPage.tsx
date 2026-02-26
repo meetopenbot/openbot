@@ -1,73 +1,137 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import CodeMirror from "@uiw/react-codemirror";
-import { yaml as yamlLanguage } from "@codemirror/lang-yaml";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "../../hooks/use-session";
-import { api } from "../../lib/api";
+import { api, type AgentConfig } from "../../lib/api";
 import { AgentAvatar } from "../AgentAvatar";
 
+type PluginRow = {
+  name: string;
+  configText: string;
+};
+
+const OFFICIAL_PLUGINS: Array<{ name: string; description: string }> = [
+  { name: "shell", description: "Execute shell commands" },
+  { name: "file-system", description: "Read and write files" },
+  { name: "approval", description: "Require approval for sensitive actions" },
+  { name: "browser", description: "Web automation and browsing tools" },
+  { name: "search", description: "Search and retrieval tools" },
+];
+
+function configToPluginRows(config: AgentConfig): PluginRow[] {
+  const rows = config.plugins.map((plugin) => {
+    if (typeof plugin === "string") {
+      return { name: plugin, configText: "" };
+    }
+    return {
+      name: plugin.name,
+      configText: typeof plugin.config === "undefined" ? "" : JSON.stringify(plugin.config, null, 2),
+    };
+  });
+
+  return rows;
+}
+
 function EditAgentModal({ agentName, onClose }: { agentName: string; onClose: () => void }) {
-  const [yaml, setYaml] = useState("");
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState(agentName);
+  const [description, setDescription] = useState("");
+  const [model, setModel] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [subscribeText, setSubscribeText] = useState("");
+  const [pluginRows, setPluginRows] = useState<PluginRow[]>([]);
 
   useEffect(() => {
-    api.getAgentYaml(agentName)
-      .then(setYaml)
+    api.getAgentConfig(agentName)
+      .then((config) => {
+        setName(config.name || agentName);
+        setDescription(config.description || "");
+        setModel(config.model || "");
+        setSystemPrompt(config.systemPrompt || "");
+        setSubscribeText((config.subscribe || []).join(", "));
+        setPluginRows(configToPluginRows(config));
+      })
       .catch((err) => {
         console.error(err);
-        setYaml("Error loading agent.yaml");
+        setError("Failed to load agent config");
       })
       .finally(() => setLoading(false));
   }, [agentName]);
 
-  useEffect(() => {
-    const root = document.documentElement;
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-
-    const updateTheme = () => {
-      const hasDarkClass = root.classList.contains("dark");
-      const hasLightClass = root.classList.contains("light");
-      if (hasDarkClass) {
-        setIsDarkMode(true);
-      } else if (hasLightClass) {
-        setIsDarkMode(false);
-      } else {
-        setIsDarkMode(media.matches);
-      }
-    };
-
-    updateTheme();
-
-    const observer = new MutationObserver(updateTheme);
-    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
-    media.addEventListener("change", updateTheme);
-
-    return () => {
-      observer.disconnect();
-      media.removeEventListener("change", updateTheme);
-    };
-  }, []);
-
   const handleSave = async () => {
+    setError(null);
+    const plugins: Array<string | { name: string; config?: unknown }> = [];
+    const seenPluginNames = new Set<string>();
+
+    for (const row of pluginRows) {
+      const pluginName = row.name.trim();
+      if (!pluginName) continue;
+      if (seenPluginNames.has(pluginName)) {
+        setError(`Plugin "${pluginName}" is selected more than once`);
+        return;
+      }
+      seenPluginNames.add(pluginName);
+
+      if (!row.configText.trim()) {
+        plugins.push(pluginName);
+        continue;
+      }
+
+      try {
+        plugins.push({
+          name: pluginName,
+          config: JSON.parse(row.configText),
+        });
+      } catch {
+        setError(`Plugin "${pluginName}" has invalid JSON config`);
+        return;
+      }
+    }
+
+    const subscribe = subscribeText
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (plugins.length === 0) {
+      setError("At least one plugin is required");
+      return;
+    }
+    if (!name.trim() || !description.trim() || !systemPrompt.trim()) {
+      setError("Name, description, and system prompt are required");
+      return;
+    }
+
     setSaving(true);
     try {
-      await api.updateAgentYaml(agentName, yaml);
+      await api.updateAgentConfig(agentName, {
+        name: name.trim(),
+        description: description.trim(),
+        model: model.trim() || undefined,
+        plugins,
+        systemPrompt,
+        subscribe,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["agents"] });
       onClose();
     } catch (err) {
       console.error(err);
-      alert("Failed to save agent.yaml");
+      setError("Failed to save agent config");
     } finally {
       setSaving(false);
     }
   };
 
+  const selectedPluginNames = pluginRows.map((row) => row.name).filter(Boolean);
+  const nextPluginToAdd = OFFICIAL_PLUGINS.find((plugin) => !selectedPluginNames.includes(plugin.name));
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
       <div className="flex w-full max-w-2xl flex-col gap-4 rounded-2xl border border-border/50 bg-background p-6 shadow-xl animate-in fade-in zoom-in-95">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">Edit {agentName}/agent.yaml</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Edit {agentName}</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
@@ -75,20 +139,128 @@ function EditAgentModal({ agentName, onClose }: { agentName: string; onClose: ()
         {loading ? (
           <div className="py-12 text-center text-muted-foreground">Loading...</div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/30">
-            <CodeMirror
-              value={yaml}
-              onChange={(value) => setYaml(value)}
-              extensions={[yamlLanguage()]}
-              theme={isDarkMode ? "dark" : "light"}
-              height="400px"
-              basicSetup={{
-                lineNumbers: true,
-                foldGutter: true,
-              }}
-              className="text-[13px]"
-            />
+          <div className="flex max-h-[65vh] flex-col gap-4 overflow-auto pr-1">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Name</label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm"
+                placeholder="agent name"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Description</label>
+              <input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm"
+                placeholder="short summary"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Model (optional)</label>
+              <input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm"
+                placeholder="openai/gpt-4o"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted-foreground">Plugins</label>
+                <button
+                  onClick={() => {
+                    if (!nextPluginToAdd) return;
+                    setPluginRows((rows) => [...rows, { name: nextPluginToAdd.name, configText: "" }]);
+                  }}
+                  disabled={!nextPluginToAdd}
+                  className="rounded-md border border-border/60 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Add Plugin
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground/70">
+                Official plugins only for now. Advanced options are optional.
+              </p>
+              <div className="flex flex-col gap-2">
+                {pluginRows.map((row, index) => (
+                  <div key={index} className="rounded-lg border border-border/60 p-3">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={row.name}
+                        onChange={(e) => {
+                          const next = [...pluginRows];
+                          next[index] = { ...next[index], name: e.target.value };
+                          setPluginRows(next);
+                        }}
+                        className="flex-1 rounded-md border border-border/60 bg-background px-3 py-1.5 text-sm"
+                      >
+                        {[...OFFICIAL_PLUGINS, ...(!OFFICIAL_PLUGINS.some((p) => p.name === row.name) && row.name ? [{ name: row.name, description: "Custom plugin (existing)" }] : [])].map((plugin) => {
+                          const alreadySelectedElsewhere = pluginRows.some((item, itemIndex) => itemIndex !== index && item.name === plugin.name);
+                          return (
+                            <option key={plugin.name} value={plugin.name} disabled={alreadySelectedElsewhere}>
+                              {plugin.name} - {plugin.description}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <button
+                        onClick={() => setPluginRows((rows) => rows.filter((_, i) => i !== index))}
+                        className="rounded-md border border-border/60 px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <details className="mt-2 rounded-md border border-border/40 bg-muted/20 px-3 py-2">
+                      <summary className="cursor-pointer text-xs text-muted-foreground">
+                        Plugin options (advanced)
+                      </summary>
+                      <textarea
+                        value={row.configText}
+                        onChange={(e) => {
+                          const next = [...pluginRows];
+                          next[index] = { ...next[index], configText: e.target.value };
+                          setPluginRows(next);
+                        }}
+                        className="mt-2 min-h-20 w-full rounded-md border border-border/60 bg-background px-3 py-2 font-mono text-xs"
+                        placeholder='Optional config as JSON (e.g. { "baseDir": "~/Documents" })'
+                      />
+                    </details>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Subscribed Events (optional)</label>
+              <input
+                value={subscribeText}
+                onChange={(e) => setSubscribeText(e.target.value)}
+                className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm"
+                placeholder="event:a, event:b"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">System Prompt</label>
+              <textarea
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                className="min-h-40 w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm"
+                placeholder="Agent behavior instructions..."
+              />
+            </div>
           </div>
+        )}
+        {error && (
+          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+            {error}
+          </p>
         )}
         <div className="flex justify-end gap-3">
           <button
@@ -120,7 +292,16 @@ export function AgentsPage() {
   const [editingAgent, setEditingAgent] = useState<string | null>(null);
 
   const handleCreateAgent = () => {
-    navigate("/?tab=chat&msg=" + encodeURIComponent("/agent-creator I want to build a new agent that..."));
+    navigate("/?tab=chat&msg=" + encodeURIComponent("/agent-creator I want to create a new agent. Ask me focused questions, then propose the final agent.yaml for approval before writing it."));
+  };
+
+  const handleEditAgentViaChat = (agentName: string) => {
+    navigate(
+      "/?tab=chat&msg=" +
+        encodeURIComponent(
+          `/agent-creator I want to update my existing agent "${agentName}". Read its current agent.yaml first, propose changes with a before/after summary, then wait for my explicit approval before writing.`
+        )
+    );
   };
 
   return (
@@ -146,7 +327,7 @@ export function AgentsPage() {
                 onClick={handleCreateAgent}
                 className="rounded-xl border border-foreground/10 bg-foreground/5 px-4 py-2 text-[13px] font-medium text-foreground transition-all hover:bg-foreground/10"
               >
-                Create Custom Agent
+                Create via Chat
               </button>
             </div>
 
@@ -172,10 +353,16 @@ export function AgentsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => handleEditAgentViaChat(agent.name)}
+                        className="rounded-lg border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:bg-muted/50 hover:text-foreground"
+                      >
+                        Edit via Chat
+                      </button>
+                      <button
                         onClick={() => setEditingAgent(agent.name)}
                         className="rounded-lg border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:bg-muted/50 hover:text-foreground"
                       >
-                        Edit
+                        Form
                       </button>
                       <button
                         onClick={() => api.openFolder(agent.folder)}
