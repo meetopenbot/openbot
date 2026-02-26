@@ -203,11 +203,16 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.post("/api/automations", async (req, res) => {
-    const { name, prompt, cron } = req.body as {
+    const { name, prompt, cron, targetType, agentName } = req.body as {
       name?: string;
       prompt?: string;
       cron?: string;
+      targetType?: "orchestrator" | "agent";
+      agentName?: string;
     };
+
+    const normalizedTargetType = targetType === "agent" ? "agent" : "orchestrator";
+    const normalizedAgentName = typeof agentName === "string" ? agentName.trim() : "";
 
     if (
       typeof name !== "string" ||
@@ -215,9 +220,10 @@ export async function startServer(options: ServerOptions = {}) {
       typeof cron !== "string" ||
       !name.trim() ||
       !prompt.trim() ||
-      !cron.trim()
+      !cron.trim() ||
+      (normalizedTargetType === "agent" && !normalizedAgentName)
     ) {
-      return res.status(400).json({ error: "name, prompt, and cron are required" });
+      return res.status(400).json({ error: "Invalid automation payload" });
     }
 
     const now = new Date().toISOString();
@@ -226,6 +232,8 @@ export async function startServer(options: ServerOptions = {}) {
       name: name.trim(),
       prompt: prompt.trim(),
       cron: cron.trim(),
+      targetType: normalizedTargetType,
+      agentName: normalizedTargetType === "agent" ? normalizedAgentName : undefined,
       enabled: true,
       createdAt: now,
       updatedAt: now,
@@ -238,11 +246,13 @@ export async function startServer(options: ServerOptions = {}) {
 
   app.put("/api/automations/:id", async (req, res) => {
     const { id } = req.params;
-    const { name, prompt, cron, enabled } = req.body as {
+    const { name, prompt, cron, enabled, targetType, agentName } = req.body as {
       name?: string;
       prompt?: string;
       cron?: string;
       enabled?: boolean;
+      targetType?: "orchestrator" | "agent";
+      agentName?: string;
     };
 
     const current = await listAutomations();
@@ -252,11 +262,26 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     const existing = current[index];
+    const nextTargetType = targetType === "agent"
+      ? "agent"
+      : targetType === "orchestrator"
+        ? "orchestrator"
+        : existing.targetType;
+    const nextAgentName = typeof agentName === "string"
+      ? agentName.trim()
+      : (existing.agentName ?? "");
+
+    if (nextTargetType === "agent" && !nextAgentName) {
+      return res.status(400).json({ error: "agentName is required when targetType is agent" });
+    }
+
     const updated: AutomationRecord = {
       ...existing,
       name: typeof name === "string" ? name.trim() || existing.name : existing.name,
       prompt: typeof prompt === "string" ? prompt.trim() || existing.prompt : existing.prompt,
       cron: typeof cron === "string" ? cron.trim() || existing.cron : existing.cron,
+      targetType: nextTargetType,
+      agentName: nextTargetType === "agent" ? nextAgentName : undefined,
       enabled: typeof enabled === "boolean" ? enabled : existing.enabled,
       updatedAt: new Date().toISOString(),
     };

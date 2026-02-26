@@ -39,7 +39,6 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
             dangerouslySetInnerHTML={{ __html: LOGO_SVG }}
           />
         </button>
-        <SidebarToggle />
       </div>
 
       {/* Primary nav */}
@@ -186,22 +185,6 @@ function PrimaryNavButton({
     >
       {icon}
       <span>{label}</span>
-    </button>
-  );
-}
-
-function SidebarToggle() {
-  const { toggle } = useSidebar();
-  return (
-    <button
-      onClick={toggle}
-      className="p-1.5 rounded-lg hover:bg-background/60 text-muted-foreground/60 hover:text-foreground transition-all duration-150"
-      aria-label="Toggle sidebar"
-    >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <rect width="18" height="18" x="3" y="3" rx="2" />
-        <path d="M9 3v18" />
-      </svg>
     </button>
   );
 }

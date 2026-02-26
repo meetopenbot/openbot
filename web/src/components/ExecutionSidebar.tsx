@@ -108,7 +108,9 @@ function latestState(run: ExecutionRun): ExecutionSnapshot {
   return run.states[run.states.length - 1] ?? { state: "UNKNOWN" };
 }
 
-export function ExecutionSidebar({ events }: { events: unknown[] }) {
+export function ExecutionSidebar({ events, open = true }: { events: unknown[]; open?: boolean }) {
+  if (!open) return null;
+
   const runs = useMemo(() => buildRuns(events), [events]);
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
 
@@ -125,7 +127,7 @@ export function ExecutionSidebar({ events }: { events: unknown[] }) {
 
   if (runs.length === 0) {
     return (
-      <aside className="hidden xl:flex h-full w-[320px] shrink-0 flex-col border-l border-border/50 bg-muted/20">
+      <aside className="hidden xl:flex h-full w-[420px] shrink-0 flex-col border-l border-border/50 bg-muted/20">
         <div className="border-b border-border/50 px-4 py-3">
           <h2 className="text-sm font-semibold">Execution</h2>
           <p className="mt-1 text-xs text-muted-foreground">No runs yet in this session.</p>
@@ -135,7 +137,7 @@ export function ExecutionSidebar({ events }: { events: unknown[] }) {
   }
 
   return (
-    <aside className="hidden xl:flex h-full w-[320px] shrink-0 flex-col border-l border-border/50 bg-muted/20">
+    <aside className="hidden xl:flex h-full w-[420px] shrink-0 flex-col border-l border-border/50 bg-muted/20">
       <div className="border-b border-border/50 px-4 py-3">
         <h2 className="text-sm font-semibold">Execution</h2>
         <p className="mt-1 text-xs text-muted-foreground">

@@ -8,9 +8,10 @@ import { api } from "../../lib/api";
 
 interface ChatPageProps {
   sessionId: string;
+  executionSidebarOpen: boolean;
 }
 
-export function ChatPage({ sessionId }: ChatPageProps) {
+export function ChatPage({ sessionId, executionSidebarOpen }: ChatPageProps) {
   const { reset, events: melonyEvents } = useMelony();
   const [loadedSessions, setLoadedSessions] = useState<Set<string>>(new Set());
   const prevSessionRef = useRef<string | null>(null);
@@ -40,7 +41,7 @@ export function ChatPage({ sessionId }: ChatPageProps) {
           </div>
         </div>
       </div>
-      <ExecutionSidebar events={(melonyEvents ?? []) as any[]} />
+      <ExecutionSidebar events={(melonyEvents ?? []) as any[]} open={executionSidebarOpen} />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useCallback, type ReactNode } from "react";
 import { SidebarContext, useSidebar } from "../../hooks/use-sidebar";
+import { useSessions } from "../../hooks/use-sessions";
 import { AppSidebar } from "./AppSidebar";
 
 const SIDEBAR_WIDTH = 272;
@@ -9,6 +10,7 @@ interface AppLayoutProps {
   sessionId: string;
   currentTab: string;
   onNavigate: (path: string) => void;
+  rightActions?: ReactNode;
 }
 
 export function AppLayoutProvider({
@@ -26,8 +28,11 @@ export function AppLayoutProvider({
   );
 }
 
-export function AppLayout({ children, sessionId, currentTab, onNavigate }: AppLayoutProps) {
+export function AppLayout({ children, sessionId, currentTab, onNavigate, rightActions }: AppLayoutProps) {
   const { open, toggle } = useSidebar();
+  const { data: sessions = [] } = useSessions();
+  const activeSession = sessions.find((session) => session.id === sessionId);
+  const headerTitle = activeSession?.title || sessionId.slice(0, 12);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
@@ -45,12 +50,12 @@ export function AppLayout({ children, sessionId, currentTab, onNavigate }: AppLa
       </aside>
 
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
-        {!open && (
-          <div className="flex items-center px-3 py-2 gap-1">
+        <div className="flex items-center justify-between px-3 py-2 gap-1 border-b border-border/50">
+          <div className="flex items-center gap-1">
             <button
               onClick={toggle}
               className="p-2 rounded-lg hover:bg-muted/80 text-muted-foreground/70 hover:text-foreground transition-all duration-150"
-              aria-label="Open sidebar"
+              aria-label={open ? "Collapse sidebar" : "Open sidebar"}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <rect width="18" height="18" x="3" y="3" rx="2" />
@@ -67,8 +72,14 @@ export function AppLayout({ children, sessionId, currentTab, onNavigate }: AppLa
                 <path d="M12 5v14" />
               </svg>
             </button>
+            {currentTab === "chat" && (
+              <h1 className="ml-2 text-sm font-medium text-foreground/85 truncate max-w-[55vw]">
+                {headerTitle}
+              </h1>
+            )}
           </div>
-        )}
+          <div className="flex items-center gap-1">{rightActions}</div>
+        </div>
 
         <main className="flex-1 overflow-hidden">
           {children}

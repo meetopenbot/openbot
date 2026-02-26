@@ -67,6 +67,8 @@ export interface AutomationItem {
   name: string;
   prompt: string;
   cron: string;
+  targetType: "orchestrator" | "agent";
+  agentName?: string;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -94,7 +96,13 @@ export const api = {
   getAutomations: () =>
     request<AutomationItem[]>("/api/automations"),
 
-  createAutomation: (data: { name: string; prompt: string; cron: string }) =>
+  createAutomation: (data: {
+    name: string;
+    prompt: string;
+    cron: string;
+    targetType: "orchestrator" | "agent";
+    agentName?: string;
+  }) =>
     request<AutomationItem>("/api/automations", {
       method: "POST",
       body: JSON.stringify(data),
@@ -102,7 +110,7 @@ export const api = {
 
   updateAutomation: (
     id: string,
-    data: Partial<Pick<AutomationItem, "name" | "prompt" | "cron" | "enabled">>
+    data: Partial<Pick<AutomationItem, "name" | "prompt" | "cron" | "enabled" | "targetType" | "agentName">>
   ) =>
     request<AutomationItem>(`/api/automations/${encodeURIComponent(id)}`, {
       method: "PUT",

@@ -7,6 +7,8 @@ export interface AutomationRecord {
   name: string;
   prompt: string;
   cron: string;
+  targetType: "orchestrator" | "agent";
+  agentName?: string;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -28,16 +30,31 @@ export async function listAutomations(): Promise<AutomationRecord[]> {
 
     return parsed
       .filter((item) => item && typeof item === "object")
-      .map((item) => ({
-        id: typeof item.id === "string" ? item.id : "",
-        name: typeof item.name === "string" ? item.name : "",
-        prompt: typeof item.prompt === "string" ? item.prompt : "",
-        cron: typeof item.cron === "string" ? item.cron : "",
-        enabled: Boolean(item.enabled),
-        createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
-        updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : new Date().toISOString(),
-      }))
-      .filter((item) => item.id && item.name && item.prompt && item.cron);
+      .map((item) => {
+        const targetType: AutomationRecord["targetType"] =
+          item.targetType === "agent" ? "agent" : "orchestrator";
+        const agentName =
+          typeof item.agentName === "string" && item.agentName.trim()
+            ? item.agentName.trim()
+            : undefined;
+
+        return {
+          id: typeof item.id === "string" ? item.id : "",
+          name: typeof item.name === "string" ? item.name : "",
+          prompt: typeof item.prompt === "string" ? item.prompt : "",
+          cron: typeof item.cron === "string" ? item.cron : "",
+          targetType,
+          agentName: targetType === "agent" ? agentName : undefined,
+          enabled: Boolean(item.enabled),
+          createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
+          updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : new Date().toISOString(),
+        };
+      })
+      .filter((item) => {
+        if (!item.id || !item.name || !item.prompt || !item.cron) return false;
+        if (item.targetType === "agent" && !item.agentName) return false;
+        return true;
+      });
   } catch {
     return [];
   }
