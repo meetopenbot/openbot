@@ -11,6 +11,13 @@ import type { LanguageModel } from "ai";
 
 const AGENT_TEXT_TYPES = new Set(["assistant:text-delta", "assistant:text"]);
 const MAX_DELEGATIONS_PER_MANAGER_RUN = 6;
+const DIRECT_TITLE_CONTEXT_LIMIT = 20;
+
+interface SessionMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+  attachments?: any[];
+}
 
 function isAgentTextEvent(event: { type: string }): boolean {
   return AGENT_TEXT_TYPES.has(event.type);
@@ -80,6 +87,30 @@ export class Orchestrator {
     return agentState;
   }
 
+  private appendSessionMessage(sessionState: ChatState, message: SessionMessage): void {
+    if (!sessionState.messages) sessionState.messages = [];
+    sessionState.messages.push(message);
+    if (sessionState.messages.length > DIRECT_TITLE_CONTEXT_LIMIT) {
+      sessionState.messages = sessionState.messages.slice(-DIRECT_TITLE_CONTEXT_LIMIT);
+    }
+  }
+
+  private async *triggerTopicRefresh(
+    sessionState: ChatState,
+    runId: string
+  ): AsyncGenerator<ChatEvent> {
+    const runtime = this.buildManagerRuntime();
+    for await (const yielded of runtime.run(
+      {
+        type: "manager:completion",
+        data: { content: "" },
+      } as ChatEvent,
+      { state: sessionState, runId }
+    )) {
+      yield yielded as ChatEvent;
+    }
+  }
+
   async *run(
     event: ChatEvent,
     options: { runId?: string; state: ChatState }
@@ -142,6 +173,14 @@ export class Orchestrator {
 
       state.lastDirectAgent =
         intent.type === "agent_direct" ? intent.targetAgent : undefined;
+
+      if (intent.type === "agent_direct") {
+        this.appendSessionMessage(state, {
+          role: "user",
+          content,
+          attachments,
+        });
+      }
 
       yield* executePlan({
         traceId,
@@ -328,11 +367,17 @@ export class Orchestrator {
       runId
     )) {
       if (yielded.type === `agent:${agentName}:output`) {
+        const content = (yielded as any).data.content;
+        this.appendSessionMessage(sessionState, {
+          role: "assistant",
+          content,
+        });
         yield {
           type: "assistant:text",
-          data: { content: (yielded as any).data.content },
+          data: { content },
           meta: { agent: agentName },
         } as any;
+        yield* this.triggerTopicRefresh(sessionState, runId);
       } else {
         yield yielded;
       }
