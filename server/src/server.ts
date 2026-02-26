@@ -17,6 +17,7 @@ import type { ChatEvent, ChatRequest, ChatState } from "./types.js";
 import { fetchProviderModels, getModelCatalog } from "./model-catalog.js";
 import type { ModelProvider } from "./model-catalog.js";
 import { DEFAULT_MODEL_BY_PROVIDER, DEFAULT_MODEL_ID } from "./model-defaults.js";
+import { listAutomations, saveAutomations, type AutomationRecord } from "./automations.js";
 
 export interface ServerOptions {
   port?: string | number;
@@ -194,6 +195,86 @@ export async function startServer(options: ServerOptions = {}) {
       { label: "How can you help me?", icon: "sparkles" },
       { label: "What is the weather in Tokyo?", icon: "sun" },
     ]);
+  });
+
+  app.get("/api/automations", async (_req, res) => {
+    const items = await listAutomations();
+    res.json(items);
+  });
+
+  app.post("/api/automations", async (req, res) => {
+    const { name, prompt, cron } = req.body as {
+      name?: string;
+      prompt?: string;
+      cron?: string;
+    };
+
+    if (
+      typeof name !== "string" ||
+      typeof prompt !== "string" ||
+      typeof cron !== "string" ||
+      !name.trim() ||
+      !prompt.trim() ||
+      !cron.trim()
+    ) {
+      return res.status(400).json({ error: "name, prompt, and cron are required" });
+    }
+
+    const now = new Date().toISOString();
+    const next: AutomationRecord = {
+      id: `auto_${randomUUID()}`,
+      name: name.trim(),
+      prompt: prompt.trim(),
+      cron: cron.trim(),
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const current = await listAutomations();
+    await saveAutomations([next, ...current]);
+    res.status(201).json(next);
+  });
+
+  app.put("/api/automations/:id", async (req, res) => {
+    const { id } = req.params;
+    const { name, prompt, cron, enabled } = req.body as {
+      name?: string;
+      prompt?: string;
+      cron?: string;
+      enabled?: boolean;
+    };
+
+    const current = await listAutomations();
+    const index = current.findIndex((item) => item.id === id);
+    if (index < 0) {
+      return res.status(404).json({ error: "Automation not found" });
+    }
+
+    const existing = current[index];
+    const updated: AutomationRecord = {
+      ...existing,
+      name: typeof name === "string" ? name.trim() || existing.name : existing.name,
+      prompt: typeof prompt === "string" ? prompt.trim() || existing.prompt : existing.prompt,
+      cron: typeof cron === "string" ? cron.trim() || existing.cron : existing.cron,
+      enabled: typeof enabled === "boolean" ? enabled : existing.enabled,
+      updatedAt: new Date().toISOString(),
+    };
+
+    current[index] = updated;
+    await saveAutomations(current);
+    res.json(updated);
+  });
+
+  app.delete("/api/automations/:id", async (req, res) => {
+    const { id } = req.params;
+    const current = await listAutomations();
+    const next = current.filter((item) => item.id !== id);
+    if (next.length === current.length) {
+      return res.status(404).json({ error: "Automation not found" });
+    }
+    await saveAutomations(next);
+    res.json({ success: true });
   });
 
   app.post("/api/uploads/image", async (req, res) => {

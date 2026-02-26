@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useSessions } from "../../hooks/use-sessions";
 import { useSidebar } from "../../hooks/use-sidebar";
 import { cn } from "../../lib/utils";
@@ -19,13 +20,6 @@ function executionDotClass(state?: string): string {
   return "bg-muted-foreground/25";
 }
 
-function executionBadge(state?: string): string | null {
-  if (state === "WAITING_APPROVAL") return "Approval";
-  if (state === "EXECUTING") return "Running";
-  if (state === "FAILED") return "Failed";
-  return null;
-}
-
 export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProps) {
   const { open } = useSidebar();
   const { data: sessions = [] } = useSessions();
@@ -45,26 +39,59 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
             dangerouslySetInnerHTML={{ __html: LOGO_SVG }}
           />
         </button>
-        <div className="flex items-center gap-0.5">
-          <button
+        <SidebarToggle />
+      </div>
+
+      {/* Primary nav */}
+      <div className="px-2.5 pb-1">
+        <div className="flex flex-col gap-px">
+          <PrimaryNavButton
+            active={currentTab === 'chat'}
             onClick={() => onNavigate("/")}
-            className="p-1.5 rounded-lg hover:bg-background/60 text-muted-foreground/60 hover:text-foreground transition-all duration-150"
-            aria-label="New chat"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9-9 9-9-1.8-9-9 1.8-9 9-9" />
-              <path d="M15 12h-6" />
-              <path d="M12 9v6" />
-            </svg>
-          </button>
-          <SidebarToggle />
+            label="New Chat"
+            icon={(
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9-9 9-9-1.8-9-9 1.8-9 9-9" />
+                <path d="M15 12h-6" />
+                <path d="M12 9v6" />
+              </svg>
+            )}
+          />
+          <PrimaryNavButton
+            active={currentTab === "agents"}
+            onClick={() => onNavigate("/?tab=agents")}
+            label="Agents"
+            icon={(
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 4v4" />
+                <rect x="4" y="8" width="16" height="12" rx="3" />
+                <circle cx="9" cy="14" r="1" />
+                <circle cx="15" cy="14" r="1" />
+                <path d="M9 18h6" />
+              </svg>
+            )}
+          />
+          <PrimaryNavButton
+            active={currentTab === "automations"}
+            onClick={() => onNavigate("/?tab=automations")}
+            label="Automations"
+            icon={(
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12h3" />
+                <path d="M18 12h3" />
+                <path d="M12 3v3" />
+                <path d="M12 18v3" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            )}
+          />
         </div>
       </div>
 
       {/* Sessions */}
-      <div className="flex-1 overflow-y-auto px-2.5 py-1">
+      <div className="flex-1 overflow-y-auto px-2.5 py-2">
         {sessions.length > 0 && (
-          <div className="mb-1.5">
+          <div className="mb-1.5 mt-1">
             <span className="px-2.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
               Chats
             </span>
@@ -74,8 +101,6 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
           {sessions.map((session: SessionInfo) => {
             const isActive = session.id === sessionId && currentTab === "chat";
             const execState = session.execution?.state;
-            const execStep = session.execution?.currentStepId;
-            const badge = executionBadge(execState);
 
             return (
               <button
@@ -119,24 +144,6 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
       {/* Footer */}
       <div className="p-2.5 mt-auto">
         <button
-          onClick={() => onNavigate("/?tab=agents")}
-          className={cn(
-            "flex items-center gap-2.5 w-full px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150",
-            currentTab === "agents"
-              ? "bg-background text-foreground font-medium shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-              : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
-          )}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 4v4" />
-            <rect x="4" y="8" width="16" height="12" rx="3" />
-            <circle cx="9" cy="14" r="1" />
-            <circle cx="15" cy="14" r="1" />
-            <path d="M9 18h6" />
-          </svg>
-          <span>Agents</span>
-        </button>
-        <button
           onClick={() => onNavigate("/?tab=settings")}
           className={cn(
             "flex items-center gap-2.5 w-full px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150",
@@ -153,6 +160,33 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
         </button>
       </div>
     </div>
+  );
+}
+
+function PrimaryNavButton({
+  active,
+  onClick,
+  label,
+  icon,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  icon: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-2.5 w-full px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150",
+        active
+          ? "bg-background text-foreground font-medium shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+          : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
   );
 }
 

@@ -9,6 +9,7 @@ import { useConfig } from "./hooks/use-config";
 import { AppLayout, AppLayoutProvider } from "./components/layout/AppLayout";
 import { ChatPage } from "./components/pages/ChatPage";
 import { AgentsPage } from "./components/pages/AgentsPage";
+import { AutomationsPage } from "./components/pages/AutomationsPage";
 import { SettingsPage } from "./components/pages/SettingsPage";
 import { Onboarding } from "./components/Onboarding";
 import { Thread } from "./components/Thread";
@@ -111,6 +112,7 @@ export function App() {
             >
               {tab === "chat" && <ChatPage sessionId={sessionId} />}
               {tab === "agents" && <AgentsPage />}
+              {tab === "automations" && <AutomationsPage />}
               {tab === "settings" && <SettingsPage />}
             </AppLayout>
           </AppLayoutProvider>

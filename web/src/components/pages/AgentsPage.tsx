@@ -307,7 +307,7 @@ export function AgentsPage() {
   return (
     <>
       <div className="h-full overflow-auto">
-        <div className="mx-auto flex max-w-xl flex-col gap-10 px-6 py-10 animate-in fade-in">
+        <div className="mx-auto flex max-w-6xl flex-col gap-10 px-6 py-10 animate-in fade-in">
           <div className="flex flex-col gap-1">
             <h2 className="text-lg font-semibold tracking-tight">Agents</h2>
             <p className="text-[13px] text-muted-foreground/70">
@@ -336,7 +336,7 @@ export function AgentsPage() {
                 No custom agents installed
               </p>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {agents.map((agent) => (
                   <div
                     key={agent.name}
@@ -351,25 +351,41 @@ export function AgentsPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleEditAgentViaChat(agent.name)}
-                        className="rounded-lg border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:bg-muted/50 hover:text-foreground"
-                      >
-                        Edit via Chat
-                      </button>
-                      <button
-                        onClick={() => setEditingAgent(agent.name)}
-                        className="rounded-lg border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:bg-muted/50 hover:text-foreground"
-                      >
-                        Form
-                      </button>
-                      <button
-                        onClick={() => api.openFolder(agent.folder)}
-                        className="rounded-lg border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:bg-muted/50 hover:text-foreground"
-                      >
-                        Folder
-                      </button>
+                    <div className="relative">
+                      <details className="group">
+                        <summary className="list-none cursor-pointer rounded-lg border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:bg-muted/50 hover:text-foreground">
+                          Actions
+                        </summary>
+                        <div className="absolute right-0 z-10 mt-1 min-w-40 rounded-lg border border-border/60 bg-background p-1 shadow-lg">
+                          <button
+                            onClick={(e) => {
+                              handleEditAgentViaChat(agent.name);
+                              e.currentTarget.closest("details")?.removeAttribute("open");
+                            }}
+                            className="block w-full rounded-md px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          >
+                            Edit via Chat
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              setEditingAgent(agent.name);
+                              e.currentTarget.closest("details")?.removeAttribute("open");
+                            }}
+                            className="block w-full rounded-md px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          >
+                            Edit via Form
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              void api.openFolder(agent.folder);
+                              e.currentTarget.closest("details")?.removeAttribute("open");
+                            }}
+                            className="block w-full rounded-md px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          >
+                            Open Folder
+                          </button>
+                        </div>
+                      </details>
                     </div>
                   </div>
                 ))}

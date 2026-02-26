@@ -62,6 +62,16 @@ export interface AgentConfig {
 
 export type ModelProvider = "openai" | "anthropic";
 
+export interface AutomationItem {
+  id: string;
+  name: string;
+  prompt: string;
+  cron: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const api = {
   getConfig: () => request<AppConfig>("/api/config"),
 
@@ -80,6 +90,29 @@ export const api = {
 
   getPrompts: () =>
     request<{ label: string; icon: string }[]>("/api/prompts"),
+
+  getAutomations: () =>
+    request<AutomationItem[]>("/api/automations"),
+
+  createAutomation: (data: { name: string; prompt: string; cron: string }) =>
+    request<AutomationItem>("/api/automations", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateAutomation: (
+    id: string,
+    data: Partial<Pick<AutomationItem, "name" | "prompt" | "cron" | "enabled">>
+  ) =>
+    request<AutomationItem>(`/api/automations/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteAutomation: (id: string) =>
+    request<{ success: boolean }>(`/api/automations/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
  
   getModels: () =>
     request<ModelOption[]>("/api/models"),
