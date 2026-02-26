@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 const TEXT_EVENT_TYPES = new Set([
   "assistant:text",
+  "assistant:text-delta",
   "manager:completion",
   "user:text",
 ]);
@@ -40,18 +41,26 @@ export function Thread({
   const visibleMessages = messages
     .filter((m) => m.role !== "system")
     .filter(hasRenderableContent);
-  const renderableEvents = visibleMessages.flatMap((msg, msgIndex) =>
-    msg.content
+  const renderableEvents = visibleMessages.flatMap((msg, msgIndex) => {
+    const hasManagerCompletion = msg.content.some((event: any) => event.type === "manager:completion");
+    return msg.content
       .map((event: any, eventIndex: number) => ({ msg, msgIndex, event, eventIndex }))
-      .filter(({ event }) => (
-        event.type === "ui" ||
-        TEXT_EVENT_TYPES.has(event.type) ||
-        event.type === "user:multimodal"
-      ))
-  );
+      .filter(({ event, eventIndex }) => {
+        if (event.type === "assistant:text-delta") {
+          if (hasManagerCompletion) return false;
+          const nextEvent = msg.content[eventIndex + 1];
+          return nextEvent?.type !== "assistant:text-delta";
+        }
+        return (
+          event.type === "ui" ||
+          TEXT_EVENT_TYPES.has(event.type) ||
+          event.type === "user:multimodal"
+        );
+      });
+  });
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: streaming ? "auto" : "smooth" });
   }, [renderableEvents, streaming]);
 
   if (renderableEvents.length === 0) {
@@ -86,11 +95,12 @@ export function Thread({
         if (TEXT_EVENT_TYPES.has(event.type)) {
           const content = typeof event.data?.content === "string" ? event.data.content : "";
           if (!content) return null;
+          const isStreamingDelta = event.type === "assistant:text-delta";
 
           return (
             <div
-              key={`${msg.runId}-${msgIndex}-text-${eventIndex}`}
-              className={`flex flex-col w-full animate-fade-in ${isUserEvent ? "items-end" : "items-start"}`}
+              key={isStreamingDelta ? `${msg.runId}-${msgIndex}-streaming-text` : `${msg.runId}-${msgIndex}-text-${eventIndex}`}
+              className={`flex flex-col w-full ${isStreamingDelta ? "" : "animate-fade-in"} ${isUserEvent ? "items-end" : "items-start"}`}
             >
               <div className={`max-w-[85%] rounded-2xl ${isUserEvent ? "px-4 py-3 bg-foreground/4 border border-border/40" : ""}`}>
                 <div className={isUserEvent ? "text-[13px] leading-relaxed" : ""}>
