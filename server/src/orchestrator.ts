@@ -10,6 +10,7 @@ import {
 import type { LanguageModel } from "ai";
 
 const AGENT_TEXT_TYPES = new Set(["assistant:text-delta", "assistant:text"]);
+const MAX_DELEGATIONS_PER_MANAGER_RUN = 6;
 
 function isAgentTextEvent(event: { type: string }): boolean {
   return AGENT_TEXT_TYPES.has(event.type);
@@ -188,26 +189,55 @@ export class Orchestrator {
     runId: string
   ): AsyncGenerator<ChatEvent> {
     const runtime = this.buildManagerRuntime();
+    const delegationSignatures = new Set<string>();
+    let delegationCount = 0;
+    let nextManagerEvent: ChatEvent | undefined = event;
 
-    for await (const yielded of runtime.run(event, { state, runId })) {
-      if (yielded.type === "action:delegateTask") {
+    while (nextManagerEvent) {
+      const managerEvent = nextManagerEvent;
+      nextManagerEvent = undefined;
+
+      for await (const yielded of runtime.run(managerEvent, { state, runId })) {
+        if (yielded.type !== "action:delegateTask") {
+          yield yielded;
+          continue;
+        }
+
         const { agent: agentName, task, attachments, toolCallId } = (yielded as any).data;
+        const normalizedTask = typeof task === "string"
+          ? task.replace(/\s+/g, " ").trim().toLowerCase()
+          : "";
+        const signature = `${agentName}::${normalizedTask}`;
+
+        if (
+          delegationCount >= MAX_DELEGATIONS_PER_MANAGER_RUN ||
+          (normalizedTask && delegationSignatures.has(signature))
+        ) {
+          nextManagerEvent = {
+            type: "manager:result",
+            data: {
+              action: "delegateTask",
+              toolCallId,
+              result: `Error: delegation loop detected for agent "${agentName}". Summarize current progress and stop delegating.`,
+            },
+          } as ChatEvent;
+          break;
+        }
 
         if (!this.agents.has(agentName)) {
-          yield* this.runManagerLoop(
-            {
-              type: "manager:result",
-              data: {
-                action: "delegateTask",
-                toolCallId,
-                result: `Error: Agent "${agentName}" not found`,
-              },
-            } as ChatEvent,
-            state,
-            runId
-          );
-          return;
+          nextManagerEvent = {
+            type: "manager:result",
+            data: {
+              action: "delegateTask",
+              toolCallId,
+              result: `Error: Agent "${agentName}" not found`,
+            },
+          } as ChatEvent;
+          break;
         }
+
+        delegationCount += 1;
+        if (normalizedTask) delegationSignatures.add(signature);
 
         if (!state.pendingAgentTasks) state.pendingAgentTasks = {};
         state.pendingAgentTasks[agentName] = { toolCallId };
@@ -241,24 +271,17 @@ export class Orchestrator {
 
         if (agentCompleted) {
           delete state.pendingAgentTasks![agentName];
-
-          yield* this.runManagerLoop(
-            {
-              type: "manager:result",
-              data: {
-                action: "delegateTask",
-                toolCallId,
-                result: agentOutput,
-              },
-            } as ChatEvent,
-            state,
-            runId
-          );
+          nextManagerEvent = {
+            type: "manager:result",
+            data: {
+              action: "delegateTask",
+              toolCallId,
+              result: agentOutput,
+            },
+          } as ChatEvent;
         }
-        return;
+        break;
       }
-
-      yield yielded;
     }
   }
 
