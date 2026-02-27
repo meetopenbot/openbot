@@ -1,6 +1,12 @@
 import { MelonyPlugin, Event, RuntimeContext } from "melony";
 import { streamText, LanguageModel } from "ai";
 import { z } from "zod";
+import {
+  buildShapedContext,
+  updateContextState,
+  type ConversationContextState,
+  type SimpleMessage,
+} from "./context-shaping.js";
 
 interface AttachmentRef {
   id: string;
@@ -10,18 +16,46 @@ interface AttachmentRef {
   url: string;
 }
 
-interface SimpleMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-  attachments?: AttachmentRef[];
+interface ToolObservation {
+  id: string;
+  action: string;
+  ok: boolean;
+  summary: string;
+  createdAt: string;
 }
 
-/**
- * Builds a simple history summary from recent messages.
- * Keeps the last N messages as simple role/content pairs.
- */
-function getRecentHistory(messages: SimpleMessage[], maxMessages: number): SimpleMessage[] {
-  return messages.slice(-maxMessages);
+const MAX_TOOL_OBSERVATIONS = 24;
+const MAX_OBSERVATION_SUMMARY_CHARS = 1600;
+const OBSERVATION_PROMPT_LIMIT = 8;
+
+function clipText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars - 3)}...`;
+}
+
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function summarizeActionResult(result: unknown): string {
+  const serialized = typeof result === "string" ? result : safeJson(result);
+  return clipText(serialized, MAX_OBSERVATION_SUMMARY_CHARS);
+}
+
+function toObservationPromptBlock(observations: ToolObservation[]): string {
+  if (observations.length === 0) return "";
+  const lines = observations
+    .slice(-OBSERVATION_PROMPT_LIMIT)
+    .map((observation, index) => {
+      const status = observation.ok ? "success" : "failure";
+      return `${index + 1}. action=${observation.action}; status=${status}; summary=${observation.summary}`;
+    })
+    .join("\n");
+  return `<tool_observations>\nUse these as trusted tool outputs for the current reasoning step.\n${lines}\n</tool_observations>`;
 }
 
 async function buildMessageContent(message: SimpleMessage): Promise<any> {
@@ -82,6 +116,13 @@ export interface LLMPluginOptions {
   usageEventType?: string;
   usageScope?: string;
   modelId?: string;
+  contextShaping?: {
+    maxRecentRawMessages?: number;
+    maxRelevantMessages?: number;
+    maxContextChars?: number;
+    maxTurnSummaries?: number;
+    maxConstraints?: number;
+  };
 }
 
 /**
@@ -101,10 +142,11 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     usageEventType = "usage:update",
     usageScope = "default",
     modelId,
+    contextShaping,
   } = options;
 
   async function* routeToLLM(
-    newMessage: SimpleMessage,
+    newMessage: SimpleMessage | undefined,
     context: RuntimeContext,
     silent: boolean = false
   ): AsyncGenerator<Event, void, unknown> {
@@ -114,18 +156,34 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
       state.messages = [] as SimpleMessage[];
     }
 
-    // Add new message to history
-    state.messages.push(newMessage);
+    // Add new message to history when this invocation is user-driven.
+    if (newMessage) {
+      state.messages.push(newMessage);
+    }
 
     // Evaluate dynamic system prompt if it's a function
-    const systemPrompt = typeof system === "function" ? await system(context) : system;
+    const baseSystemPrompt = typeof system === "function" ? await system(context) : system;
+    const observations = Array.isArray(state.toolObservations)
+      ? (state.toolObservations as ToolObservation[])
+      : [];
+    const observationBlock = toObservationPromptBlock(observations);
+    const systemPrompt = observationBlock
+      ? `${baseSystemPrompt ?? ""}\n\n${observationBlock}`
+      : baseSystemPrompt;
 
-    const recentMessages = getRecentHistory(state.messages, 20);
-    const modelMessages = await toModelMessages(recentMessages);
+    const shapedMessages = buildShapedContext({
+      messages: state.messages as SimpleMessage[],
+      contextState: state.contextState as ConversationContextState | undefined,
+      options: contextShaping,
+    });
+    const modelMessages = await toModelMessages(shapedMessages);
     
     // Initialize an empty assistant message to be populated as we stream
     const assistantMessage: SimpleMessage = { role: "assistant", content: "" };
     state.messages.push(assistantMessage);
+
+    console.log("systemPrompt:::::", systemPrompt);
+    console.log("modelMessages:::::", JSON.stringify(modelMessages, null, 2));
 
     const result = streamText({
       model,
@@ -160,6 +218,19 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
         } as Event;
       }
     }
+
+    const latestUserMessage = newMessage?.role === "user" ? newMessage.content : "";
+    state.contextState = updateContextState(
+      {
+        contextState: state.contextState as ConversationContextState | undefined,
+        latestUserMessage,
+        latestAssistantMessage: assistantText,
+      },
+      contextShaping
+    );
+
+    // Tool observations are only for the immediate follow-up step after tools run.
+    state.toolObservations = [];
 
     const usage = await result.usage;
 
@@ -214,12 +285,17 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     yield* routeToLLM({ role: "user", content, attachments }, context);
   });
 
-  // Feed action results back to the LLM as user messages (with a System prefix)
-  // We use "user" role instead of "system" to avoid errors with providers like Anthropic
-  // that don't support multiple system messages or system messages after the first turn.
+  // Feed action results back as system-role feedback to the model.
   builder.on(actionResultInputType, async function* (event, context) {
     const { action, result } = event.data as any;
-    const summary = typeof result === "string" ? result : JSON.stringify(result);
-    yield* routeToLLM({ role: "user", content: `System: Action "${action}" completed: ${summary}` }, context);
+    const normalizedAction = typeof action === "string" ? action : "unknown";
+    const summary = summarizeActionResult(result);
+    yield* routeToLLM(
+      {
+        role: "system",
+        content: `Action "${normalizedAction}" completed: ${summary}`,
+      },
+      context
+    );
   });
 };

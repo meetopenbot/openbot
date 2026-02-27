@@ -86,6 +86,13 @@ export interface AgentState {
     outputTokens: number;
     totalTokens: number;
   };
+  toolObservations?: Array<{
+    id: string;
+    action: string;
+    ok: boolean;
+    summary: string;
+    createdAt: string;
+  }>;
 }
 
 export interface ChatState {
@@ -104,6 +111,20 @@ export interface ChatState {
   pendingAgentTasks?: Record<string, { toolCallId: string }>;
   lastDirectAgent?: string;
   execution?: ExecutionTrace;
+  contextState?: {
+    currentGoal?: string;
+    constraints?: string[];
+    turnSummaries?: string[];
+    rollingSummary?: string;
+    updatedAt?: string;
+  };
+  toolObservations?: Array<{
+    id: string;
+    action: string;
+    ok: boolean;
+    summary: string;
+    createdAt: string;
+  }>;
   /** Isolated state per agent, keyed by agent name */
   agentStates?: Record<string, AgentState>;
 }
