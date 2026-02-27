@@ -18,6 +18,7 @@ import { fetchProviderModels, getModelCatalog } from "./model-catalog.js";
 import type { ModelProvider } from "./model-catalog.js";
 import { DEFAULT_MODEL_BY_PROVIDER, DEFAULT_MODEL_ID } from "./model-defaults.js";
 import { listAutomations, saveAutomations, type AutomationRecord } from "./automations.js";
+import { startAutomationWorker } from "./automation-worker.js";
 
 export interface ServerOptions {
   port?: string | number;
@@ -104,11 +105,59 @@ export async function startServer(options: ServerOptions = {}) {
     await watcher.close();
   };
 
+  const runAutomation = async (automation: AutomationRecord, scheduledAt: Date) => {
+    const sessionId = `automation_${automation.id}`;
+    const runId = `run_auto_${generateId()}`;
+    const state: ChatState = (await loadSession(sessionId)) ?? {};
+
+    state.sessionId = sessionId;
+    if (!state.cwd) state.cwd = process.cwd();
+    if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
+    if (!state.title) state.title = `Automation: ${automation.name}`;
+
+    const content =
+      automation.targetType === "agent" && automation.agentName
+        ? `/${automation.agentName} ${automation.prompt}`
+        : automation.prompt;
+
+    const iterator = orchestrator.run(
+      {
+        type: "user:text",
+        data: { content },
+      },
+      { runId, state }
+    );
+
+    try {
+      console.log(
+        `[automations] Running "${automation.name}" (${automation.id}) at ${scheduledAt.toISOString()}`
+      );
+      for await (const chunk of iterator) {
+        await logEvent(sessionId, runId, chunk);
+      }
+      console.log(`[automations] Completed "${automation.name}" (${automation.id})`);
+    } catch (error) {
+      console.error(`[automations] Run failed for "${automation.name}" (${automation.id})`, error);
+      throw error;
+    } finally {
+      await saveSession(sessionId, state);
+    }
+  };
+
+  const stopAutomationWorker = startAutomationWorker({
+    listAutomations,
+    runAutomation,
+  });
+
+  const cleanupBackground = async () => {
+    stopAutomationWorker();
+    await cleanupWatcher();
+  };
   process.once("SIGINT", () => {
-    void cleanupWatcher().finally(() => process.exit(0));
+    void cleanupBackground().finally(() => process.exit(0));
   });
   process.once("SIGTERM", () => {
-    void cleanupWatcher().finally(() => process.exit(0));
+    void cleanupBackground().finally(() => process.exit(0));
   });
 
   app.use(cors());
