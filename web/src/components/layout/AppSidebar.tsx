@@ -12,13 +12,13 @@ interface AppSidebarProps {
   onNavigate: (path: string) => void;
 }
 
-function executionDotClass(state?: string): string {
-  if (state === "COMPLETED") return "bg-emerald-500";
-  if (state === "FAILED") return "bg-red-500";
-  if (state === "WAITING_APPROVAL") return "bg-amber-500";
-  if (state === "EXECUTING") return "bg-sky-500";
-  return "bg-muted-foreground/25";
-}
+// function executionDotClass(state?: string): string {
+//   if (state === "COMPLETED") return "bg-emerald-500";
+//   if (state === "FAILED") return "bg-red-500";
+//   if (state === "WAITING_APPROVAL") return "bg-amber-500";
+//   if (state === "EXECUTING") return "bg-sky-500";
+//   return "bg-muted-foreground/25";
+// }
 
 export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProps) {
   const { open } = useSidebar();
@@ -99,7 +99,7 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
         <div className="flex flex-col gap-px">
           {sessions.map((session: SessionInfo) => {
             const isActive = session.id === sessionId && currentTab === "chat";
-            const execState = session.execution?.state;
+            // const execState = session.execution?.state;
 
             return (
               <button
@@ -112,13 +112,6 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
                     : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
                 )}
               >
-                <span
-                  className={cn(
-                    "mr-2 size-1.5 shrink-0 rounded-full",
-                    executionDotClass(execState),
-                    execState === "EXECUTING" ? "animate-pulse" : ""
-                  )}
-                />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">
                     {session.title || session.id.slice(0, 12)}
