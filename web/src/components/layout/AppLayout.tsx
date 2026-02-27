@@ -35,10 +35,10 @@ export function AppLayout({ children, sessionId, currentTab, onNavigate, rightAc
   const headerTitle = activeSession?.title || sessionId.slice(0, 12);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+    <div className="flex h-screen w-screen overflow-hidden text-foreground bg-muted/30">
       <aside
-        className="h-full shrink-0 border-r border-border/50 transition-[width] duration-300 ease-in-out overflow-hidden"
-        style={{ width: open ? SIDEBAR_WIDTH : 0, borderRightWidth: open ? 1 : 0 }}
+        className="h-full shrink-0 transition-[width] duration-300 ease-in-out overflow-hidden"
+        style={{ width: open ? SIDEBAR_WIDTH : 0 }}
       >
         <div className="h-full" style={{ width: SIDEBAR_WIDTH }}>
           <AppSidebar
@@ -49,7 +49,7 @@ export function AppLayout({ children, sessionId, currentTab, onNavigate, rightAc
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-background">
         <div className="flex items-center justify-between px-3 py-2 gap-1 border-b border-border/50">
           <div className="flex items-center gap-1">
             <button
