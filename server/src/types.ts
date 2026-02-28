@@ -8,7 +8,11 @@ export interface SimpleMessage {
 
 type ChatEventBase<T extends string, D> = Event<D> & {
   type: T;
-  delegationId?: string;
+  meta?: {
+    delegationId?: string;
+    agentName?: string;
+    [key: string]: any;
+  };
 };
 
 export interface AttachmentRef {
@@ -68,7 +72,7 @@ export type DelegationEndEvent = ChatEventBase<"delegation:end", {
   result: any;
 }>;
 
-export type ChatEvent =
+export type ChatEvent = (
   | AgentInputEvent
   | AgentOutputEvent
   | AgentOutputDeltaEvent
@@ -83,7 +87,14 @@ export type ChatEvent =
   | AgentSubActionEvent
   | AgentSubUsageEvent
   | DelegationStartEvent
-  | DelegationEndEvent;
+  | DelegationEndEvent
+) & {
+  meta?: {
+    delegationId?: string;
+    agentName?: string;
+    [key: string]: any;
+  };
+};
 
 /**
  * Per-agent isolated state. Each agent runtime gets its own instance,

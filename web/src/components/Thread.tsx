@@ -43,7 +43,7 @@ function DelegationCard({
   subEvents: any[] 
 }) {
   const isCompleted = !!endEvent;
-  const agentName = startEvent.data.agent;
+  const agentName = startEvent.meta?.agentName || startEvent.data.agent;
   const task = startEvent.data.task;
 
   // Find the latest status message from sub-events (e.g. browser:status)
@@ -133,15 +133,16 @@ export function Thread({
         }
 
         // Handle Delegation Events
-        if (event.delegationId) {
-          if (!delegationMap.has(event.delegationId)) {
-            delegationMap.set(event.delegationId, { subs: [] });
+        const delegationId = event.meta?.delegationId;
+        if (delegationId) {
+          if (!delegationMap.has(delegationId)) {
+            delegationMap.set(delegationId, { subs: [] });
           }
-          const group = delegationMap.get(event.delegationId)!;
+          const group = delegationMap.get(delegationId)!;
 
           if (event.type === "delegation:start") {
             group.start = event;
-            topLevelEvents.push({ type: 'delegation-group', delegationId: event.delegationId });
+            topLevelEvents.push({ type: 'delegation-group', delegationId });
           } else if (event.type === "delegation:end") {
             group.end = event;
           } else {

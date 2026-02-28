@@ -157,7 +157,7 @@ ${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ""}
         system: async (context: any) => {
           const brainPrompt = await buildBrainPrompt(context);
 
-          return `${brainPrompt}
+          return `
 
 <orchestrator>
 Your goal is to solve user requests by delegating tasks to expert sub-agents.
@@ -243,7 +243,7 @@ ${agentDescriptions}
       // Signal delegation start for UI
       yield {
         type: "delegation:start",
-        delegationId,
+        meta: { delegationId, agentName },
         data: { agent: agentName, task },
       } as ChatEvent;
 
@@ -267,55 +267,69 @@ ${agentDescriptions}
 
       let lastAgentOutput = "";
 
-      for await (const agentEvent of agentIterator) {
-        // Forward agent events to the main runtime so the user sees progress.
-        // We SKIP forwarding 'agent:input' because it triggers the manager's LLM again.
-        // Instead, we yield it as 'agent:sub-input' for logging/monitoring.
-        if (agentEvent.type === "agent:input") {
+      try {
+        for await (const agentEvent of agentIterator) {
+          // Forward agent events to the main runtime so the user sees progress.
+          // We SKIP forwarding 'agent:input' because it triggers the manager's LLM again.
+          // Instead, we yield it as 'agent:sub-input' for logging/monitoring.
+          if (agentEvent.type === "agent:input") {
+            yield {
+              ...agentEvent,
+              type: "agent:sub-input",
+              meta: { ...agentEvent.meta, delegationId, agentName },
+            } as ChatEvent;
+            continue;
+          }
+
+          // We wrap sub-agent actions to avoid triggering manager handlers if they share names.
+          if (agentEvent.type.startsWith("action:") && agentEvent.type !== "action:result") {
+            yield {
+              ...agentEvent,
+              type: "agent:sub-action",
+              meta: { ...agentEvent.meta, delegationId, agentName },
+              data: { ...agentEvent.data, originalType: agentEvent.type },
+            } as ChatEvent;
+            continue;
+          }
+
+          // Wrap usage updates to avoid confusion with manager usage.
+          if (agentEvent.type === "usage:update") {
+            yield {
+              ...agentEvent,
+              type: "agent:sub-usage",
+              meta: { ...agentEvent.meta, delegationId, agentName },
+            } as ChatEvent;
+            continue;
+          }
+
+          // Pass through other events but tag them with delegationId and agentName in meta
           yield {
             ...agentEvent,
-            type: "agent:sub-input",
-            delegationId,
+            meta: { ...agentEvent.meta, delegationId, agentName },
           } as ChatEvent;
-          continue;
-        }
 
-        // We wrap sub-agent actions to avoid triggering manager handlers if they share names.
-        if (agentEvent.type.startsWith("action:") && agentEvent.type !== "action:result") {
-          yield {
-            ...agentEvent,
-            type: "agent:sub-action",
-            delegationId,
-            data: { ...agentEvent.data, originalType: agentEvent.type },
-          } as ChatEvent;
-          continue;
+          // accumulate agent output
+          if (agentEvent.type === "agent:output") {
+            console.log("agentEvent:::::", agentEvent);
+            const agentOutput = agentEvent.data as any;
+            if (typeof agentOutput === "string") {
+              if (lastAgentOutput) lastAgentOutput += "\n\n";
+              lastAgentOutput += agentOutput;
+            } else if (typeof agentOutput === "object") {
+              if (lastAgentOutput) lastAgentOutput += "\n\n";
+              lastAgentOutput += JSON.stringify(agentOutput);
+            }
+          }
         }
-
-        // Wrap usage updates to avoid confusion with manager usage.
-        if (agentEvent.type === "usage:update") {
-          yield {
-            ...agentEvent,
-            type: "agent:sub-usage",
-            delegationId,
-          } as ChatEvent;
-          continue;
-        }
-
-        // Pass through other events but tag them with delegationId
-        yield {
-          ...agentEvent,
-          delegationId,
-        } as ChatEvent;
-
-        if (agentEvent.type === "agent:output") {
-          lastAgentOutput = (agentEvent.data as any).content || agentEvent.data as any;
-        }
+      } catch (error: any) {
+        console.error(`[delegation] Error running agent "${agentName}":`, error);
+        lastAgentOutput = `Error executing task: ${error.message}`;
       }
 
       // Signal delegation end for UI
       yield {
         type: "delegation:end",
-        delegationId,
+        meta: { delegationId, agentName },
         data: { agent: agentName, result: lastAgentOutput || "Task completed." },
       } as ChatEvent;
 
@@ -340,9 +354,6 @@ ${agentDescriptions}
       // Ensure manager state exists
       if (!state.messages) state.messages = [];
       if (!state.agentStates) state.agentStates = {};
-
-      console.log("event:::::", event);
-      console.log("context:::::", context);
 
       // Handle direct agent routing (e.g. "@os list files")
       if (event.type === "agent:input") {
@@ -387,7 +398,6 @@ ${agentDescriptions}
       });
 
       for await (const e of iterator) {
-        console.log("e:::::", e);
         yield e;
       }
     },
