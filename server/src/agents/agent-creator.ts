@@ -62,9 +62,6 @@ Workflow:
 4. On approval, write ${agentsDir}/<name>/agent.yaml using file-system tools.
 5. Return a short completion summary with plugin choices and intent coverage.`,
         toolDefinitions: fileSystemToolDefinitions, // Give it access to write files
-        promptInputType: "agent:agent-creator:input",
-        actionResultInputType: "agent:agent-creator:result",
-        completionEventType: "agent:agent-creator:output",
       })
     );
 };

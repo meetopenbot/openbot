@@ -38,9 +38,6 @@ export const osAgent = (options: OSAgentOptions): MelonyPlugin<ChatState, ChatEv
         ...shellToolDefinitions,
         ...fileSystemToolDefinitions
       },
-      promptInputType: "agent:os:input",
-      actionResultInputType: "agent:os:result",
-      completionEventType: "agent:os:output",
     }));
 
   // NOTE: Bridge-back to the manager is handled generically by open-bot.ts.

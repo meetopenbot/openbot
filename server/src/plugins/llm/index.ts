@@ -74,9 +74,9 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     system,
     toolDefinitions = {},
     actionEventPrefix = "action:",
-    promptInputType = "user:text",
-    actionResultInputType = "action:taskResult",
-    completionEventType,
+    promptInputType = "agent:input",
+    actionResultInputType = "action:result",
+    completionEventType = "agent:output",
     usageEventType = "usage:update",
     usageScope = "default",
     modelId,
@@ -120,7 +120,7 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
       assistantMessage.content += delta;
       if (!silent) {
         yield {
-          type: "assistant:text-delta",
+          type: "agent:output-delta",
           data: { delta, content: assistantMessage.content },
         } as Event;
       }

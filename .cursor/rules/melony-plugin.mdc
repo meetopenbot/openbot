@@ -33,7 +33,7 @@ export const myPluginFactory = (options: any = {}): MelonyPlugin => (builder) =>
     const { param1, toolCallId } = event.data;
     // ... logic ...
     yield {
-      type: "action:taskResult",
+      type: "action:result",
       data: { action: "doSomething", toolCallId, result: { success: true } }
     };
   });
@@ -68,7 +68,7 @@ export interface MyStatusEvent extends Event {
 ```
 
 ### 3. Action Handlers
-Events triggered by LLM tool calls follow the pattern `action:<toolName>`. Every action handler **MUST** yield an `action:taskResult` event to close the loop with the LLM.
+Events triggered by LLM tool calls follow the pattern `action:<toolName>`. Every action handler **MUST** yield an `action:result` event to close the loop with the LLM.
 
 ## Registration
 
@@ -86,6 +86,6 @@ Plugins in `~/.openbot/plugins/` are automatically loaded if they export a `plug
 
 - **Atomic Actions**: Each tool should perform one clear task.
 - **Informative Status**: Yield status events (`my:status`) during long operations.
-- **Error Boundaries**: Wrap plugin logic in try/catch and return a failed `taskResult`.
+- **Error Boundaries**: Wrap plugin logic in try/catch and return a failed `result` in `action:result`.
 - **UI Events**: Use `ui.event(ui.text(...))` for visual feedback.
 - **State**: Use `context.state` for persistence across the stream.

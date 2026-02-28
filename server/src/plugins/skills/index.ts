@@ -228,7 +228,7 @@ export const skillsPlugin = (
       };
 
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "loadSkill",
           toolCallId,
@@ -237,7 +237,7 @@ export const skillsPlugin = (
       };
     } catch {
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "loadSkill",
           toolCallId,
@@ -254,7 +254,7 @@ export const skillsPlugin = (
     const skillsList = await skills.list();
 
     yield {
-      type: "action:taskResult",
+      type: "action:result",
       data: {
         action: "listSkills",
         toolCallId,
@@ -277,7 +277,7 @@ export const skillsPlugin = (
       };
 
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "createSkill",
           toolCallId,
@@ -297,7 +297,7 @@ export const skillsPlugin = (
         },
       };
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "createSkill",
           toolCallId,
@@ -324,7 +324,7 @@ export const skillsPlugin = (
       };
 
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "updateSkill",
           toolCallId,
@@ -350,7 +350,7 @@ export const skillsPlugin = (
         },
       };
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "updateSkill",
           toolCallId,

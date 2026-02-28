@@ -74,7 +74,7 @@ function ChatPlaceholder() {
         {suggestions.map((s) => (
           <button
             key={s.label}
-            onClick={() => send({ type: "user:text", data: { content: s.label } })}
+            onClick={() => send({ type: "agent:input", data: { content: s.label } })}
             className="text-left text-[13px] px-4 py-3 rounded-xl border border-border/60 hover:border-border hover:bg-muted/40 transition-all duration-150 text-muted-foreground hover:text-foreground group"
           >
             {s.label}

@@ -68,9 +68,7 @@ export const agent: TSAgentDefinition = {
       model,
       system: "You are a specialized TS Agent...",
       toolDefinitions: { /* custom tools */ },
-      promptInputType: "agent:my-ts-agent:input",
-      actionResultInputType: "agent:my-ts-agent:result",
-      completionEventType: "agent:my-ts-agent:output",
+      // I/O defaults to standardized: agent:input / agent:output
     }));
   },
   capabilities: {

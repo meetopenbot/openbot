@@ -215,10 +215,10 @@ export const approvalPlugin = (options: ApprovalPluginOptions): MelonyPlugin<any
       delete state.pendingApprovals[id];
       yield ui.event(widgets.status("Action denied", "error"));
 
-      // If it was a tool call (action:*), return a taskResult error so the LLM knows it failed
+      // If it was a tool call (action:*), return a result error so the LLM knows it failed
       if (originalEvent.data?.toolCallId) {
         yield {
-          type: "action:taskResult",
+          type: "action:result",
           data: {
             action: originalEvent.type.replace("action:", ""),
             toolCallId: originalEvent.data.toolCallId,

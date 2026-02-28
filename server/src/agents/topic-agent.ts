@@ -3,7 +3,7 @@ import { generateText, LanguageModel } from "ai";
 import { ChatState, ChatEvent } from "../types.js";
 
 export const topicAgent = (options: { model: LanguageModel }): MelonyPlugin<ChatState, ChatEvent> => (builder) => {
-  builder.on("manager:completion" as any, async function* (event, { state }) {
+  builder.on("agent:output" as any, async function* (event, { state }) {
     // Only title if it doesn't have one and there's history
     if (state.title || !state.messages || state.messages.length === 0) {
       return;

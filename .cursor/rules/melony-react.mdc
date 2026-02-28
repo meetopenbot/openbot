@@ -48,7 +48,7 @@ function Chat() {
           ))}
         </div>
       ))}
-      <button onClick={() => send({ type: "user:text", data: { content: "Hi" } })}>
+      <button onClick={() => send({ type: "agent:input", data: { content: "Hi" } })}>
         Send
       </button>
     </div>

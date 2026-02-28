@@ -230,9 +230,6 @@ function composeAgentFromYaml(
       model,
       system: config.systemPrompt,
       toolDefinitions: allToolDefinitions,
-      promptInputType: `agent:${config.name}:input`,
-      actionResultInputType: `agent:${config.name}:result`,
-      completionEventType: `agent:${config.name}:output`,
     }));
   };
 

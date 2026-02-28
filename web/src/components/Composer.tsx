@@ -104,15 +104,10 @@ export function Composer() {
       }
     }
 
-    send(attachments.length > 0
-      ? {
-        type: "user:multimodal",
-        data: { content: finalContent, attachments },
-      }
-      : {
-        type: "user:text",
-        data: { content: finalContent },
-      });
+    send({
+      type: "agent:input",
+      data: { content: finalContent, attachments: attachments.length > 0 ? attachments : undefined },
+    });
     setContent("");
     clearPendingImages();
     // Do NOT reset selectedAgent here, so it sticks between messages!

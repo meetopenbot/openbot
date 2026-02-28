@@ -97,7 +97,7 @@ export const brainPlugin = (
       };
 
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "remember",
           toolCallId,
@@ -117,7 +117,7 @@ export const brainPlugin = (
         },
       };
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "remember",
           toolCallId,
@@ -136,7 +136,7 @@ export const brainPlugin = (
       const results = await memory.recall(query, { tags, limit });
 
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "recall",
           toolCallId,
@@ -153,7 +153,7 @@ export const brainPlugin = (
       };
     } catch (error: any) {
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "recall",
           toolCallId,
@@ -180,7 +180,7 @@ export const brainPlugin = (
       };
 
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "forget",
           toolCallId,
@@ -194,7 +194,7 @@ export const brainPlugin = (
       };
     } catch (error: any) {
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "forget",
           toolCallId,
@@ -218,7 +218,7 @@ export const brainPlugin = (
       };
 
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "journal",
           toolCallId,
@@ -234,7 +234,7 @@ export const brainPlugin = (
         },
       };
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "journal",
           toolCallId,
@@ -258,7 +258,7 @@ export const brainPlugin = (
       };
 
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "updateIdentity",
           toolCallId,
@@ -278,7 +278,7 @@ export const brainPlugin = (
         },
       };
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "updateIdentity",
           toolCallId,
@@ -297,7 +297,7 @@ export const brainPlugin = (
       const content = await identity.readFile(file);
 
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "readIdentity",
           toolCallId,
@@ -306,7 +306,7 @@ export const brainPlugin = (
       };
     } catch (error: any) {
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "readIdentity",
           toolCallId,

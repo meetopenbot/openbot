@@ -122,7 +122,7 @@ export async function startServer(options: ServerOptions = {}) {
 
     const iterator = runtime.run(
       {
-        type: "user:text",
+        type: "agent:input",
         data: { content },
       },
       { runId, state }

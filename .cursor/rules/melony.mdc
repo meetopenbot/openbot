@@ -20,9 +20,9 @@ Use the `melony()` builder to define event handlers.
 import { melony } from "melony";
 
 export const agent = melony()
-  .on("user:text", async function* (event, { runtime }) {
+  .on("agent:input", async function* (event, { runtime }) {
     // Logic here
-    yield { type: "assistant:text", data: { content: "Processing..." } };
+    yield { type: "agent:output", data: { content: "Processing..." } };
     
     // Yield UI components
     yield { 

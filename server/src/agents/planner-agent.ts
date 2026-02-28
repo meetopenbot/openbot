@@ -37,8 +37,5 @@ export const plannerAgent = (options: PlannerAgentOptions): MelonyPlugin<ChatSta
   builder.use(llmPlugin({
     model: options.model,
     system: PLANNER_SYSTEM_PROMPT,
-    promptInputType: "agent:planner-agent:input",
-    actionResultInputType: "agent:planner-agent:result",
-    completionEventType: "agent:planner-agent:output",
   }));
 };

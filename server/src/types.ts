@@ -16,25 +16,15 @@ export interface AttachmentRef {
   url: string;
 }
 
-export type UserTextEvent = ChatEventBase<"user:text", { content: string }>;
-export type UserMultimodalEvent = ChatEventBase<"user:multimodal", {
-  content: string;
-  attachments: AttachmentRef[];
-}>;
-export type ManagerInputEvent = ChatEventBase<"manager:input", {
+export type AgentInputEvent = ChatEventBase<"agent:input", {
   content: string;
   attachments?: AttachmentRef[];
 }>;
-export type AssistantTextEvent = ChatEventBase<"assistant:text", { content: string }>;
+export type AgentOutputEvent = ChatEventBase<"agent:output", { content: string }>;
+export type AgentOutputDeltaEvent = ChatEventBase<"agent:output-delta", { delta: string; content: string }>;
 
-export type ActionTaskResultEvent = ChatEventBase<"action:taskResult", { action: string; result: any; toolCallId?: string; error?: string }>;
+export type ActionResultEvent = ChatEventBase<"action:result", { action: string; result: any; toolCallId?: string; error?: string }>;
 export type ActionEvent = ChatEventBase<`action:${string}`, any>;
-
-export type AgentInputEvent = ChatEventBase<`agent:${string}:input`, {
-  content: string;
-  attachments?: AttachmentRef[];
-}>;
-export type AgentOutputEvent = ChatEventBase<`agent:${string}:output`, { content: string }>;
 
 export type BrowserStatusEvent = ChatEventBase<"browser:status", { message: string; severity?: "info" | "success" | "error" }>;
 export type BrowserStateUpdateEvent = ChatEventBase<"browser:state-update", { url: string; title: string; screenshot?: string; pagesCount: number }>;
@@ -63,15 +53,12 @@ export type ExecutionStateEvent = ChatEventBase<"execution:state", {
 }>;
 
 export type ChatEvent =
-  | UserTextEvent
-  | UserMultimodalEvent
-  | ManagerInputEvent
-  | AssistantTextEvent
-  | UIEvent
-  | ActionTaskResultEvent
-  | ActionEvent
   | AgentInputEvent
   | AgentOutputEvent
+  | AgentOutputDeltaEvent
+  | UIEvent
+  | ActionResultEvent
+  | ActionEvent
   | BrowserStatusEvent
   | BrowserStateUpdateEvent
   | UsageUpdateEvent

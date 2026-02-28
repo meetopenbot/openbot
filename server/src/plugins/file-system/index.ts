@@ -78,7 +78,7 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
     try {
       const content = await fs.readFile(resolvePath(filePath, state.cwd), "utf-8");
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: { 
           action: "readFile", 
           result: { content: truncate(content, maxFileReadLength) }, 
@@ -91,7 +91,7 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
       } as FileSystemStatusEvent;
     } catch (error: any) {
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: { action: "readFile", result: { error: error.message }, toolCallId },
       };
       yield {
@@ -112,7 +112,7 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
       await fs.writeFile(fullPath, content, "utf-8");
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: { action: "writeFile", result: { success: true }, toolCallId },
       };
       yield {
@@ -121,7 +121,7 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
       } as FileSystemStatusEvent;
     } catch (error: any) {
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: { action: "writeFile", result: { error: error.message }, toolCallId },
       };
       yield {
@@ -144,7 +144,7 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
         data: { message: `Files listed successfully`, severity: "success" }
       } as FileSystemStatusEvent;
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: { action: "listFiles", result: { files }, toolCallId },
       };
     } catch (error: any) {
@@ -153,7 +153,7 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
         data: { message: `Files listing failed: ${error.message}`, severity: "error" }
       } as FileSystemStatusEvent;
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: { action: "listFiles", result: { error: error.message }, toolCallId },
       };
     }
@@ -168,7 +168,7 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
     try {
       await fs.unlink(resolvePath(filePath, state.cwd));
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: { action: "deleteFile", result: { success: true }, toolCallId },
       };
       yield {
@@ -177,7 +177,7 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
       } as FileSystemStatusEvent;
     } catch (error: any) {
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: { action: "deleteFile", result: { error: error.message }, toolCallId },
       };
       yield {

@@ -141,7 +141,7 @@ For those who want even more control, you can extend the AI's toolbox with custo
 export const myPlugin = () => (builder) => {
   builder.on("action:myTool", async function* (event, { state }) {
     // Perform custom logic or interact with other systems
-    yield { type: "action:taskResult", data: { result: "Done!" } };
+    yield { type: "action:result", data: { result: "Done!" } };
   });
 };
 ```

@@ -25,7 +25,7 @@ You can talk to OpenBot using a simple POST request:
 ```bash
 curl -N \
   -H "Content-Type: application/json" \
-  -d '{"event":{"type":"user:text","data":{"content":"Hello!"}}}' \
+  -d '{"event":{"type":"agent:input","data":{"content":"Hello!"}}}' \
   http://localhost:4001/api/chat
 ```
 

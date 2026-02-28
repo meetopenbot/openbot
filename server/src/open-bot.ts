@@ -181,9 +181,9 @@ ${agentDescriptions}
 Always remain professional and efficient. You manage the big picture; let the agents do the work.
 </final_guidance>`;
         },
-        promptInputType: "manager:input",
-        actionResultInputType: "manager:result",
-        completionEventType: "manager:completion",
+        promptInputType: "agent:input",
+        actionResultInputType: "action:result",
+        completionEventType: "agent:output",
         toolDefinitions: {
           ...brainToolDefinitions,
           delegateTask: {
@@ -239,7 +239,7 @@ Always remain professional and efficient. You manage the big picture; let the ag
 
       if (!agentRuntime) {
         yield {
-          type: "action:taskResult",
+          type: "action:result",
           data: {
             action: "delegateTask",
             result: `Error: Agent "${agentName}" not found.`,
@@ -250,8 +250,6 @@ Always remain professional and efficient. You manage the big picture; let the ag
       }
 
       const agentRunId = `delegate_${generateId()}`;
-      const agentInputType = `agent:${agentName}:input` as any;
-      const agentOutputType = `agent:${agentName}:output`;
 
       // yield ui status event
       yield ui.event(widgets.status(`Delegating task to ${agentName}`, "info"));
@@ -265,7 +263,7 @@ Always remain professional and efficient. You manage the big picture; let the ag
 
       const agentIterator = agentRuntime.run(
         {
-          type: agentInputType,
+          type: "agent:input",
           data: { content: task, attachments },
         } as any,
         {
@@ -277,18 +275,17 @@ Always remain professional and efficient. You manage the big picture; let the ag
       let lastAgentOutput = "";
 
       for await (const agentEvent of agentIterator) {
-        console.log("agentEvent:::::", agentEvent);
         // Forward agent events to the main runtime so the user sees progress
         yield agentEvent;
 
-        if (agentEvent.type === agentOutputType) {
-          lastAgentOutput = (agentEvent.data as any);
+        if (agentEvent.type === "agent:output") {
+          lastAgentOutput = (agentEvent.data as any).content || agentEvent.data as any;
         }
       }
 
       // Feedback the result back to the manager
       yield {
-        type: "manager:result",
+        type: "action:result",
         data: {
           action: "delegateTask",
           result: lastAgentOutput || "Task completed with no output.",
@@ -308,8 +305,11 @@ Always remain professional and efficient. You manage the big picture; let the ag
       if (!state.messages) state.messages = [];
       if (!state.agentStates) state.agentStates = {};
 
+      console.log("event:::::", event);
+      console.log("context:::::", context);
+
       // Handle direct agent routing (e.g. "@os list files")
-      if (event.type === "user:text" || event.type === "user:multimodal") {
+      if (event.type === "agent:input") {
         const content = (event.data as any).content as string;
         if (content.startsWith("@")) {
           const match = content.match(/^@([a-zA-Z0-9_-]+)\s*(.*)$/);
@@ -318,7 +318,8 @@ Always remain professional and efficient. You manage the big picture; let the ag
             const runtime = agentRuntimes.get(agentName);
             if (runtime) {
               const agentEvent = {
-                type: `agent:${agentName}:input`,
+                ...event,
+                type: "agent:input",
                 data: {
                   content: remaining || "Hello",
                   attachments: (event.data as any).attachments,
@@ -340,8 +341,8 @@ Always remain professional and efficient. You manage the big picture; let the ag
 
       // Default routing: translate user event to manager input
       const managerEvent = {
-        type: "manager:input",
-        data: event.data,
+        ...event,
+        type: "agent:input",
       } as ChatEvent;
 
       const iterator = managerRuntime.run(managerEvent, {
@@ -350,6 +351,7 @@ Always remain professional and efficient. You manage the big picture; let the ag
       });
 
       for await (const e of iterator) {
+        console.log("e:::::", e);
         yield e;
       }
     },

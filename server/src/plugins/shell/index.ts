@@ -67,7 +67,7 @@ export const shellPlugin = (options: ShellPluginOptions = {}): MelonyPlugin<any,
       } as ShellStatusEvent;
 
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "executeCommand",
           toolCallId,
@@ -90,7 +90,7 @@ export const shellPlugin = (options: ShellPluginOptions = {}): MelonyPlugin<any,
       } as ShellStatusEvent;
 
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "executeCommand",
           toolCallId,
@@ -103,7 +103,7 @@ export const shellPlugin = (options: ShellPluginOptions = {}): MelonyPlugin<any,
       };
     } catch (error: any) {
       yield {
-        type: "action:taskResult",
+        type: "action:result",
         data: {
           action: "executeCommand",
           toolCallId,
