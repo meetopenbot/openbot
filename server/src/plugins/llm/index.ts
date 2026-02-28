@@ -1,62 +1,7 @@
 import { MelonyPlugin, Event, RuntimeContext } from "melony";
 import { streamText, LanguageModel } from "ai";
 import { z } from "zod";
-import {
-  buildShapedContext,
-  updateContextState,
-  type ConversationContextState,
-  type SimpleMessage,
-} from "./context-shaping.js";
-
-interface AttachmentRef {
-  id: string;
-  name: string;
-  mimeType: string;
-  size: number;
-  url: string;
-}
-
-interface ToolObservation {
-  id: string;
-  action: string;
-  ok: boolean;
-  summary: string;
-  createdAt: string;
-}
-
-const MAX_TOOL_OBSERVATIONS = 24;
-const MAX_OBSERVATION_SUMMARY_CHARS = 1600;
-const OBSERVATION_PROMPT_LIMIT = 8;
-
-function clipText(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text;
-  return `${text.slice(0, maxChars - 3)}...`;
-}
-
-function safeJson(value: unknown): string {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function summarizeActionResult(result: unknown): string {
-  const serialized = typeof result === "string" ? result : safeJson(result);
-  return clipText(serialized, MAX_OBSERVATION_SUMMARY_CHARS);
-}
-
-function toObservationPromptBlock(observations: ToolObservation[]): string {
-  if (observations.length === 0) return "";
-  const lines = observations
-    .slice(-OBSERVATION_PROMPT_LIMIT)
-    .map((observation, index) => {
-      const status = observation.ok ? "success" : "failure";
-      return `${index + 1}. action=${observation.action}; status=${status}; summary=${observation.summary}`;
-    })
-    .join("\n");
-  return `<tool_observations>\nUse these as trusted tool outputs for the current reasoning step.\n${lines}\n</tool_observations>`;
-}
+import { SimpleMessage } from "../../types.js";
 
 async function buildMessageContent(message: SimpleMessage): Promise<any> {
   if (!message.attachments?.length) return message.content;
@@ -116,13 +61,6 @@ export interface LLMPluginOptions {
   usageEventType?: string;
   usageScope?: string;
   modelId?: string;
-  contextShaping?: {
-    maxRecentRawMessages?: number;
-    maxRelevantMessages?: number;
-    maxContextChars?: number;
-    maxTurnSummaries?: number;
-    maxConstraints?: number;
-  };
 }
 
 /**
@@ -142,7 +80,6 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     usageEventType = "usage:update",
     usageScope = "default",
     modelId,
-    contextShaping,
   } = options;
 
   async function* routeToLLM(
@@ -162,28 +99,15 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     }
 
     // Evaluate dynamic system prompt if it's a function
-    const baseSystemPrompt = typeof system === "function" ? await system(context) : system;
-    const observations = Array.isArray(state.toolObservations)
-      ? (state.toolObservations as ToolObservation[])
-      : [];
-    const observationBlock = toObservationPromptBlock(observations);
-    const systemPrompt = observationBlock
-      ? `${baseSystemPrompt ?? ""}\n\n${observationBlock}`
-      : baseSystemPrompt;
+    const systemPrompt = typeof system === "function" ? await system(context) : system;
 
-    const shapedMessages = buildShapedContext({
-      messages: state.messages as SimpleMessage[],
-      contextState: state.contextState as ConversationContextState | undefined,
-      options: contextShaping,
-    });
-    const modelMessages = await toModelMessages(shapedMessages);
+    const modelMessages = await toModelMessages(state.messages as SimpleMessage[]);
     
     // Initialize an empty assistant message to be populated as we stream
     const assistantMessage: SimpleMessage = { role: "assistant", content: "" };
     state.messages.push(assistantMessage);
 
-    console.log("systemPrompt:::::", systemPrompt);
-    console.log("modelMessages:::::", JSON.stringify(modelMessages, null, 2));
+    // console.log("modelMessages:::::", JSON.stringify(modelMessages, null, 2));
 
     const result = streamText({
       model,
@@ -218,19 +142,6 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
         } as Event;
       }
     }
-
-    const latestUserMessage = newMessage?.role === "user" ? newMessage.content : "";
-    state.contextState = updateContextState(
-      {
-        contextState: state.contextState as ConversationContextState | undefined,
-        latestUserMessage,
-        latestAssistantMessage: assistantText,
-      },
-      contextShaping
-    );
-
-    // Tool observations are only for the immediate follow-up step after tools run.
-    state.toolObservations = [];
 
     const usage = await result.usage;
 
@@ -289,7 +200,8 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
   builder.on(actionResultInputType, async function* (event, context) {
     const { action, result } = event.data as any;
     const normalizedAction = typeof action === "string" ? action : "unknown";
-    const summary = summarizeActionResult(result);
+    const summary = typeof result === "string" ? result : JSON.stringify(result);
+
     yield* routeToLLM(
       {
         role: "system",

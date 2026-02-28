@@ -1,6 +1,10 @@
 import type { Event } from "melony";
 import type { UIEvent } from "@melony/ui-kit";
-import type { ExecutionTrace } from "./architecture/contracts.js";
+export interface SimpleMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+  attachments?: AttachmentRef[];
+}
 
 type ChatEventBase<T extends string, D> = Event<D> & { type: T };
 
@@ -86,21 +90,12 @@ export interface AgentState {
     outputTokens: number;
     totalTokens: number;
   };
-  toolObservations?: Array<{
-    id: string;
-    action: string;
-    ok: boolean;
-    summary: string;
-    createdAt: string;
-  }>;
 }
 
 export interface ChatState {
   title?: string;
   sessionId?: string;
-  lastUserMessage?: string;
-  /** Manager conversation history */
-  messages?: any[];
+  messages?: SimpleMessage[];
   cwd?: string;
   workspaceRoot?: string;
   usage?: {
@@ -109,22 +104,6 @@ export interface ChatState {
     totalTokens: number;
   };
   pendingAgentTasks?: Record<string, { toolCallId: string }>;
-  lastDirectAgent?: string;
-  execution?: ExecutionTrace;
-  contextState?: {
-    currentGoal?: string;
-    constraints?: string[];
-    turnSummaries?: string[];
-    rollingSummary?: string;
-    updatedAt?: string;
-  };
-  toolObservations?: Array<{
-    id: string;
-    action: string;
-    ok: boolean;
-    summary: string;
-    createdAt: string;
-  }>;
   /** Isolated state per agent, keyed by agent name */
   agentStates?: Record<string, AgentState>;
 }

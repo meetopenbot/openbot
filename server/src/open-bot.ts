@@ -1,6 +1,8 @@
+import { melony, generateId, MelonyPlugin, Runtime } from "melony";
 import { osAgent } from "./agents/os-agent.js";
 import { topicAgent } from "./agents/topic-agent.js";
 import { agentCreatorAgent } from "./agents/agent-creator.js";
+import { plannerAgent } from "./agents/planner-agent.js";
 import { brainPlugin, brainToolDefinitions, createBrainPromptBuilder } from "./plugins/brain/index.js";
 import { llmPlugin } from "./plugins/llm/index.js";
 import { loadConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
@@ -8,21 +10,23 @@ import { createModel, parseModelString } from "./models.js";
 import { DEFAULT_MODEL_ID } from "./model-defaults.js";
 import path from "node:path";
 import { z } from "zod";
+import { ChatEvent, ChatState } from "./types.js";
 
 import { shellPlugin, shellToolDefinitions } from "./plugins/shell/index.js";
 import { fileSystemPlugin, fileSystemToolDefinitions } from "./plugins/file-system/index.js";
 import { approvalPlugin } from "./plugins/approval/index.js";
 
 import { PluginRegistry, AgentRegistry, discoverYamlAgents, discoverTsAgents, loadPluginsFromDir } from "./registry/index.js";
-import { Orchestrator, OrchestratorAgent } from "./orchestrator.js";
+import { ui } from "@melony/ui-kit";
+import widgets from "./ui/widgets/index.js";
 
 /**
- * Create the OpenBot orchestrator.
+ * Create the OpenBot runtime.
  *
  * Architecture:
  *  1. Each agent gets its own isolated melony runtime (no shared handlers or state).
  *  2. The manager has its own runtime with brain tools and a delegateTask tool.
- *  3. The Orchestrator routes events between manager and agent runtimes.
+ *  3. OpenBot runtime routes events between manager and agent runtimes.
  *  4. Plugins are only instantiated within the runtime that needs them — no duplication.
  */
 export async function createOpenBot(options?: {
@@ -99,6 +103,12 @@ export async function createOpenBot(options?: {
     plugin: agentCreatorAgent({ model: model as any }),
   });
 
+  agentRegistry.register({
+    name: "planner-agent",
+    description: "Creates concise execution plans from user intent for OpenBot to run.",
+    plugin: plannerAgent({ model: model as any }),
+  });
+
   // Discover community / user agents from ~/.openbot/agents/
   const agentsDir = path.join(resolvedBaseDir, "agents");
 
@@ -111,7 +121,7 @@ export async function createOpenBot(options?: {
     agentRegistry.register(agent);
   }
 
-  // ─── Build Orchestrator ──────────────────────────────────────────
+  // ─── Build Runtime ───────────────────────────────────────────────
 
   const allAgents = agentRegistry.getAll();
   const agentNames = agentRegistry.getNames();
@@ -155,10 +165,11 @@ Your role is to be the central orchestrator of this system. Your primary goal is
 </role>
 
 <operating_principles>
-1. **Delegate by Default**: If a task requires specialized expertise (shell, files, browser, etc.), you **must** delegate to an expert agent via \`delegateTask\`.
-2. **Context-Rich Delegation**: When calling \`delegateTask\`, provide a thorough, context-rich task description so the sub-agent can work independently. If the user included attachments, pass them through \`attachments\`.
-3. **Concise Reporting**: After a sub-agent finishes, provide a high-level, concise summary to the user. Do not repeat technical details unless requested.
-4. **Memory Management**: Use your brain tools (\`remember\`, \`recall\`, \`journal\`, etc.) to maintain continuity and preferences across sessions.
+1. **Delegation is Key**: If a task requires specialized expertise (shell, files, browser, etc.), you **must** delegate to an expert agent via \`delegateTask\`.
+2. **Use Planner for Complex Tasks**: For non-trivial multi-step tasks, delegate to \`planner-agent\` first, then execute that plan step-by-step via the relevant specialist agents.
+3. **Context-Rich Delegation**: When calling \`delegateTask\`, provide a thorough, context-rich task description so the sub-agent can work independently. If the user included attachments, pass them through \`attachments\`.
+4. **Concise Reporting**: After a sub-agent finishes, provide a high-level, concise summary to the user. Do not repeat technical details unless requested.
+5. **Memory Management**: Use your brain tools (\`remember\`, \`recall\`, \`journal\`, etc.) to maintain continuity and preferences across sessions.
 </operating_principles>
 </manager_core>
 
@@ -180,7 +191,6 @@ Always remain professional and efficient. You manage the big picture; let the ag
             inputSchema: z.object({
               agent: z.enum(agentNames).describe("The specialized agent to use"),
               task: z.string().describe("The detailed task description for the agent"),
-              successCriteria: z.string().optional().describe("How to determine task success."),
               budget: z.object({
                 maxSteps: z.number().int().positive().optional(),
                 maxTokens: z.number().int().positive().optional(),
@@ -201,17 +211,147 @@ Always remain professional and efficient. You manage the big picture; let the ag
       }));
   };
 
-  // Collect agents for the orchestrator (excludes topic since it's a manager plugin now)
-  const orchestratorAgents: OrchestratorAgent[] = allAgents.map((a) => ({
+  // Collect agents for the runtime (excludes topic since it's a manager plugin now)
+  const runtimeAgents = allAgents.map((a) => ({
     name: a.name,
     description: a.description,
     plugin: a.plugin,
     capabilities: a.capabilities,
   }));
 
-  return new Orchestrator({
-    managerPlugin,
-    agents: orchestratorAgents,
-    plannerModel: model as any,
+  // ─── Routing & Delegation Logic ──────────────────────────────────
+
+  const agentRuntimes = new Map<string, Runtime<ChatState, ChatEvent>>();
+  for (const agent of runtimeAgents) {
+    const builder = melony<ChatState, ChatEvent>();
+    builder.use(agent.plugin);
+    agentRuntimes.set(agent.name, builder.build());
+  }
+
+  const managerBuilder = melony<ChatState, ChatEvent>();
+  managerBuilder.use(managerPlugin);
+
+  // The delegation plugin allows the manager to call sub-agents and wait for results.
+  managerBuilder.use((builder) => {
+    builder.on("action:delegateTask", async function* (event: any, context: any) {
+      const { agent: agentName, task, attachments } = event.data;
+      const agentRuntime = agentRuntimes.get(agentName);
+
+      if (!agentRuntime) {
+        yield {
+          type: "action:taskResult",
+          data: {
+            action: "delegateTask",
+            result: `Error: Agent "${agentName}" not found.`,
+            toolCallId: event.data.toolCallId,
+          },
+        };
+        return;
+      }
+
+      const agentRunId = `delegate_${generateId()}`;
+      const agentInputType = `agent:${agentName}:input` as any;
+      const agentOutputType = `agent:${agentName}:output`;
+
+      // yield ui status event
+      yield ui.event(widgets.status(`Delegating task to ${agentName}`, "info"));
+
+      // Initialize agent isolated state if not present
+      const state = context.state as ChatState;
+      if (!state.agentStates) state.agentStates = {};
+      if (!state.agentStates[agentName]) state.agentStates[agentName] = {};
+
+      const agentState = state.agentStates[agentName];
+
+      const agentIterator = agentRuntime.run(
+        {
+          type: agentInputType,
+          data: { content: task, attachments },
+        } as any,
+        {
+          runId: agentRunId,
+          state: agentState as any,
+        }
+      );
+
+      let lastAgentOutput = "";
+
+      for await (const agentEvent of agentIterator) {
+        console.log("agentEvent:::::", agentEvent);
+        // Forward agent events to the main runtime so the user sees progress
+        yield agentEvent;
+
+        if (agentEvent.type === agentOutputType) {
+          lastAgentOutput = (agentEvent.data as any);
+        }
+      }
+
+      // Feedback the result back to the manager
+      yield {
+        type: "manager:result",
+        data: {
+          action: "delegateTask",
+          result: lastAgentOutput || "Task completed with no output.",
+          toolCallId: event.data.toolCallId,
+        },
+      } as ChatEvent;
+    });
   });
+
+  const managerRuntime = managerBuilder.build();
+
+  return {
+    async *run(event: ChatEvent, context: { runId: string; state: ChatState }) {
+      const { state } = context;
+
+      // Ensure manager state exists
+      if (!state.messages) state.messages = [];
+      if (!state.agentStates) state.agentStates = {};
+
+      // Handle direct agent routing (e.g. "@os list files")
+      if (event.type === "user:text" || event.type === "user:multimodal") {
+        const content = (event.data as any).content as string;
+        if (content.startsWith("@")) {
+          const match = content.match(/^@([a-zA-Z0-9_-]+)\s*(.*)$/);
+          if (match) {
+            const [, agentName, remaining] = match;
+            const runtime = agentRuntimes.get(agentName);
+            if (runtime) {
+              const agentEvent = {
+                type: `agent:${agentName}:input`,
+                data: {
+                  content: remaining || "Hello",
+                  attachments: (event.data as any).attachments,
+                },
+              } as any;
+
+              if (!state.agentStates[agentName]) state.agentStates[agentName] = {};
+
+              const iterator = runtime.run(agentEvent, {
+                runId: context.runId,
+                state: state.agentStates[agentName] as any,
+              });
+              for await (const e of iterator) yield e;
+              return;
+            }
+          }
+        }
+      }
+
+      // Default routing: translate user event to manager input
+      const managerEvent = {
+        type: "manager:input",
+        data: event.data,
+      } as ChatEvent;
+
+      const iterator = managerRuntime.run(managerEvent, {
+        runId: context.runId,
+        state: state as any,
+      });
+
+      for await (const e of iterator) {
+        yield e;
+      }
+    },
+  };
 }

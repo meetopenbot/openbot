@@ -31,17 +31,17 @@ export async function startServer(options: ServerOptions = {}) {
   const PORT = Number(options.port ?? config.port ?? process.env.PORT ?? 4001);
   const app = express();
 
-  const createOrchestrator = () => createOpenBot({
+  const createRuntime = () => createOpenBot({
     openaiApiKey: options.openaiApiKey,
     anthropicApiKey: options.anthropicApiKey,
   });
-  let orchestrator = await createOrchestrator();
+  let runtime = await createRuntime();
 
   let reloadTimer: NodeJS.Timeout | null = null;
   let reloadInProgress = false;
   let queuedReload = false;
 
-  const reloadOrchestrator = async () => {
+  const reloadRuntime = async () => {
     if (reloadInProgress) {
       queuedReload = true;
       return;
@@ -49,11 +49,11 @@ export async function startServer(options: ServerOptions = {}) {
 
     reloadInProgress = true;
     try {
-      const nextOrchestrator = await createOrchestrator();
-      orchestrator = nextOrchestrator;
-      console.log("[hot-reload] Orchestrator reloaded from ~/.openbot changes");
+      const nextRuntime = await createRuntime();
+      runtime = nextRuntime;
+      console.log("[hot-reload] Runtime reloaded from ~/.openbot changes");
     } catch (error) {
-      console.error("[hot-reload] Reload failed; keeping previous orchestrator", error);
+      console.error("[hot-reload] Reload failed; keeping previous runtime", error);
     } finally {
       reloadInProgress = false;
       if (queuedReload) {
@@ -67,7 +67,7 @@ export async function startServer(options: ServerOptions = {}) {
     if (reloadTimer) clearTimeout(reloadTimer);
     reloadTimer = setTimeout(() => {
       reloadTimer = null;
-      void reloadOrchestrator();
+      void reloadRuntime();
     }, 800);
   };
 
@@ -120,7 +120,7 @@ export async function startServer(options: ServerOptions = {}) {
         ? `/${automation.agentName} ${automation.prompt}`
         : automation.prompt;
 
-    const iterator = orchestrator.run(
+    const iterator = runtime.run(
       {
         type: "user:text",
         data: { content },
@@ -727,13 +727,13 @@ export async function startServer(options: ServerOptions = {}) {
     if (!state.cwd) state.cwd = process.cwd();
     if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
 
-    const iterator = orchestrator.run(body.event as ChatEvent, {
+    const iterator = runtime.run(body.event as ChatEvent, {
       runId,
       state,
     });
 
     const stopStreaming = () => {
-      iterator.return?.({ done: true, value: undefined });
+      void iterator.return?.();
     };
 
     res.on("close", stopStreaming);
