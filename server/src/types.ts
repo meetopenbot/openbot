@@ -6,7 +6,10 @@ export interface SimpleMessage {
   attachments?: AttachmentRef[];
 }
 
-type ChatEventBase<T extends string, D> = Event<D> & { type: T };
+type ChatEventBase<T extends string, D> = Event<D> & {
+  type: T;
+  delegationId?: string;
+};
 
 export interface AttachmentRef {
   id: string;
@@ -52,6 +55,19 @@ export type ExecutionStateEvent = ChatEventBase<"execution:state", {
   planSteps?: number;
 }>;
 
+export type AgentSubInputEvent = ChatEventBase<"agent:sub-input", any>;
+export type AgentSubActionEvent = ChatEventBase<"agent:sub-action", any>;
+export type AgentSubUsageEvent = ChatEventBase<"agent:sub-usage", any>;
+
+export type DelegationStartEvent = ChatEventBase<"delegation:start", {
+  agent: string;
+  task: string;
+}>;
+export type DelegationEndEvent = ChatEventBase<"delegation:end", {
+  agent: string;
+  result: any;
+}>;
+
 export type ChatEvent =
   | AgentInputEvent
   | AgentOutputEvent
@@ -62,7 +78,12 @@ export type ChatEvent =
   | BrowserStatusEvent
   | BrowserStateUpdateEvent
   | UsageUpdateEvent
-  | ExecutionStateEvent;
+  | ExecutionStateEvent
+  | AgentSubInputEvent
+  | AgentSubActionEvent
+  | AgentSubUsageEvent
+  | DelegationStartEvent
+  | DelegationEndEvent;
 
 /**
  * Per-agent isolated state. Each agent runtime gets its own instance,

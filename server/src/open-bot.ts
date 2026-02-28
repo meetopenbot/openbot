@@ -159,27 +159,20 @@ ${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ""}
 
           return `${brainPrompt}
 
-<manager_core>
-<role>
-Your role is to be the central orchestrator of this system. Your primary goal is to solve user requests by managing your persistent memory and delegating tasks to expert sub-agents.
-</role>
+<orchestrator>
+Your goal is to solve user requests by delegating tasks to expert sub-agents.
 
-<operating_principles>
-1. **Delegation is Key**: If a task requires specialized expertise (shell, files, browser, etc.), you **must** delegate to an expert agent via \`delegateTask\`.
-2. **Use Planner for Complex Tasks**: For non-trivial multi-step tasks, delegate to \`planner-agent\` first, then execute that plan step-by-step via the relevant specialist agents.
-3. **Context-Rich Delegation**: When calling \`delegateTask\`, provide a thorough, context-rich task description so the sub-agent can work independently. If the user included attachments, pass them through \`attachments\`.
-4. **Concise Reporting**: After a sub-agent finishes, provide a high-level, concise summary to the user. Do not repeat technical details unless requested.
-5. **Memory Management**: Use your brain tools (\`remember\`, \`recall\`, \`journal\`, etc.) to maintain continuity and preferences across sessions.
-</operating_principles>
-</manager_core>
+**Directives**:
+1. **Delegate**: Use \`delegateTask\` for any task matching an agent's description.
+2. **Plan**: For multi-step tasks, use \`planner-agent\` first to create a roadmap.
+3. **Context**: Provide a clear, detailed task for the sub-agent. Pass any relevant user attachments.
+4. **Report**: Summarize the sub-agent's work concisely for the user.
+5. **Memory**: Use your brain tools (\`remember\`, \`recall\`) to maintain context across sessions.
+</orchestrator>
 
-<specialized_agents>
+<agents>
 ${agentDescriptions}
-</specialized_agents>
-
-<final_guidance>
-Always remain professional and efficient. You manage the big picture; let the agents do the work.
-</final_guidance>`;
+</agents>`;
         },
         promptInputType: "agent:input",
         actionResultInputType: "action:result",
@@ -187,15 +180,10 @@ Always remain professional and efficient. You manage the big picture; let the ag
         toolDefinitions: {
           ...brainToolDefinitions,
           delegateTask: {
-            description: `Delegate a specialized task to another agent. Use this whenever a task matches the capabilities of one of the available agents.`,
+            description: `Delegate a task to a specialized expert agent.`,
             inputSchema: z.object({
-              agent: z.enum(agentNames).describe("The specialized agent to use"),
-              task: z.string().describe("The detailed task description for the agent"),
-              budget: z.object({
-                maxSteps: z.number().int().positive().optional(),
-                maxTokens: z.number().int().positive().optional(),
-              }).optional().describe("Optional execution budget constraints."),
-              correlationId: z.string().optional().describe("Optional trace/correlation identifier."),
+              agent: z.enum(agentNames).describe("The name of the agent to use"),
+              task: z.string().describe("The task for the agent to perform"),
               attachments: z.array(
                 z.object({
                   id: z.string(),
@@ -204,7 +192,7 @@ Always remain professional and efficient. You manage the big picture; let the ag
                   size: z.number(),
                   url: z.string(),
                 })
-              ).optional().describe("Image/file attachments from the user message, if present."),
+              ).optional().describe("Attachments to pass through to the agent"),
             }),
           },
         },
@@ -250,9 +238,14 @@ Always remain professional and efficient. You manage the big picture; let the ag
       }
 
       const agentRunId = `delegate_${generateId()}`;
+      const delegationId = `del_${generateId()}`;
 
-      // yield ui status event
-      yield ui.event(widgets.status(`Delegating task to ${agentName}`, "info"));
+      // Signal delegation start for UI
+      yield {
+        type: "delegation:start",
+        delegationId,
+        data: { agent: agentName, task },
+      } as ChatEvent;
 
       // Initialize agent isolated state if not present
       const state = context.state as ChatState;
@@ -275,13 +268,56 @@ Always remain professional and efficient. You manage the big picture; let the ag
       let lastAgentOutput = "";
 
       for await (const agentEvent of agentIterator) {
-        // Forward agent events to the main runtime so the user sees progress
-        yield agentEvent;
+        // Forward agent events to the main runtime so the user sees progress.
+        // We SKIP forwarding 'agent:input' because it triggers the manager's LLM again.
+        // Instead, we yield it as 'agent:sub-input' for logging/monitoring.
+        if (agentEvent.type === "agent:input") {
+          yield {
+            ...agentEvent,
+            type: "agent:sub-input",
+            delegationId,
+          } as ChatEvent;
+          continue;
+        }
+
+        // We wrap sub-agent actions to avoid triggering manager handlers if they share names.
+        if (agentEvent.type.startsWith("action:") && agentEvent.type !== "action:result") {
+          yield {
+            ...agentEvent,
+            type: "agent:sub-action",
+            delegationId,
+            data: { ...agentEvent.data, originalType: agentEvent.type },
+          } as ChatEvent;
+          continue;
+        }
+
+        // Wrap usage updates to avoid confusion with manager usage.
+        if (agentEvent.type === "usage:update") {
+          yield {
+            ...agentEvent,
+            type: "agent:sub-usage",
+            delegationId,
+          } as ChatEvent;
+          continue;
+        }
+
+        // Pass through other events but tag them with delegationId
+        yield {
+          ...agentEvent,
+          delegationId,
+        } as ChatEvent;
 
         if (agentEvent.type === "agent:output") {
           lastAgentOutput = (agentEvent.data as any).content || agentEvent.data as any;
         }
       }
+
+      // Signal delegation end for UI
+      yield {
+        type: "delegation:end",
+        delegationId,
+        data: { agent: agentName, result: lastAgentOutput || "Task completed." },
+      } as ChatEvent;
 
       // Feedback the result back to the manager
       yield {
