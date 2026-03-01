@@ -2,9 +2,8 @@ import { z } from "zod";
 
 // --- Plugin Options ---
 
-export interface BrainPluginOptions {
+export interface MemoryPluginOptions {
   baseDir: string;
-  allowSoulModification?: boolean; // default: false (safety)
 }
 
 // --- Memory ---
@@ -22,7 +21,7 @@ export interface MemoryIndex {
 
 // --- Tool Definitions ---
 
-export const brainToolDefinitions = {
+export const memoryToolDefinitions = {
   // Memory tools
   remember: {
     description:
@@ -67,23 +66,6 @@ export const brainToolDefinitions = {
       "Add a journal entry for today. Use for session notes, learnings, and reflections.",
     inputSchema: z.object({
       content: z.string().describe("Journal entry content"),
-    }),
-  },
-
-  // Identity tools
-  updateIdentity: {
-    description:
-      "Update your identity file to refine your personality and traits. Start it with # Identity.",
-    inputSchema: z.object({
-      content: z.string().describe("New content for IDENTITY.md"),
-    }),
-  },
-  readIdentity: {
-    description: "Read your current identity or soul configuration.",
-    inputSchema: z.object({
-      file: z
-        .enum(["IDENTITY.md", "SOUL.md"])
-        .describe("Which identity file to read"),
     }),
   },
 };

@@ -7,7 +7,7 @@ Plugins are the building blocks of OpenBot's capabilities. They provide tools an
 - **shell**: Allows agents to execute shell commands.
 - **file-system**: Provides file CRUD operations (read, write, list, delete).
 - **approval**: Intercepts actions and requires user confirmation before proceeding.
-- **brain**: Manages the "long-term memory" and context for the manager agent.
+- **memory**: Manages the "long-term memory" and context for the manager agent.
 
 ## In-depth: Approval Plugin
 

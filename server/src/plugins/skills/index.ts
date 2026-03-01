@@ -176,7 +176,7 @@ You have no skills yet. When you learn reusable patterns, create skills using \`
 
 /**
  * Create a prompt builder that generates the skills section
- * of the system prompt. Use alongside the brain prompt builder.
+ * of the system prompt. Use alongside the memory prompt builder.
  */
 export function createSkillsPromptBuilder(baseDir: string) {
   const expandedBase = expandPath(baseDir);
@@ -191,7 +191,7 @@ export function createSkillsPromptBuilder(baseDir: string) {
  * Skills Plugin for Melony
  *
  * Manages reusable skill definitions: load, create, update, list.
- * Fully independent from the brain plugin.
+ * Fully independent from the memory plugin.
  */
 export const skillsPlugin = (
   options: SkillsPluginOptions

@@ -15,7 +15,7 @@ OpenBot is an extensible AI assistant ecosystem built on the **Melony** framewor
 ### 1. The Manager Agent
 The central entry point. Its primary responsibilities are:
 - **Orchestration**: Analyzing user intent and routing tasks to the correct agent using the `delegateTask` tool.
-- **Memory & Identity**: Using the `brain` plugin to manage long-term memory (`remember`/`recall`) and maintain its own persona (`updateIdentity`).
+- **Memory**: Using the `memory` plugin to manage long-term memory (`remember`/`recall`).
 - **Summarization**: Providing high-level, concise summaries of sub-agent activities.
 
 ### 2. Specialized Agents
@@ -28,7 +28,7 @@ Agents are workers that handle specific domains.
 ### 3. Key Plugins
 Plugins provide the actual tools and logic used by agents.
 - **`llm`**: The core LLM integration, handling completion and tool calling.
-- **`brain`**: Identity and memory management. Stores data in `~/.openbot/identity.md` and `~/.openbot/memories/`.
+- **`memory`**: Agent definition and long-term memory management. Stores data in `~/.openbot/AGENT.md` and `~/.openbot/memory/`.
 - **`shell`**: Secure terminal execution.
 - **`file-system`**: CRUD operations on the local disk.
 - **`approval`**: A middleware plugin that requires user confirmation for destructive or sensitive actions.
@@ -43,9 +43,9 @@ Plugins provide the actual tools and logic used by agents.
 5. **Manager Bridge** → Manager catches output, reports results to user.
 
 ### Memory Workflow
-1. **Action** → Manager calls `remember(content, tags)`.
-2. **Storage** → `brain` plugin saves to local JSON/Markdown.
-3. **Retrieval** → Manager calls `recall(query)` to inject past context into its prompt.
+1. **Action** → Manager calls \`remember(content, tags)\`.
+2. **Storage** → \`memory\` plugin saves to local JSON.
+3. **Retrieval** → Manager calls \`recall(query)\` to inject past context into its prompt.
 
 ## 📂 Project Structure
 - `/server`: Node.js/TypeScript backend core.
@@ -83,6 +83,6 @@ The `AgentRegistry` and `PluginRegistry` are used to:
 - Auto-wire event subscriptions for agents (e.g., if an agent subscribes to `agent:output`).
 
 ## 🎨 UI & Events
-- **Status Updates**: Plugins should yield `brain:status` or similar events to show progress in the UI.
+- **Status Updates**: Plugins should yield `memory:status` or similar events to show progress in the UI.
 - **Dynamic Widgets (SDUI)**: Use `ui.event(widget(...))` to send dynamic UI widgets to the conversation history. See `.cursor/rules/openbot-sdui.mdc` for detailed guidelines.
 - **Task Results**: Always yield `action:result` with the `toolCallId` to close tool-calling loops.

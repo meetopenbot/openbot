@@ -1,31 +1,31 @@
 import { RuntimeContext } from "melony";
-import { IdentityModule } from "./identity.js";
 import { MemoryModule } from "./memory.js";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 
 // --- Types ---
 
-export interface BrainModules {
-  identity: IdentityModule;
+export interface MemoryModules {
   memory: MemoryModule;
 }
 
 // --- Prompt Builder ---
 
 /**
- * Build the brain's section of the system prompt.
+ * Build the memory's section of the system prompt.
  *
- * Includes only what the brain owns:
+ * Includes only what the memory owns:
  * - Environment context
- * - Identity + Soul (small, static)
+ * - Agent definition (from AGENT.md)
  * - A handful of the most recent memories
- * - Brain capability instructions
+ * - Memory capability instructions
  *
  * Skills are handled by the separate skills plugin and composed
  * at the top level in open-bot.ts.
  */
-export async function buildBrainPrompt(
+export async function buildMemoryPrompt(
   baseDir: string,
-  modules: BrainModules,
+  modules: MemoryModules,
   context?: RuntimeContext
 ): Promise<string> {
   const parts: string[] = [];
@@ -41,12 +41,16 @@ export async function buildBrainPrompt(
 - Bot Home: ${baseDir}
 </environment>`);
 
-  // 2. Identity (small, always included)
-  const identity = await modules.identity.getIdentity();
-  if (identity) parts.push(`<identity>\n${identity}\n</identity>`);
-
-  const soul = await modules.identity.getSoul();
-  if (soul) parts.push(`<soul>\n${soul}\n</soul>`);
+  // 2. Agent definition (manual edit only)
+  try {
+    const agentPath = path.join(baseDir, "AGENT.md");
+    const agentMd = await fs.readFile(agentPath, "utf-8");
+    if (agentMd.trim()) {
+      parts.push(`<agent_definition>\n${agentMd.trim()}\n</agent_definition>`);
+    }
+  } catch {
+    // Skip if AGENT.md doesn't exist yet
+  }
 
   // 3. Recent memories (lean — just a few to keep context fresh)
   const recentFacts = await modules.memory.getRecentFacts(5);
@@ -60,16 +64,14 @@ export async function buildBrainPrompt(
     parts.push(`<recent_memories>\n${factsList}\n</recent_memories>`);
   }
 
-  // 4. Brain capabilities
-  parts.push(`<brain_tools>
+  // 4. Memory capabilities
+  parts.push(`<memory_tools>
 Use these to manage your persistent state:
 - \`remember(content, tags)\`: Store facts/preferences
 - \`recall(query, tags)\`: Search long-term memory
 - \`forget(memoryId)\`: Remove outdated info
 - \`journal(content)\`: Record session reflections
-- \`updateIdentity(content)\`: Refine your persona
-- \`readIdentity(file)\`: Inspect SOUL.md or IDENTITY.md
-</brain_tools>`);
+</memory_tools>`);
 
   return `\n${parts.join("\n\n")}\n`;
 }

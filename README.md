@@ -23,14 +23,14 @@ OpenBot is more than just a chatbot. It's an orchestrator that lives in your ter
 
 OpenBot follows a **Delegate by Default** pattern. 
 
-- **The Manager Agent**: Your primary interface. It analyzes your intent, manages long-term memory (via the `brain` plugin), and orchestrates specialized workers.
+- **The Manager Agent**: Your primary interface. It analyzes your intent, manages long-term memory (via the `memory` plugin), and orchestrates specialized workers.
 - **Specialized Agents**: Workers dedicated to specific domains like `os` (shell & files), `browser` (web automation), or any custom agent you define.
 - **Event Bus**: All communication happens asynchronously via events, allowing for complex multi-agent choreography and real-time UI updates.
 
 ## 🤖 Meet the Agents
 
 ### 🧠 Manager Agent (The Orchestrator)
-The central "brain" of the OpenBot ecosystem. It analyzes user intent, manages long-term memory (via the `brain` plugin), and coordinates other agents using the `delegateTask` tool. It provides you with a concise summary of the results once the specialists finish their work.
+The central orchestrator of the OpenBot ecosystem. It analyzes user intent, manages long-term memory (via the `memory` plugin), and coordinates other agents using the `delegateTask` tool. It provides you with a concise summary of the results once the specialists finish their work.
 
 ### 🐚 OS Agent (`os`)
 Your specialized terminal and file system companion. It has full access to your local machine (within the boundaries you set). It can execute shell commands, create/read/edit files, manage directories, and handle system-level operations like git commands or script execution.
@@ -63,11 +63,10 @@ We are constantly expanding the OpenBot ecosystem with specialized agents:
 - **`data-scientist` Agent**: Capable of running local notebooks, performing statistical analysis, and generating visualizations.
 - **`social` Agent**: Designed to manage social media interactions, schedule posts, and monitor mentions.
 
-### 💭 Persistent Brain & Memory
+### 💭 Persistent Memory
 Unlike most chatbots, OpenBot has a long-term memory. It can:
 - **`remember`**: Store facts, snippets, or preferences for later.
 - **`recall`**: Search its past experiences to provide context for new tasks.
-- **`updateIdentity`**: Maintain its own persona and "soul" in a markdown file.
 - **`journal`**: Keep a daily log of activities and insights.
 
 ## 🚀 Quick Start
@@ -153,7 +152,7 @@ Skip the manager's reasoning and talk directly to an agent using prefixes:
 
 ## 🏗️ Core Architecture
 
-- **`Manager`**: Central brain, handles `/remember` and `/recall`.
+- **`Manager`**: Central orchestrator, handles `/remember` and `/recall`.
 - **`Plugin Registry`**: Centralized tool discovery.
 - **`Agent Registry`**: Dynamic loading of built-in and user-defined agents.
 - **`SDUI (Server-Driven UI)`**: Plugins can emit UI components (cards, logs, status updates) that render directly in the web dashboard.

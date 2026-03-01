@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { brainPlugin, brainToolDefinitions, createBrainPromptBuilder } from "../plugins/brain/index.js";
+import { memoryPlugin, memoryToolDefinitions, createMemoryPromptBuilder } from "../plugins/memory/index.js";
 import { topicAgent } from "../agents/topic-agent.js";
 import { llmPlugin } from "../plugins/llm/index.js";
 import { AgentRegistry } from "../registry/index.js";
@@ -12,7 +12,7 @@ export function createManagerPlugin(
 ) {
   const agentNames = agentRegistry.getNames();
   const allAgents = agentRegistry.getAll();
-  const buildBrainPrompt = createBrainPromptBuilder(resolvedBaseDir);
+  const buildMemoryPrompt = createMemoryPromptBuilder(resolvedBaseDir);
 
   const agentDescriptions = allAgents
     .map((a) => {
@@ -30,9 +30,8 @@ ${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ""}
 
   return (builder: any) => {
     builder
-      .use(brainPlugin({
+      .use(memoryPlugin({
         baseDir: resolvedBaseDir,
-        allowSoulModification: false,
       }))
       .use(topicAgent({ model: model as any }))
       .use(llmPlugin({
@@ -40,7 +39,7 @@ ${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ""}
         modelId: resolvedModelId,
         usageScope: "manager",
         system: async (context: any) => {
-          const brainPrompt = await buildBrainPrompt(context);
+          const memoryPrompt = await buildMemoryPrompt(context);
 
           return `
 
@@ -52,18 +51,18 @@ Your goal is to solve user requests by delegating tasks to expert sub-agents.
 2. **Plan**: For multi-step tasks, use \`planner-agent\` first to create a roadmap.
 3. **Context**: Provide a clear, detailed task for the sub-agent. Pass any relevant user attachments.
 4. **Report**: Summarize the sub-agent's work concisely for the user.
-5. **Memory**: Use your brain tools (\`remember\`, \`recall\`) to maintain context across sessions.
+5. **Memory**: Use your memory tools (\`remember\`, \`recall\`) to maintain context across sessions.
 </orchestrator>
 
 <agents>
 ${agentDescriptions}
-</agents>`;
+</agents>${memoryPrompt}`;
         },
         promptInputType: "agent:input",
         actionResultInputType: "action:result",
         completionEventType: "agent:output",
         toolDefinitions: {
-          ...brainToolDefinitions,
+          ...memoryToolDefinitions,
           delegateTask: {
             description: `Delegate a task to a specialized expert agent.`,
             inputSchema: z.object({

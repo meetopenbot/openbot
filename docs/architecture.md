@@ -5,7 +5,7 @@ OpenBot follows a modular architecture based on the `melony` framework.
 ## Core Components
 
 ### 1. The Manager Agent
-The central brain of OpenBot. It receives user input and uses a `delegateTask` tool to route tasks to the most appropriate specialized agent.
+The central orchestrator of OpenBot. It receives user input and uses a `delegateTask` tool to route tasks to the most appropriate specialized agent.
 
 ### 2. Agent Registry
 Holds all available agents. Agents can be:
