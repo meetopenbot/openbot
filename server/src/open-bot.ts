@@ -45,7 +45,21 @@ export async function createOpenBot(options?: {
   
   const managerRuntime = managerBuilder.build();
 
-  // 5. Return the runtime
+  // 5. Trigger initialization for all runtimes
+  const initPromises: Promise<void>[] = [];
+  const exhaust = async (runtime: Runtime<ChatState, ChatEvent>) => {
+    const iterator = runtime.run({ type: "init" } as any, { runId: "init", state: {} as any });
+    for await (const _ of iterator) { /* side-effects only */ }
+  };
+
+  for (const agentRuntime of agentRuntimes.values()) {
+    initPromises.push(exhaust(agentRuntime));
+  }
+  initPromises.push(exhaust(managerRuntime));
+
+  await Promise.all(initPromises);
+
+  // 6. Return the runtime
   return {
     run: (event: ChatEvent, context: { runId: string; state: ChatState }) =>
       runOpenBot(event, context, managerRuntime, agentRuntimes),
