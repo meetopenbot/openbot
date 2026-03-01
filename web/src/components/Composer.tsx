@@ -240,7 +240,7 @@ export function Composer() {
   useEffect(() => {
     if (textareaRef.current) {
       if (content === "") {
-        textareaRef.current.style.height = "44px";
+        textareaRef.current.style.height = "22px";
       } else {
         textareaRef.current.style.height = "auto";
         textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
@@ -329,39 +329,20 @@ export function Composer() {
         </div>
       )}
       <form onSubmit={handleSubmit} className="flex flex-col">
-        {selectedAgent && (
-          <div className="flex items-center px-3 pt-2.5 pb-2">
-            <div className="flex items-center gap-1.5 rounded-md bg-foreground/10 px-2 py-1 text-[11px] font-medium text-foreground">
-              <AgentAvatar name={selectedAgent} className="w-3.5 h-3.5 rounded-sm" />
-              <span>@{selectedAgent}</span>
-              <button
-                type="button"
-                onClick={handleRemoveAgent}
-                className="rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-foreground/20 hover:text-foreground"
-                aria-label="Remove agent"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
         {pendingImages.length > 0 && (
-          <div className="px-3 pt-2">
+          <div className="px-4 pt-3">
             <div className="flex flex-wrap gap-2">
               {pendingImages.map((image) => (
-                <div key={image.id} className="relative">
+                <div key={image.id} className="relative group animate-in fade-in scale-in-95">
                   <img
                     src={image.previewUrl}
                     alt={image.file.name}
-                    className="h-14 w-14 rounded-lg border border-border/60 object-cover"
+                    className="h-16 w-16 rounded-xl border border-border/60 object-cover shadow-sm transition-all duration-200 hover:border-border"
                   />
                   <button
                     type="button"
                     onClick={() => removePendingImage(image.id)}
-                    className="absolute -right-1.5 -top-1.5 rounded-full border border-border/70 bg-background p-0.5 text-muted-foreground hover:text-foreground"
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground shadow-sm transition-all duration-200 hover:text-foreground"
                     aria-label={`Remove ${image.file.name}`}
                   >
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -374,16 +355,36 @@ export function Composer() {
             </div>
           </div>
         )}
-        <textarea
-          ref={textareaRef}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={selectedAgent ? `Message @${selectedAgent}...` : "Message OpenBot..."}
-          className={`min-h-[44px] max-h-[200px] w-full resize-none bg-transparent px-4 ${selectedAgent ? 'pt-1 pb-3' : 'py-3'} text-[13px] leading-relaxed placeholder:text-muted-foreground/50 focus:outline-none`}
-          rows={1}
-        />
-        <div className="flex items-center justify-between px-3 pb-2.5">
+
+        <div className="flex items-start px-4 py-3">
+          {selectedAgent && (
+            <div className="mr-2 flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-foreground/8 px-2.5 py-0.5 text-[11px] font-semibold text-foreground ring-1 ring-inset ring-foreground/5 transition-all duration-200 hover:bg-foreground/12 animate-in fade-in slide-in-from-left-2">
+              <AgentAvatar name={selectedAgent} className="h-3.5 w-3.5 rounded-full" />
+              <span className="max-w-[120px] truncate leading-none">@{selectedAgent}</span>
+              <button
+                type="button"
+                onClick={handleRemoveAgent}
+                className="ml-0.5 rounded-full p-0.5 text-muted-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
+                aria-label="Remove agent"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          )}
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={selectedAgent ? `Message @${selectedAgent}...` : "Message OpenBot..."}
+            className="flex-1 min-h-[22px] max-h-[200px] w-full resize-none bg-transparent p-0 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none"
+            rows={1}
+          />
+        </div>
+        <div className="flex items-center justify-between px-3.5 pb-2.5">
           <div ref={actionPopoverRef} className="relative flex items-center">
             <input
               ref={fileInputRef}

@@ -107,7 +107,7 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     const assistantMessage: SimpleMessage = { role: "assistant", content: "" };
     state.messages.push(assistantMessage);
 
-    // console.log("modelMessages:::::", JSON.stringify(modelMessages, null, 2));
+    console.log("modelMessages:::::", JSON.stringify(modelMessages, null, 2));
 
     const result = streamText({
       model,
