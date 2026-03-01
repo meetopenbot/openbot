@@ -316,7 +316,7 @@ export function Composer() {
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${i === popoverIndex ? "bg-muted/60" : "hover:bg-muted/40"
                   }`}
               >
-                <AgentAvatar name={agent.name} className="w-8 h-8 rounded-lg" />
+                <AgentAvatar name={(agent as any).isDefault ? "default" : agent.name} className="w-8 h-8 rounded-lg" />
                 <div className="flex flex-col items-start gap-0.5">
                   <div className="text-[13px] font-medium text-foreground">@{agent.name}</div>
                   <div className="line-clamp-1 text-xs text-muted-foreground/70">
@@ -359,7 +359,7 @@ export function Composer() {
         <div className="flex items-start px-4 py-3">
           {selectedAgent && (
             <div className="mr-2 flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-foreground/8 px-2.5 py-0.5 text-[11px] font-semibold text-foreground ring-1 ring-inset ring-foreground/5 transition-all duration-200 hover:bg-foreground/12 animate-in fade-in slide-in-from-left-2">
-              <AgentAvatar name={selectedAgent} className="h-3.5 w-3.5 rounded-full" />
+              <AgentAvatar name={customAgents.find((a: any) => a.name === selectedAgent)?.isDefault ? "default" : selectedAgent} className="h-3.5 w-3.5 rounded-full" />
               <span className="max-w-[120px] truncate leading-none">@{selectedAgent}</span>
               <button
                 type="button"

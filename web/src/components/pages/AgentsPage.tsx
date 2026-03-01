@@ -57,6 +57,7 @@ function AgentEditForm({ agentName, isDefault, onUpdate }: { agentName: string; 
     setError(null);
     
     const promises = [];
+    const effectiveName = isDefault ? "default" : agentName;
     
     if (isDefault) {
       promises.push(
@@ -69,7 +70,7 @@ function AgentEditForm({ agentName, isDefault, onUpdate }: { agentName: string; 
       );
     } else {
       promises.push(
-        api.getAgentConfig(agentName)
+        api.getAgentConfig(effectiveName)
           .then((config) => {
             setName(config.name || agentName);
             setDescription(config.description || "");
@@ -82,7 +83,7 @@ function AgentEditForm({ agentName, isDefault, onUpdate }: { agentName: string; 
     }
     
     promises.push(
-      api.getAgentMd(agentName)
+      api.getAgentMd(effectiveName)
         .then((md) => setMdContent(md))
         .catch(() => setMdContent("")) // Ignore errors for MD
     );
@@ -98,6 +99,7 @@ function AgentEditForm({ agentName, isDefault, onUpdate }: { agentName: string; 
   const handleSave = async () => {
     setError(null);
     setSaving(true);
+    const effectiveName = isDefault ? "default" : agentName;
     try {
       if (isDefault) {
         await api.updateConfig({ 
@@ -147,7 +149,7 @@ function AgentEditForm({ agentName, isDefault, onUpdate }: { agentName: string; 
           return;
         }
 
-        await api.updateAgentConfig(agentName, {
+        await api.updateAgentConfig(effectiveName, {
           name: name.trim(),
           description: description.trim(),
           model: model.trim() || undefined,
@@ -157,7 +159,7 @@ function AgentEditForm({ agentName, isDefault, onUpdate }: { agentName: string; 
         });
       }
 
-      await api.updateAgentMd(agentName, mdContent);
+      await api.updateAgentMd(effectiveName, mdContent);
       
       await queryClient.invalidateQueries({ queryKey: ["agents"] });
       onUpdate?.();
@@ -187,7 +189,7 @@ function AgentEditForm({ agentName, isDefault, onUpdate }: { agentName: string; 
     <div className="flex flex-col h-full overflow-hidden bg-background">
       <div className="flex items-center justify-between border-b border-border/50 px-6 py-4 bg-background/50 backdrop-blur-sm sticky top-0 z-10 shrink-0">
         <div className="flex items-center gap-3">
-          <AgentAvatar name={agentName} className="w-8 h-8 rounded-lg" />
+          <AgentAvatar name={isDefault ? "default" : agentName} className="w-8 h-8 rounded-lg" />
           <h2 className="text-lg font-semibold tracking-tight">{agentName}</h2>
           {isDefault && <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-bold uppercase tracking-wider">Default</span>}
         </div>
@@ -415,7 +417,7 @@ export function AgentsPage() {
                   )}
                 >
                   <AgentAvatar 
-                    name={agent.name} 
+                    name={agent.isDefault ? "default" : agent.name} 
                     className={cn(
                       "w-9 h-9 rounded-lg transition-transform",
                       selectedAgentName === agent.name ? "scale-105" : "group-hover:scale-105"

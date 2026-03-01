@@ -54,7 +54,8 @@ export async function readAgentConfig(agentDir: string): Promise<AgentYamlConfig
   try {
     mdContent = await fs.readFile(mdPath, "utf-8");
   } catch {
-    throw new Error(`AGENT.md not found in ${agentDir}`);
+    // Fallback to a default template if AGENT.md is missing
+    mdContent = DEFAULT_AGENT_MD.replace("name: Agent", `name: ${folderName}`);
   }
 
   const parsed = matter(mdContent);
@@ -186,7 +187,8 @@ export async function discoverYamlAgents(
         try {
           await fs.access(agentMdPath);
         } catch {
-          await fs.writeFile(agentMdPath, DEFAULT_AGENT_MD, "utf-8");
+          const content = DEFAULT_AGENT_MD.replace("name: Agent", `name: ${config.name}`);
+          await fs.writeFile(agentMdPath, content, "utf-8");
           console.log(`[agents] Initialized ${config.name}/AGENT.md`);
         }
 

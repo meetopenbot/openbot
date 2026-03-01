@@ -76,6 +76,7 @@ export async function startServer(options: ServerOptions = {}) {
   const watcher = chokidar.watch(
     [
       path.join(openBotDir, "config.json"),
+      path.join(openBotDir, "AGENT.md"),
       path.join(openBotDir, "agents", "**", "*"),
       path.join(openBotDir, "plugins", "**", "*"),
     ],
@@ -504,7 +505,7 @@ export async function startServer(options: ServerOptions = {}) {
     const defaultName = cfg.name || "OpenBot";
     
     let mdPath: string;
-    if (name === defaultName) {
+    if (name === defaultName || name === "default") {
       mdPath = path.join(resolvedBaseDir, "AGENT.md");
     } else {
       mdPath = path.join(resolvedBaseDir, "agents", name, "AGENT.md");
@@ -529,7 +530,7 @@ export async function startServer(options: ServerOptions = {}) {
     
     let mdPath: string;
     let agentDir: string;
-    if (name === defaultName) {
+    if (name === defaultName || name === "default") {
       agentDir = resolvedBaseDir;
       mdPath = path.join(resolvedBaseDir, "AGENT.md");
     } else {
@@ -563,8 +564,14 @@ export async function startServer(options: ServerOptions = {}) {
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
-    const agentDir = path.join(resolvedBaseDir, "agents", name);
-    const mdPath = path.join(agentDir, "AGENT.md");
+    const defaultName = cfg.name || "OpenBot";
+
+    let mdPath: string;
+    if (name === defaultName || name === "default") {
+      mdPath = path.join(resolvedBaseDir, "AGENT.md");
+    } else {
+      mdPath = path.join(resolvedBaseDir, "agents", name, "AGENT.md");
+    }
 
     try {
       const content = await fs.readFile(mdPath, "utf-8");
@@ -575,9 +582,9 @@ export async function startServer(options: ServerOptions = {}) {
       }
 
       res.json({
-        name: typeof parsed.name === "string" ? parsed.name : name,
-        description: typeof parsed.description === "string" ? parsed.description : "",
-        model: typeof parsed.model === "string" ? parsed.model : undefined,
+        name: typeof parsed.name === "string" ? parsed.name : (name === defaultName || name === "default" ? defaultName : name),
+        description: typeof parsed.description === "string" ? parsed.description : (name === defaultName || name === "default" ? cfg.description || "" : ""),
+        model: typeof parsed.model === "string" ? parsed.model : (name === defaultName || name === "default" ? cfg.model : undefined),
         plugins: Array.isArray(parsed.plugins) ? parsed.plugins : [],
         systemPrompt: body.trim(),
         subscribe: Array.isArray(parsed.subscribe)
@@ -585,6 +592,17 @@ export async function startServer(options: ServerOptions = {}) {
           : [],
       });
     } catch {
+      if (name === defaultName || name === "default") {
+        // Fallback for default agent if AGENT.md is missing or unreadable
+        return res.json({
+          name: defaultName,
+          description: cfg.description || "",
+          model: cfg.model,
+          plugins: [],
+          systemPrompt: "",
+          subscribe: [],
+        });
+      }
       res.status(404).json({ error: "Agent not found or invalid format" });
     }
   });
@@ -642,8 +660,17 @@ export async function startServer(options: ServerOptions = {}) {
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
-    const agentDir = path.join(resolvedBaseDir, "agents", name);
-    const mdPath = path.join(agentDir, "AGENT.md");
+    const defaultName = cfg.name || "OpenBot";
+
+    let agentDir: string;
+    let mdPath: string;
+    if (name === defaultName || name === "default") {
+      agentDir = resolvedBaseDir;
+      mdPath = path.join(resolvedBaseDir, "AGENT.md");
+    } else {
+      agentDir = path.join(resolvedBaseDir, "agents", name);
+      mdPath = path.join(agentDir, "AGENT.md");
+    }
 
     // Prepare frontmatter
     const frontmatter: Record<string, unknown> = {
@@ -671,6 +698,15 @@ export async function startServer(options: ServerOptions = {}) {
       
       const consolidated = matter.stringify(normalizedSystemPrompt, frontmatter);
       await fs.writeFile(mdPath, consolidated, "utf-8");
+
+      if (name === defaultName || name === "default") {
+        // For the default agent, sync changes back to config.json
+        saveConfig({
+          name: normalizedName,
+          description: normalizedDescription,
+          model: (typeof body.model === "string" && body.model.trim()) ? body.model.trim() : undefined,
+        });
+      }
 
       res.json({ success: true });
     } catch (err) {
@@ -703,12 +739,15 @@ export async function startServer(options: ServerOptions = {}) {
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
+    const defaultName = cfg.name || "OpenBot";
     
     const extensions = [".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"];
     const fileNames = ["avatar", "icon", "image", "logo"];
     
     const searchDirs = [
-      path.join(resolvedBaseDir, "agents", name, "assets"),
+      (name === defaultName || name === "default")
+        ? path.join(resolvedBaseDir, "assets")
+        : path.join(resolvedBaseDir, "agents", name, "assets"),
       path.join(process.cwd(), "server", "src", "agents", name, "assets"),
       path.join(process.cwd(), "server", "src", "assets", "agents", name),
       path.join(process.cwd(), "server", "src", "agents", "assets"),
