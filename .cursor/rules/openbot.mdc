@@ -23,7 +23,7 @@ Agents are workers that handle specific domains.
 - **`os` Agent**: Handles shell commands and file system operations.
 - **`browser` Agent**: (If installed) Performs web navigation and interaction.
 - **`topic` Agent**: Background agent that automatically titles chat threads.
-- **YAML Agents**: Defined in `~/.openbot/agents/*.yaml`, they allow for custom prompts and tool configurations without code changes.
+- **YAML Agents**: Defined in `~/.openbot/agents/*/AGENT.md`, they allow for custom prompts and tool configurations without code changes.
 
 ### 3. Key Plugins
 Plugins provide the actual tools and logic used by agents.
@@ -73,8 +73,9 @@ Agents are specialized personas that use plugins.
   2. Implement it using `melony()` and include an `llmPlugin`.
   3. Register it in `server/src/open-bot.ts` using `agentRegistry.register()`.
 - **YAML Agent** (No code required):
-  1. Create a file in `~/.openbot/agents/<name>.yaml`.
-  2. Define `name`, `description`, `systemPrompt`, and `plugins` (referencing registered plugin names).
+  1. Create a folder in `~/.openbot/agents/<name>/` and an `AGENT.md` file within it.
+  2. Define `name`, `description`, `model`, and `plugins` (referencing registered plugin names) in the YAML frontmatter.
+  3. Write the instructions (prompt) as the Markdown body below the frontmatter.
 
 ### 3. Using Registry for Discovery
 The `AgentRegistry` and `PluginRegistry` are used to:

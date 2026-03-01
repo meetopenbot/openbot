@@ -53,24 +53,32 @@ Official plugin catalog (prefer these):
 - browser-tools: web automation
 - search: search/retrieval tools
 
+Tool Usage:
+1. Use \`listFiles\` to explore existing agents in ${agentsDir}.
+2. Use \`readFile\` to inspect an existing agent's AGENT.md before updating it.
+3. Use \`writeFile\` to create or update an agent's AGENT.md.
+
 Rules:
 1. Do not write files until user explicitly approves the proposed changes.
-2. For updates, first read the current AGENT.md, then produce a concise summary of changes.
+2. For updates, ALWAYS read the current AGENT.md first using \`readFile\`, then propose changes.
 3. For the Default Agent, ALWAYS use ${baseDir}/AGENT.md.
 4. For Custom Agents, ALWAYS use ${agentsDir}/<name>/AGENT.md.
-5. Prefer official plugins.
-6. Keep frontmatter minimal; include only meaningful fields.
-7. If required info is missing, ask focused follow-up questions.
-8. After writing, confirm that the correct AGENT.md was updated.
-9. The server hot-reloads ~/.openbot changes.
-10. ALWAYS use the consolidated AGENT.md format. Do NOT create agent.yaml files anymore.
+5. If you're unsure which agent to update, use \`listFiles\` on ${agentsDir} to see available agents.
+6. Prefer official plugins.
+7. Keep frontmatter minimal; include only meaningful fields.
+8. If required info is missing, ask focused follow-up questions.
+9. After writing, confirm that the correct AGENT.md was updated.
+10. The server hot-reloads ~/.openbot changes.
+11. ALWAYS use the consolidated AGENT.md format. Do NOT create agent.yaml files anymore.
 
 Workflow:
 1. Determine whether this is create or update, and if it's for the Default Agent or a Custom Agent.
-2. Collect missing requirements.
-3. Show a proposed AGENT.md content (frontmatter + instructions) and request explicit approval.
-4. On approval, write the appropriate AGENT.md using file-system tools.
-5. Return a short completion summary.`,
+2. If it's an update, use \`readFile\` to get the current configuration.
+3. If the agent name is ambiguous, use \`listFiles\` to find the correct one.
+4. Collect missing requirements from the user.
+5. Show a proposed AGENT.md content (frontmatter + instructions) and request explicit approval.
+6. On approval, write the appropriate AGENT.md using \`writeFile\`.
+7. Return a short completion summary.`,
         toolDefinitions: fileSystemToolDefinitions, // Give it access to write files
       })
     );

@@ -356,9 +356,9 @@ export function Composer() {
           </div>
         )}
 
-        <div className="flex items-start px-4 py-3">
-          {selectedAgent && (
-            <div className="mr-2 flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-foreground/8 px-2.5 py-0.5 text-[11px] font-semibold text-foreground ring-1 ring-inset ring-foreground/5 transition-all duration-200 hover:bg-foreground/12 animate-in fade-in slide-in-from-left-2">
+        {selectedAgent && (
+          <div className="px-4 pt-3 flex">
+            <div className="flex h-6 items-center gap-1.5 rounded-full bg-foreground/8 px-2.5 py-0.5 text-[11px] font-semibold text-foreground ring-1 ring-inset ring-foreground/5 transition-all duration-200 hover:bg-foreground/12 animate-in fade-in slide-in-from-left-2">
               <AgentAvatar name={customAgents.find((a: any) => a.name === selectedAgent)?.isDefault ? "default" : selectedAgent} className="h-3.5 w-3.5 rounded-full" />
               <span className="max-w-[120px] truncate leading-none">@{selectedAgent}</span>
               <button
@@ -373,7 +373,10 @@ export function Composer() {
                 </svg>
               </button>
             </div>
-          )}
+          </div>
+        )}
+
+        <div className="flex items-start px-4 py-3">
           <textarea
             ref={textareaRef}
             value={content}

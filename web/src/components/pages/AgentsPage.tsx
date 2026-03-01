@@ -56,7 +56,6 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
   const [name, setName] = useState(agentName);
   const [description, setDescription] = useState("");
   const [model, setModel] = useState("");
-  const [systemPrompt, setSystemPrompt] = useState("");
   const [subscribeText, setSubscribeText] = useState("");
   const [pluginRows, setPluginRows] = useState<PluginRow[]>([]);
   
@@ -93,7 +92,6 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
             setName(config.name || agentName);
             setDescription(config.description || "");
             setModel(config.model || "");
-            setSystemPrompt(config.systemPrompt || "");
             setSubscribeText((config.subscribe || []).join(", "));
             setPluginRows(configToPluginRows(config));
           })
@@ -161,8 +159,8 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
           .map((item) => item.trim())
           .filter(Boolean);
 
-        if (!name.trim() || !description.trim() || !systemPrompt.trim()) {
-          setError("Name, description, and system prompt are required");
+        if (!name.trim() || !description.trim()) {
+          setError("Name and description are required");
           setSaving(false);
           return;
         }
@@ -172,7 +170,6 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
           description: description.trim(),
           model: model.trim() || undefined,
           plugins,
-          systemPrompt,
           subscribe,
         });
       }
@@ -416,16 +413,6 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
                       </div>
                     )}
                   </div>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">System Prompt</label>
-                  <textarea
-                    value={systemPrompt}
-                    onChange={(e) => setSystemPrompt(e.target.value)}
-                    className="min-h-32 w-full rounded-xl border border-border/60 bg-background/50 px-4 py-3 text-sm focus:outline-none focus:border-foreground/30 transition-all leading-relaxed"
-                    placeholder="Define behavior..."
-                  />
                 </div>
 
                 <div className="flex flex-col gap-1.5">

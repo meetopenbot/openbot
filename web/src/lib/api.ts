@@ -58,7 +58,6 @@ export interface AgentConfig {
   description: string;
   model?: string;
   plugins: Array<string | AgentPluginConfig>;
-  systemPrompt: string;
   subscribe?: string[];
 }
 

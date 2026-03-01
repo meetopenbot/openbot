@@ -99,7 +99,8 @@ OpenBot is designed for power users and builders who want to create their own cu
 ### 1. YAML Agents (No Coding Required)
 Create specialized agents just by writing a simple Markdown file with YAML frontmatter in `~/.openbot/agents/researcher/AGENT.md`:
 
-```yaml
+```markdown
+---
 name: researcher
 description: A specialized agent for gathering information and summarizing articles.
 model: anthropic/claude-3-5-sonnet-20240620
@@ -108,10 +109,13 @@ plugins:
   - name: file-system
     config:
       baseDir: ~/Documents/Research
-systemPrompt: |
-  You are an expert researcher. 
-  Use the browser to gather information and the file-system to save detailed reports.
-  Always cite your sources and provide a high-level summary.
+---
+
+# Instructions
+
+You are an expert researcher. 
+Use the browser to gather information and the file-system to save detailed reports.
+Always cite your sources and provide a high-level summary.
 ```
 
 ### 2. TS Agent Packages (Advanced)

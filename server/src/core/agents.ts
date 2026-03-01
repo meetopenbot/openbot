@@ -30,7 +30,7 @@ export async function setupAgentRegistry(
 
   agentRegistry.register({
     name: "agent-creator",
-    description: "Helps the user create and configure new custom OpenBot agents via natural language.",
+    description: "Helps the user create and update custom OpenBot agents via natural language.",
     capabilities: {
       ...Object.fromEntries(
         Object.entries(fileSystemToolDefinitions).map(([k, v]) => [k, v.description])

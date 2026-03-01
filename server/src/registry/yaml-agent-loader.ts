@@ -39,7 +39,7 @@ export interface AgentYamlConfig {
   description: string;
   model?: string;
   plugins: (string | { name: string; config?: any })[];
-  systemPrompt: string;
+  instructions: string;
   subscribe?: string[];
 }
 
@@ -66,7 +66,7 @@ export async function readAgentConfig(agentDir: string): Promise<AgentYamlConfig
     description: config.description || `The ${folderName} agent`,
     model: config.model,
     plugins: config.plugins || [],
-    systemPrompt: parsed.content.trim() || "",
+    instructions: parsed.content.trim() || "",
     subscribe: config.subscribe,
   };
 }
@@ -292,7 +292,7 @@ function composeAgentFromConfig(
     // Wire up the LLM with agent-scoped event channels
     builder.use(llmPlugin({
       model,
-      system: config.systemPrompt,
+      system: config.instructions,
       toolDefinitions: allToolDefinitions,
     }));
   };

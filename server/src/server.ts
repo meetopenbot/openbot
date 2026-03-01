@@ -586,7 +586,6 @@ export async function startServer(options: ServerOptions = {}) {
         description: typeof parsed.description === "string" ? parsed.description : (name === defaultName || name === "default" ? cfg.description || "" : ""),
         model: typeof parsed.model === "string" ? parsed.model : (name === defaultName || name === "default" ? cfg.model : undefined),
         plugins: Array.isArray(parsed.plugins) ? parsed.plugins : [],
-        systemPrompt: body.trim(),
         subscribe: Array.isArray(parsed.subscribe)
           ? parsed.subscribe.filter((item: unknown) => typeof item === "string")
           : [],
@@ -614,14 +613,12 @@ export async function startServer(options: ServerOptions = {}) {
       description?: string;
       model?: string;
       plugins?: Array<string | { name: string; config?: unknown }>;
-      systemPrompt?: string;
       subscribe?: string[];
     };
 
     if (
       typeof body.name !== "string" ||
       typeof body.description !== "string" ||
-      typeof body.systemPrompt !== "string" ||
       !Array.isArray(body.plugins)
     ) {
       return res.status(400).json({ error: "Invalid agent config payload" });
@@ -651,10 +648,9 @@ export async function startServer(options: ServerOptions = {}) {
 
     const normalizedName = body.name.trim();
     const normalizedDescription = body.description.trim();
-    const normalizedSystemPrompt = body.systemPrompt;
 
-    if (!normalizedName || !normalizedDescription || !normalizedSystemPrompt.trim()) {
-      return res.status(400).json({ error: "name, description, and systemPrompt are required" });
+    if (!normalizedName || !normalizedDescription) {
+      return res.status(400).json({ error: "name and description are required" });
     }
 
     const cfg = loadConfig();
@@ -670,6 +666,16 @@ export async function startServer(options: ServerOptions = {}) {
     } else {
       agentDir = path.join(resolvedBaseDir, "agents", name);
       mdPath = path.join(agentDir, "AGENT.md");
+    }
+
+    // Read current content to preserve the body (instructions)
+    let currentBody = "";
+    try {
+      const currentContent = await fs.readFile(mdPath, "utf-8");
+      const parsed = matter(currentContent);
+      currentBody = parsed.content;
+    } catch {
+      // No current AGENT.md, starting with empty body or defaults
     }
 
     // Prepare frontmatter
@@ -696,7 +702,7 @@ export async function startServer(options: ServerOptions = {}) {
     try {
       await fs.mkdir(agentDir, { recursive: true });
       
-      const consolidated = matter.stringify(normalizedSystemPrompt, frontmatter);
+      const consolidated = matter.stringify(currentBody, frontmatter);
       await fs.writeFile(mdPath, consolidated, "utf-8");
 
       if (name === defaultName || name === "default") {
