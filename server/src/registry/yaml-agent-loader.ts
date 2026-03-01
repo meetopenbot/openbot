@@ -79,8 +79,8 @@ export async function readAgentConfig(agentDir: string): Promise<AgentYamlConfig
  */
 export async function listYamlAgents(
   agentsDir: string,
-): Promise<{ name: string; description: string; folder: string }[]> {
-  const agents: { name: string; description: string; folder: string }[] = [];
+): Promise<{ name: string; description: string; folder: string; isTs?: boolean }[]> {
+  const agents: { name: string; description: string; folder: string; isTs?: boolean }[] = [];
   const seenNames = new Set<string>();
 
   try {
@@ -91,6 +91,32 @@ export async function listYamlAgents(
       if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
 
       const agentDir = path.join(agentsDir, entry.name);
+
+      // Check if it's a TS agent (has package.json but NO AGENT.md)
+      const hasMd = await fs.access(path.join(agentDir, "AGENT.md")).then(() => true).catch(() => false);
+      const hasPkg = await fs.access(path.join(agentDir, "package.json")).then(() => true).catch(() => false);
+      
+      if (!hasMd && hasPkg) {
+        let description = "TypeScript Agent (editable via files only)";
+        let name = entry.name;
+        try {
+          const pkg = JSON.parse(await fs.readFile(path.join(agentDir, "package.json"), "utf-8"));
+          if (pkg.description) description = pkg.description;
+          if (pkg.name) name = pkg.name;
+        } catch {
+          // Ignore
+        }
+        if (!seenNames.has(name)) {
+          agents.push({
+            name,
+            description,
+            folder: agentDir,
+            isTs: true,
+          });
+          seenNames.add(name);
+        }
+        continue;
+      }
 
       try {
         const config = await readAgentConfig(agentDir);
@@ -150,6 +176,11 @@ export async function discoverYamlAgents(
       if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
 
       const agentDir = path.join(agentsDir, entry.name);
+
+      // Skip TS agents (they don't need AGENT.md)
+      const hasMd = await fs.access(path.join(agentDir, "AGENT.md")).then(() => true).catch(() => false);
+      const hasPkg = await fs.access(path.join(agentDir, "package.json")).then(() => true).catch(() => false);
+      if (!hasMd && hasPkg) continue;
 
       try {
         const config = await readAgentConfig(agentDir);

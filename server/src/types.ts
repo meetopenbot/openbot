@@ -1,8 +1,8 @@
 import type { Event } from "melony";
 import type { UIEvent } from "@melony/ui-kit";
 export interface SimpleMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | any[];
   attachments?: AttachmentRef[];
 }
 
@@ -61,6 +61,7 @@ export type ExecutionStateEvent = ChatEventBase<"execution:state", {
 
 export type AgentSubInputEvent = ChatEventBase<"agent:sub-input", any>;
 export type AgentSubActionEvent = ChatEventBase<"agent:sub-action", any>;
+export type AgentSubActionResultEvent = ChatEventBase<"agent:sub-action-result", any>;
 export type AgentSubUsageEvent = ChatEventBase<"agent:sub-usage", any>;
 
 export type DelegationStartEvent = ChatEventBase<"delegation:start", {
@@ -85,6 +86,7 @@ export type ChatEvent = (
   | ExecutionStateEvent
   | AgentSubInputEvent
   | AgentSubActionEvent
+  | AgentSubActionResultEvent
   | AgentSubUsageEvent
   | DelegationStartEvent
   | DelegationEndEvent

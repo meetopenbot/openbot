@@ -226,7 +226,7 @@ export function AutomationsPage() {
       <div className="h-full overflow-auto">
         <div className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-10 animate-in fade-in">
           <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-semibold tracking-tight">Automations</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">Automations</h2>
             <p className="text-[13px] text-muted-foreground/70">
               Create scheduled tasks and choose whether they run through the orchestrator or a specific agent.
             </p>

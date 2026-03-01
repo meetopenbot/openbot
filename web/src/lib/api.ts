@@ -92,7 +92,7 @@ export const api = {
   getSessionEvents: (id: string) => request<any[]>(`/api/sessions/${encodeURIComponent(id)}/events`),
 
   getAgents: () =>
-    request<{ name: string; description: string; folder: string; isDefault?: boolean }[]>("/api/agents"),
+    request<{ name: string; description: string; folder: string; isDefault?: boolean; isTs?: boolean }[]>("/api/agents"),
 
   getPrompts: () =>
     request<{ label: string; icon: string }[]>("/api/prompts"),

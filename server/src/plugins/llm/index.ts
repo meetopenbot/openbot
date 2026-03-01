@@ -1,46 +1,93 @@
 import { MelonyPlugin, Event, RuntimeContext } from "melony";
-import { streamText, LanguageModel } from "ai";
+import { streamText, LanguageModel, ModelMessage } from "ai";
 import { z } from "zod";
 import { SimpleMessage } from "../../types.js";
 
-async function buildMessageContent(message: SimpleMessage): Promise<any> {
-  if (!message.attachments?.length) return message.content;
-
-  const parts: any[] = [];
-  const trimmed = message.content.trim();
-  if (trimmed) {
-    parts.push({ type: "text", text: trimmed });
-  }
-
-  for (const attachment of message.attachments) {
-    if (!attachment?.mimeType?.startsWith("image/")) continue;
-    if (!attachment.url) continue;
-
-    try {
-      const response = await fetch(attachment.url);
-      if (!response.ok) continue;
-      const bytes = await response.arrayBuffer();
-      parts.push({
-        type: "image",
-        image: Buffer.from(bytes),
-        mimeType: attachment.mimeType,
-      });
-    } catch {
-      // Best-effort multimodal handling: skip failed image fetches.
+async function toModelMessages(messages: SimpleMessage[]): Promise<ModelMessage[]> {
+  return messages.map((message) => {
+    if (message.role === "tool") {
+      return {
+        role: "tool",
+        content: Array.isArray(message.content)
+          ? message.content.map((c: any) => {
+              const result = c.result ?? c.output?.value ?? c.output;
+              return {
+                type: "tool-result",
+                toolCallId: c.toolCallId,
+                toolName: c.toolName,
+                output:
+                  typeof result === "string"
+                    ? { type: "text", value: result }
+                    : { type: "json", value: result as any },
+              };
+            })
+          : [],
+      } as ModelMessage;
     }
-  }
 
-  return parts.length > 0 ? parts : message.content;
-}
+    if (message.role === "assistant") {
+      if (Array.isArray(message.content)) {
+        return {
+          role: "assistant",
+          content: message.content.map((c: any) => {
+            if (c.type === "tool-call") {
+              return {
+                type: "tool-call",
+                toolCallId: c.toolCallId,
+                toolName: c.toolName,
+                input: c.input,
+              };
+            }
+            if (c.type === "text") {
+              return c;
+            }
+            // Fallback for character spread bug fix
+            if (typeof c === "string") {
+              return { type: "text", text: c };
+            }
+            return c;
+          }),
+        } as ModelMessage;
+      }
+      return {
+        role: "assistant",
+        content: message.content,
+      } as ModelMessage;
+    }
 
-async function toModelMessages(messages: SimpleMessage[]): Promise<any[]> {
-  const built = await Promise.all(
-    messages.map(async (message) => ({
-      role: message.role,
-      content: await buildMessageContent(message),
-    }))
-  );
-  return built;
+    if (message.role === "user") {
+      if (message.attachments && message.attachments.length > 0) {
+        return {
+          role: "user",
+          content: [
+            { type: "text", text: message.content as string },
+            ...message.attachments.map((a) => {
+              if (a.mimeType.startsWith("image/")) {
+                return {
+                  type: "image",
+                  image: a.url,
+                };
+              }
+              return {
+                type: "file",
+                data: a.url,
+                mimeType: a.mimeType,
+              };
+            }),
+          ],
+        } as ModelMessage;
+      }
+      return {
+        role: "user",
+        content: message.content as string,
+      } as ModelMessage;
+    }
+
+    return {
+      role: message.role as any,
+      content: message.content as any,
+    } as ModelMessage;
+  });
 }
 
 export interface LLMPluginOptions {
@@ -102,11 +149,12 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
     const systemPrompt = typeof system === "function" ? await system(context) : system;
 
     const modelMessages = await toModelMessages(state.messages as SimpleMessage[]);
-    
+
     // Initialize an empty assistant message to be populated as we stream
     const assistantMessage: SimpleMessage = { role: "assistant", content: "" };
     state.messages.push(assistantMessage);
 
+    console.log("messages:::::", JSON.stringify(state.messages, null, 2));
     console.log("modelMessages:::::", JSON.stringify(modelMessages, null, 2));
 
     const result = streamText({
@@ -114,6 +162,9 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
       system: systemPrompt,
       messages: modelMessages,
       tools: toolDefinitions,
+      onError: (error) => {
+        console.error("streamText error:::::", JSON.stringify(error, null, 2));
+      },
     });
 
     for await (const delta of result.textStream) {
@@ -126,19 +177,35 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
       }
     }
 
-    const assistantText = assistantMessage.content;
+    const assistantText = assistantMessage.content as string;
 
     // Wait for tool calls to complete
     const toolCalls = await result.toolCalls;
 
+    if (toolCalls && toolCalls.length > 0) {
+      const parts: any[] = [];
+      if (assistantText) {
+        parts.push({ type: "text", text: assistantText });
+      }
+      parts.push(
+        ...toolCalls.map((c) => ({
+          type: "tool-call",
+          toolCallId: c.toolCallId,
+          toolName: c.toolName,
+          input: c.input,
+        }))
+      );
+      assistantMessage.content = parts;
+    }
+
     // Remove the message if it's empty (e.g. only tool calls)
-    if (!assistantText) {
+    if (!assistantText && (!toolCalls || toolCalls.length === 0)) {
       state.messages = state.messages.filter((m: SimpleMessage) => m !== assistantMessage);
     } else {
       if (completionEventType && !silent) {
         yield {
           type: completionEventType,
-          data: { content: assistantText },
+          data: { result: assistantText },
         } as Event;
       }
     }
@@ -198,14 +265,22 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
 
   // Feed action results back as system-role feedback to the model.
   builder.on(actionResultInputType, async function* (event, context) {
-    const { action, result } = event.data as any;
+    const { action, result, toolCallId } = event.data as any;
     const normalizedAction = typeof action === "string" ? action : "unknown";
     const summary = typeof result === "string" ? result : JSON.stringify(result);
 
     yield* routeToLLM(
       {
-        role: "system",
-        content: `Action "${normalizedAction}" completed: ${summary}`,
+        role: "tool",
+        content: [{
+          type: 'tool-result',
+          toolCallId,
+          toolName: normalizedAction,
+          output: {
+            type: 'text',
+            value: summary,
+          },
+        }],
       },
       context
     );

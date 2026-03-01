@@ -6,7 +6,7 @@ export function setupDelegation(
   agentRuntimes: Map<string, Runtime<ChatState, ChatEvent>>
 ) {
   builder.on("action:delegateTask", async function* (event: any, context: any) {
-    const { agent: agentName, task, attachments } = event.data;
+    const { agent: agentName, toolCallId, task, attachments } = event.data;
     const agentRuntime = agentRuntimes.get(agentName);
 
     if (!agentRuntime) {
@@ -15,12 +15,12 @@ export function setupDelegation(
         data: {
           action: "delegateTask",
           result: `Error: Agent "${agentName}" not found.`,
-          toolCallId: event.data.toolCallId,
+          toolCallId,
         },
       };
       return;
     }
- 
+
     const delegationId = `del_${generateId()}`;
 
     // Signal delegation start for UI
@@ -75,6 +75,16 @@ export function setupDelegation(
           continue;
         }
 
+        // Wrap action results to avoid confusion with manager action results.
+        if (agentEvent.type === "action:result") {
+          yield {
+            ...agentEvent,
+            type: "agent:sub-action-result",
+            meta: { ...agentEvent.meta, delegationId, agentName },
+          } as ChatEvent;
+          continue;
+        }
+
         // Wrap usage updates to avoid confusion with manager usage.
         if (agentEvent.type === "usage:update") {
           yield {
@@ -93,13 +103,15 @@ export function setupDelegation(
 
         // accumulate agent output
         if (agentEvent.type === "agent:output") {
+          console.log("agent:output:::::", JSON.stringify(agentEvent.data));
           const agentOutput = agentEvent.data as any;
-          if (typeof agentOutput === "string") {
+
+          if (typeof agentOutput?.result === "string") {
             if (lastAgentOutput) lastAgentOutput += "\n\n";
-            lastAgentOutput += agentOutput;
-          } else if (typeof agentOutput === "object") {
+            lastAgentOutput += agentOutput.result;
+          } else if (typeof agentOutput?.result === "object") {
             if (lastAgentOutput) lastAgentOutput += "\n\n";
-            lastAgentOutput += JSON.stringify(agentOutput);
+            lastAgentOutput += JSON.stringify(agentOutput.result, null, 2);
           }
         }
       }
@@ -121,7 +133,7 @@ export function setupDelegation(
       data: {
         action: "delegateTask",
         result: lastAgentOutput || "Task completed with no output.",
-        toolCallId: event.data.toolCallId,
+        toolCallId,
       },
     } as ChatEvent;
   });
