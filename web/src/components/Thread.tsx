@@ -321,7 +321,7 @@ export function Thread({
               key={item.key}
               className={`flex flex-col w-full ${event.type === "agent:output-delta" ? "" : "animate-fade-in"} ${isUserEvent ? "items-end" : "items-start"}`}
             >
-              <div className={`max-w-[85%] rounded-2xl ${isUserEvent ? "px-4 py-3 bg-foreground/4 border border-border/40" : ""}`}>
+              <div className={`max-w-[85%] rounded-2xl ${isUserEvent ? "px-4 py-3 bg-foreground/5" : ""}`}>
                 <div className="flex flex-col gap-2">
                   {content && (
                     <div className={isUserEvent ? "text-[13px] leading-relaxed" : ""}>

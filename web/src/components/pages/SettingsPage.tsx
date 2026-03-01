@@ -1,8 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "@melony/ui-shadcn";
 import { useConfig, useUpdateConfig } from "../../hooks/use-config";
-import { useModels } from "../../hooks/use-models";
-import { ModelSelector } from "../ModelSelector";
 
 type Theme = "light" | "dark" | "system";
 const MASKED_KEY_VALUE = "**********";
@@ -17,20 +15,28 @@ export function SettingsPage() {
   const { data: config } = useConfig();
   const updateConfig = useUpdateConfig();
   const { theme, setTheme } = useTheme();
-  const { data: models = [] } = useModels();
 
-  const [model, setModel] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openaiEditing, setOpenaiEditing] = useState(false);
   const [anthropicEditing, setAnthropicEditing] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  useEffect(() => {
+    if (config) {
+      setName(config.name || "");
+      setDescription(config.description || "");
+    }
+  }, [config]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateConfig.mutate(
       {
-        model: model || undefined,
+        name: name || undefined,
+        description: description || undefined,
         openai_api_key: openaiKey || undefined,
         anthropic_api_key: anthropicKey || undefined,
       },
@@ -83,22 +89,37 @@ export function SettingsPage() {
             </div>
           </section>
 
-          <div className="h-px bg-border/50" />
-
-          {/* Model & API Keys */}
+          {/* API Keys */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-8">
             <section className="flex flex-col gap-4">
               <div className="flex flex-col gap-0.5">
-                <h3 className="text-[13px] font-medium">Model</h3>
+                <h3 className="text-[13px] font-medium">Default Agent</h3>
                 <p className="text-xs text-muted-foreground/60">
-                  Configure the LLM model for conversations
+                  Customize the name and description of the main orchestrator
                 </p>
               </div>
-              <ModelSelector
-                value={model || config.model || ""}
-                models={models}
-                onChange={setModel}
-              />
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground/70">Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="OpenBot"
+                    className="w-full rounded-xl border border-border/60 bg-transparent px-4 py-2.5 text-[13px] placeholder:text-muted-foreground/40 transition-colors focus:border-foreground/20 focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground/70">Description</label>
+                  <input
+                    type="text"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="The main orchestrator and system settings"
+                    className="w-full rounded-xl border border-border/60 bg-transparent px-4 py-2.5 text-[13px] placeholder:text-muted-foreground/40 transition-colors focus:border-foreground/20 focus:outline-none"
+                  />
+                </div>
+              </div>
             </section>
 
             <section className="flex flex-col gap-4">

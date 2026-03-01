@@ -26,6 +26,8 @@ export interface SessionInfo {
 
 export interface AppConfig {
   configured: boolean;
+  name: string;
+  description: string;
   model: string;
   defaultModelId: string;
   defaultModels: Record<ModelProvider, string>;
@@ -78,6 +80,8 @@ export const api = {
   getConfig: () => request<AppConfig>("/api/config"),
 
   updateConfig: (data: {
+    name?: string;
+    description?: string;
     model?: string;
     openai_api_key?: string;
     anthropic_api_key?: string;
@@ -88,7 +92,7 @@ export const api = {
   getSessionEvents: (id: string) => request<any[]>(`/api/sessions/${encodeURIComponent(id)}/events`),
 
   getAgents: () =>
-    request<{ name: string; description: string; folder: string }[]>("/api/agents"),
+    request<{ name: string; description: string; folder: string; isDefault?: boolean }[]>("/api/agents"),
 
   getPrompts: () =>
     request<{ label: string; icon: string }[]>("/api/prompts"),
@@ -131,11 +135,17 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  getAgentYaml: async (name: string) => {
-    const res = await fetch(`${BASE_URL}/api/agents/${encodeURIComponent(name)}/yaml`);
+  getAgentMd: async (name: string) => {
+    const res = await fetch(`${BASE_URL}/api/agents/${encodeURIComponent(name)}/md`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.text();
   },
+
+  updateAgentMd: (name: string, md: string) =>
+    request<{ success: boolean }>(`/api/agents/${encodeURIComponent(name)}/md`, {
+      method: "PUT",
+      body: JSON.stringify({ md }),
+    }),
 
   getAgentConfig: (name: string) =>
     request<AgentConfig>(`/api/agents/${encodeURIComponent(name)}/config`),
@@ -144,12 +154,6 @@ export const api = {
     request<{ success: boolean }>(`/api/agents/${encodeURIComponent(name)}/config`, {
       method: "PUT",
       body: JSON.stringify(config),
-    }),
-
-  updateAgentYaml: (name: string, yaml: string) =>
-    request<{ success: boolean }>(`/api/agents/${encodeURIComponent(name)}/yaml`, {
-      method: "PUT",
-      body: JSON.stringify({ yaml }),
     }),
 
   openFolder: (folder: string) =>

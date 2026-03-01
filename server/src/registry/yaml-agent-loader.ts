@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import yaml from "js-yaml";
+import matter from "gray-matter";
 import { MelonyPlugin } from "melony";
 import { LanguageModel } from "ai";
 import { llmPlugin } from "../plugins/llm/index.js";
@@ -8,7 +9,7 @@ import { PluginRegistry } from "./plugin-registry.js";
 import { AgentRegistryEntry } from "./agent-registry.js";
 import { createModel } from "../models.js";
 import { loadPluginsFromDir } from "./plugin-loader.js";
-import { resolvePath } from "../config.js";
+import { resolvePath, DEFAULT_AGENT_MD } from "../config.js";
 
 /**
  * Recursively resolve tilde paths in a configuration object.
@@ -31,7 +32,7 @@ function resolveConfigPaths(config: any): any {
 }
 
 /**
- * Shape of an agent.yaml configuration file.
+ * Shape of an agent configuration (from AGENT.md frontmatter).
  */
 export interface AgentYamlConfig {
   name: string;
@@ -43,12 +44,30 @@ export interface AgentYamlConfig {
 }
 
 /**
- * Read and parse an agent.yaml file from a directory.
+ * Read and parse an agent configuration from AGENT.md with frontmatter.
  */
 export async function readAgentConfig(agentDir: string): Promise<AgentYamlConfig> {
-  const yamlPath = path.join(agentDir, "agent.yaml");
-  const content = await fs.readFile(yamlPath, "utf-8");
-  return yaml.load(content) as AgentYamlConfig;
+  const mdPath = path.join(agentDir, "AGENT.md");
+  const folderName = path.basename(agentDir);
+
+  let mdContent = "";
+  try {
+    mdContent = await fs.readFile(mdPath, "utf-8");
+  } catch {
+    throw new Error(`AGENT.md not found in ${agentDir}`);
+  }
+
+  const parsed = matter(mdContent);
+  const config = (parsed.data || {}) as Partial<AgentYamlConfig>;
+
+  return {
+    name: config.name || folderName,
+    description: config.description || `The ${folderName} agent`,
+    model: config.model,
+    plugins: config.plugins || [],
+    systemPrompt: parsed.content.trim() || "",
+    subscribe: config.subscribe,
+  };
 }
 
 /**
@@ -61,6 +80,7 @@ export async function listYamlAgents(
   agentsDir: string,
 ): Promise<{ name: string; description: string; folder: string }[]> {
   const agents: { name: string; description: string; folder: string }[] = [];
+  const seenNames = new Set<string>();
 
   try {
     const entries = await fs.readdir(agentsDir, { withFileTypes: true });
@@ -74,12 +94,13 @@ export async function listYamlAgents(
       try {
         const config = await readAgentConfig(agentDir);
 
-        if (config.name && config.description) {
+        if (config.name && config.description && !seenNames.has(config.name)) {
           agents.push({
             name: config.name,
             description: config.description,
             folder: agentDir,
           });
+          seenNames.add(config.name);
         }
       } catch {
         // Skip invalid agents
@@ -95,7 +116,7 @@ export async function listYamlAgents(
 /**
  * Discover and load YAML-defined agents from a directory.
  *
- * Scans `agentsDir` for subdirectories containing an `agent.yaml` file,
+ * Scans `agentsDir` for subdirectories containing an `AGENT.md` file,
  * parses each one, and composes a Melony plugin from the referenced plugins.
  *
  * @param agentsDir  Absolute path to the agents directory (e.g. ~/.openbot/agents)
@@ -111,6 +132,7 @@ export async function discoverYamlAgents(
   options?: { openaiApiKey?: string; anthropicApiKey?: string },
 ): Promise<AgentRegistryEntry[]> {
   const agents: AgentRegistryEntry[] = [];
+  const seenNames = new Set<string>();
 
   // Ensure the agents directory exists
   try {
@@ -126,17 +148,17 @@ export async function discoverYamlAgents(
       if (!entry.isDirectory()) continue;
       if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
 
-      const yamlPath = path.join(agentsDir, entry.name, "agent.yaml");
       const agentDir = path.join(agentsDir, entry.name);
 
       try {
         const config = await readAgentConfig(agentDir);
 
-        // Validate required fields
-        if (!config.name || !config.description || !config.plugins?.length || !config.systemPrompt) {
-          console.warn(`[agents] "${entry.name}/agent.yaml": missing required fields (name, description, plugins, systemPrompt) — skipping`);
+        // Validate required fields and avoid duplicates
+        if (!config.name || !config.description || seenNames.has(config.name)) {
           continue;
         }
+
+        seenNames.add(config.name);
 
         const agentModel = config.model
           ? createModel({ ...options, model: config.model })
@@ -159,7 +181,16 @@ export async function discoverYamlAgents(
           scopedRegistry.register(p);
         }
 
-        const { plugin, toolDefinitions } = composeAgentFromYaml(config, scopedRegistry, agentModel as LanguageModel);
+        // Initialize AGENT.md if it doesn't exist (using the template)
+        const agentMdPath = path.join(agentDir, "AGENT.md");
+        try {
+          await fs.access(agentMdPath);
+        } catch {
+          await fs.writeFile(agentMdPath, DEFAULT_AGENT_MD, "utf-8");
+          console.log(`[agents] Initialized ${config.name}/AGENT.md`);
+        }
+
+        const { plugin, toolDefinitions } = composeAgentFromConfig(config, scopedRegistry, agentModel as LanguageModel);
 
         agents.push({
           name: config.name,
@@ -176,9 +207,9 @@ export async function discoverYamlAgents(
 
         console.log(`[agents] Loaded: ${config.name} — ${config.description}${config.model ? ` (model: ${config.model})` : ""}`);
       } catch (err: any) {
-        // Invalid or missing agent.yaml — silently skip if missing, warn if invalid
+        // Skip invalid agents
         if (err.code !== 'ENOENT') {
-          console.warn(`[agents] Error loading "${entry.name}/agent.yaml":`, err);
+          console.warn(`[agents] Error loading "${entry.name}":`, err);
         }
       }
     }
@@ -190,12 +221,12 @@ export async function discoverYamlAgents(
 }
 
 /**
- * Compose a Melony plugin from a YAML agent configuration.
+ * Compose a Melony plugin from an agent configuration.
  *
  * Resolves each plugin name against the registry, collects their tool definitions,
  * and wires them with an agent-scoped LLM plugin.
  */
-function composeAgentFromYaml(
+function composeAgentFromConfig(
   config: AgentYamlConfig,
   pluginRegistry: PluginRegistry,
   model: LanguageModel,

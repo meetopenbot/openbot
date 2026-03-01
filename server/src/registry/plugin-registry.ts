@@ -10,7 +10,7 @@ import { z } from "zod";
  *  - an optional UI factory for status/rendering plugins
  */
 export interface PluginRegistryEntry {
-  /** Short kebab-case name used in agent.yaml (e.g. "shell", "file-system") */
+  /** Short kebab-case name used in AGENT.md (e.g. "shell", "file-system") */
   name: string;
   /** Human-readable description shown in logs */
   description: string;

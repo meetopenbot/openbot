@@ -4,7 +4,7 @@ import cors from "cors";
 import chokidar from "chokidar";
 import { generateId } from "melony";
 import { createOpenBot } from "./open-bot.js";
-import { loadConfig, saveConfig, isConfigured, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
+import { loadConfig, saveConfig, isConfigured, resolvePath, DEFAULT_BASE_DIR, DEFAULT_AGENT_MD } from "./config.js";
 import { loadSession, saveSession, logEvent, loadEvents, listSessions } from "./session.js";
 import { listYamlAgents } from "./registry/index.js";
 import { exec } from "node:child_process";
@@ -13,6 +13,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import yaml from "js-yaml";
+import matter from "gray-matter";
 import type { ChatEvent, ChatRequest, ChatState } from "./types.js";
 import { fetchProviderModels, getModelCatalog } from "./model-catalog.js";
 import type { ModelProvider } from "./model-catalog.js";
@@ -429,6 +430,8 @@ export async function startServer(options: ServerOptions = {}) {
     const cfg = loadConfig();
     res.json({
       configured: isConfigured(),
+      name: cfg.name || "OpenBot",
+      description: cfg.description || "The main orchestrator and system settings",
       model: cfg.model || DEFAULT_MODEL_ID,
       defaultModelId: DEFAULT_MODEL_ID,
       defaultModels: DEFAULT_MODEL_BY_PROVIDER,
@@ -438,9 +441,11 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.post("/api/config", async (req, res) => {
-    const { openai_api_key, anthropic_api_key, model } = req.body;
+    const { openai_api_key, anthropic_api_key, model, name, description } = req.body;
     const updates: Record<string, string> = {};
 
+    if (name) updates.name = name.trim();
+    if (description) updates.description = description.trim();
     if (model) updates.model = model.trim();
     if (openai_api_key && openai_api_key !== "••••••••••••••••")
       updates.openaiApiKey = openai_api_key.trim();
@@ -470,26 +475,86 @@ export async function startServer(options: ServerOptions = {}) {
     const resolvedBaseDir = resolvePath(baseDir);
     const agentsDir = path.join(resolvedBaseDir, "agents");
 
+    const defaultName = cfg.name || "OpenBot";
+    const defaultDescription = cfg.description || "The main orchestrator and system settings";
+
+    const agents: any[] = [
+      {
+        name: defaultName,
+        description: defaultDescription,
+        folder: resolvedBaseDir,
+        isDefault: true,
+      },
+    ];
+
     try {
-      const agents = await listYamlAgents(agentsDir);
-      res.json(agents);
+      const customAgents = await listYamlAgents(agentsDir);
+      agents.push(...customAgents);
     } catch {
-      res.json([]);
+      // ignore
     }
+    res.json(agents);
   });
 
-  app.get("/api/agents/:name/yaml", async (req, res) => {
+  app.get("/api/agents/:name/md", async (req, res) => {
     const { name } = req.params;
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
-    const yamlPath = path.join(resolvedBaseDir, "agents", name, "agent.yaml");
+    const defaultName = cfg.name || "OpenBot";
+    
+    let mdPath: string;
+    if (name === defaultName) {
+      mdPath = path.join(resolvedBaseDir, "AGENT.md");
+    } else {
+      mdPath = path.join(resolvedBaseDir, "agents", name, "AGENT.md");
+    }
 
     try {
-      const content = await fs.readFile(yamlPath, "utf-8");
-      res.send(content);
+      const content = await fs.readFile(mdPath, "utf-8");
+      const { content: body } = matter(content);
+      res.send(body.trim());
     } catch {
-      res.status(404).send("Agent not found or has no agent.yaml");
+      res.status(404).send("");
+    }
+  });
+
+  app.put("/api/agents/:name/md", async (req, res) => {
+    const { name } = req.params;
+    const { md } = req.body;
+    const cfg = loadConfig();
+    const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
+    const resolvedBaseDir = resolvePath(baseDir);
+    const defaultName = cfg.name || "OpenBot";
+    
+    let mdPath: string;
+    let agentDir: string;
+    if (name === defaultName) {
+      agentDir = resolvedBaseDir;
+      mdPath = path.join(resolvedBaseDir, "AGENT.md");
+    } else {
+      agentDir = path.join(resolvedBaseDir, "agents", name);
+      mdPath = path.join(agentDir, "AGENT.md");
+    }
+
+    try {
+      await fs.mkdir(agentDir, { recursive: true });
+      
+      let frontmatter = {};
+      try {
+        const currentContent = await fs.readFile(mdPath, "utf-8");
+        const parsed = matter(currentContent);
+        frontmatter = parsed.data || {};
+      } catch {
+        // No current AGENT.md, starting with empty frontmatter or defaults
+      }
+
+      const consolidated = matter.stringify(md, frontmatter);
+      await fs.writeFile(mdPath, consolidated, "utf-8");
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to write AGENT.md" });
     }
   });
 
@@ -498,14 +563,15 @@ export async function startServer(options: ServerOptions = {}) {
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
-    const yamlPath = path.join(resolvedBaseDir, "agents", name, "agent.yaml");
+    const agentDir = path.join(resolvedBaseDir, "agents", name);
+    const mdPath = path.join(agentDir, "AGENT.md");
 
     try {
-      const content = await fs.readFile(yamlPath, "utf-8");
-      const parsed = yaml.load(content) as any;
+      const content = await fs.readFile(mdPath, "utf-8");
+      const { data: parsed, content: body } = matter(content);
 
       if (!parsed || typeof parsed !== "object") {
-        return res.status(400).json({ error: "Invalid agent.yaml format" });
+        return res.status(400).json({ error: "Invalid AGENT.md frontmatter" });
       }
 
       res.json({
@@ -513,13 +579,13 @@ export async function startServer(options: ServerOptions = {}) {
         description: typeof parsed.description === "string" ? parsed.description : "",
         model: typeof parsed.model === "string" ? parsed.model : undefined,
         plugins: Array.isArray(parsed.plugins) ? parsed.plugins : [],
-        systemPrompt: typeof parsed.systemPrompt === "string" ? parsed.systemPrompt : "",
+        systemPrompt: body.trim(),
         subscribe: Array.isArray(parsed.subscribe)
           ? parsed.subscribe.filter((item: unknown) => typeof item === "string")
           : [],
       });
     } catch {
-      res.status(404).json({ error: "Agent not found or invalid YAML" });
+      res.status(404).json({ error: "Agent not found or invalid format" });
     }
   });
 
@@ -577,17 +643,17 @@ export async function startServer(options: ServerOptions = {}) {
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
     const agentDir = path.join(resolvedBaseDir, "agents", name);
-    const yamlPath = path.join(agentDir, "agent.yaml");
+    const mdPath = path.join(agentDir, "AGENT.md");
 
-    const output: Record<string, unknown> = {
+    // Prepare frontmatter
+    const frontmatter: Record<string, unknown> = {
       name: normalizedName,
       description: normalizedDescription,
       plugins: normalizedPlugins,
-      systemPrompt: normalizedSystemPrompt,
     };
 
     if (typeof body.model === "string" && body.model.trim()) {
-      output.model = body.model.trim();
+      frontmatter.model = body.model.trim();
     }
 
     if (Array.isArray(body.subscribe) && body.subscribe.length > 0) {
@@ -596,54 +662,20 @@ export async function startServer(options: ServerOptions = {}) {
         .map((item) => item.trim())
         .filter(Boolean);
       if (normalizedSubscribe.length > 0) {
-        output.subscribe = normalizedSubscribe;
+        frontmatter.subscribe = normalizedSubscribe;
       }
     }
 
     try {
       await fs.mkdir(agentDir, { recursive: true });
-      const yamlContent = yaml.dump(output, {
-        lineWidth: -1,
-        noRefs: true,
-        quotingType: '"',
-      });
-      await fs.writeFile(yamlPath, yamlContent, "utf-8");
-      res.json({ success: true });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to write agent.yaml" });
-    }
-  });
-
-  app.put("/api/agents/:name/yaml", async (req, res) => {
-    const { name } = req.params;
-    const { yaml } = req.body;
-    
-    if (!yaml || typeof yaml !== "string") {
-      return res.status(400).json({ error: "YAML content is required" });
-    }
-
-    const cfg = loadConfig();
-    const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
-    const resolvedBaseDir = resolvePath(baseDir);
-    const agentDir = path.join(resolvedBaseDir, "agents", name);
-    const yamlPath = path.join(agentDir, "agent.yaml");
-
-    try {
-      await fs.mkdir(agentDir, { recursive: true });
-      await fs.writeFile(yamlPath, yaml, "utf-8");
       
-      // Optionally, hot-reload openBotAgent if needed here.
-      // But OpenBot runtime loads agents at startup or dynamically per request?
-      // createOpenBot builds the Melony App. Since createOpenBot is called at startup:
-      // openBotAgent = await createOpenBot(...) happens once.
-      // Restarting server is required unless we hot-reload. We can just leave it as is 
-      // and instruct the user to restart, or implement a simple hot reload. Let's stick to simple file write first.
+      const consolidated = matter.stringify(normalizedSystemPrompt, frontmatter);
+      await fs.writeFile(mdPath, consolidated, "utf-8");
 
       res.json({ success: true });
     } catch (err) {
       console.error(err);
-      res.status(500).json({ error: "Failed to write agent.yaml" });
+      res.status(500).json({ error: "Failed to write AGENT.md" });
     }
   });
 

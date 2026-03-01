@@ -97,7 +97,7 @@ openbot add browser
 OpenBot is designed for power users and builders who want to create their own custom AI workflows without the complexity of building from scratch.
 
 ### 1. YAML Agents (No Coding Required)
-Create specialized agents just by writing a simple YAML file in `~/.openbot/agents/researcher/agent.yaml`:
+Create specialized agents just by writing a simple Markdown file with YAML frontmatter in `~/.openbot/agents/researcher/AGENT.md`:
 
 ```yaml
 name: researcher

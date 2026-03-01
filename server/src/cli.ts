@@ -122,7 +122,7 @@ async function installAgent(source: string) {
     // 1. Clone to temp directory
     execSync(`git clone --depth 1 ${repoUrl} ${tempDir}`, { stdio: "inherit" });
 
-    // 2. Identify name from agent.yaml
+    // 2. Identify name from AGENT.md
     const config = await readAgentConfig(tempDir);
     const name = config.name || path.basename(source.replace(".git", ""));
 

@@ -15,7 +15,7 @@ The `approval` plugin is a safety layer that can be added to any agent. It inter
 
 ### Configuration
 
-Add it to your `agent.yaml`:
+Add it to your `AGENT.md` frontmatter:
 
 ```yaml
 plugins:

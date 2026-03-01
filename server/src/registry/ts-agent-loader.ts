@@ -47,11 +47,11 @@ export async function discoverTsAgents(
 
       const agentDir = path.join(agentsDir, entry.name);
       
-      // We only consider it a TS agent if it doesn't have an agent.yaml
+      // We only consider it a TS agent if it doesn't have an AGENT.md
       // (This avoids double-loading if someone has both for some reason)
-      const yamlPath = path.join(agentDir, "agent.yaml");
-      const hasYaml = await fs.access(yamlPath).then(() => true).catch(() => false);
-      if (hasYaml) continue;
+      const mdPath = path.join(agentDir, "AGENT.md");
+      const hasMd = await fs.access(mdPath).then(() => true).catch(() => false);
+      if (hasMd) continue;
 
       // Check for package.json to see if it's a package
       const pkgPath = path.join(agentDir, "package.json");

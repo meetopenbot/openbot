@@ -3,6 +3,8 @@ import path from "node:path";
 import os from "node:os";
 
 export interface MelonyConfig {
+  name?: string;
+  description?: string;
   model?: string;
   openaiApiKey?: string;
   anthropicApiKey?: string;
@@ -46,3 +48,22 @@ export function isConfigured(): boolean {
 export function resolvePath(p: string) {
   return p.startsWith("~/") ? path.join(os.homedir(), p.slice(2)) : path.resolve(p);
 }
+
+export const DEFAULT_AGENT_MD = `---
+name: Agent
+description: A specialized AI agent
+plugins:
+  - shell
+  - file-system
+---
+
+# Agent Profile
+
+You are a specialized AI agent within the OpenBot system.
+Your role is defined by your configuration and the tools you have access to.
+
+## Persona
+- Helpful and precise
+- Focused on my specific domain
+- Professional in all interactions
+`;
