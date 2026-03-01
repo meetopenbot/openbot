@@ -35,6 +35,7 @@ export function createMemoryModule(baseDir: string): MemoryModule {
   }
 
   async function saveIndex(index: MemoryIndex): Promise<void> {
+    await fs.mkdir(memoryDir, { recursive: true });
     await fs.writeFile(indexPath, JSON.stringify(index, null, 2), "utf-8");
   }
 
@@ -147,6 +148,8 @@ export function createMemoryModule(baseDir: string): MemoryModule {
       const journalPath = path.join(journalDir, `${today}.md`);
       const timestamp = new Date().toLocaleTimeString();
       const entry = `\n## ${timestamp}\n${content}\n`;
+
+      await fs.mkdir(journalDir, { recursive: true });
 
       try {
         await fs.access(journalPath);
