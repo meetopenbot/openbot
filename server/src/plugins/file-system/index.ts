@@ -111,7 +111,6 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
       const fullPath = resolvePath(filePath, state.cwd);
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
       await fs.writeFile(fullPath, content, "utf-8");
-      console.log("file-system:writeFile success:::::", fullPath);
       yield {
         type: "action:result",
         data: { action: "writeFile", result: { success: true }, toolCallId },
@@ -121,7 +120,6 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
         data: { message: `File written successfully`, severity: "success" }
       } as FileSystemStatusEvent;
     } catch (error: any) {
-      console.error("file-system:writeFile error:::::", JSON.stringify(error, null, 2));
       yield {
         type: "action:result",
         data: { action: "writeFile", result: { error: error.message }, toolCallId },

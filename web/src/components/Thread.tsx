@@ -13,7 +13,11 @@ const DELEGATION_EVENT_TYPES = new Set([
   "delegation:end",
 ]);
 
-function hasRenderableContent(message: { content: any[] }): boolean {
+function hasRenderableContent(message: { content: any }): boolean {
+  if (typeof message.content === 'string') {
+    return message.content.length > 0;
+  }
+  if (!Array.isArray(message.content)) return false;
   return message.content.some((event: any) => (
     event.type === "ui" ||
     TEXT_EVENT_TYPES.has(event.type) ||
@@ -62,7 +66,7 @@ function EventItem({ event }: { event: any }) {
       );
     case "agent:output":
     case "agent:output-delta": {
-      const content = typeof data === 'string' ? data : data?.content;
+      const content = typeof data === 'string' ? data : (data?.content || data?.result);
       if (!content) return null;
       return (
         <div className="px-2 py-1.5 bg-background/40 rounded border border-border/20 my-1 mx-2">
@@ -195,17 +199,21 @@ export function Thread({
     .filter((m) => m.role !== "system")
     .filter(hasRenderableContent);
 
-  const seenIds = new Set<string>();
-
   const renderableEvents = useMemo(() => {
     const events: any[] = [];
+    const seenIds = new Set<string>();
     
     // Track delegation states per message to group them
     visibleMessages.forEach((msg, msgIndex) => {
       const delegationMap = new Map<string, { start?: any, end?: any, subs: any[] }>();
       const topLevelEvents: any[] = [];
 
-      msg.content.forEach((event: any, eventIndex: number) => {
+      const content = Array.isArray(msg.content) ? msg.content : [{
+        type: msg.role === "user" ? "agent:input" : "agent:output",
+        data: { content: msg.content }
+      }];
+
+      content.forEach((event: any, eventIndex: number) => {
         // Skip already seen IDs
         if (event.id) {
           if (seenIds.has(event.id)) return;
@@ -226,6 +234,13 @@ export function Thread({
           } else if (event.type === "delegation:end") {
             group.end = event;
           } else {
+            // Handle Text Delta (deduplication) for sub-events
+            if (event.type === "agent:output-delta") {
+              const hasFinalOutput = content.some((e: any) => e.type === "agent:output" && e.meta?.delegationId === delegationId);
+              if (hasFinalOutput) return;
+              const nextDelta = content.slice(eventIndex + 1).find((e: any) => e.type === "agent:output-delta" && e.meta?.delegationId === delegationId);
+              if (nextDelta) return;
+            }
             group.subs.push(event);
           }
           return;
@@ -233,10 +248,10 @@ export function Thread({
 
         // Handle Text Delta (deduplication)
         if (event.type === "agent:output-delta") {
-          const hasFinalOutput = msg.content.some((e: any) => e.type === "agent:output");
+          const hasFinalOutput = content.some((e: any) => e.type === "agent:output");
           if (hasFinalOutput) return;
-          const nextEvent = msg.content[eventIndex + 1];
-          if (nextEvent?.type === "agent:output-delta") return;
+          const nextDelta = content.slice(eventIndex + 1).find((e: any) => e.type === "agent:output-delta");
+          if (nextDelta) return;
         }
 
         // Handle normal renderable events
@@ -312,7 +327,7 @@ export function Thread({
         }
 
         if (TEXT_EVENT_TYPES.has(event.type)) {
-          const content = typeof event.data?.content === "string" ? event.data.content : "";
+          const content = typeof event.data?.content === "string" ? event.data.content : (typeof event.data?.result === "string" ? event.data.result : "");
           const attachments = Array.isArray(event.data?.attachments) ? event.data.attachments : [];
           if (!content && attachments.length === 0) return null;
 

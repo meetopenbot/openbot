@@ -205,7 +205,7 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
       if (completionEventType && !silent) {
         yield {
           type: completionEventType,
-          data: { result: assistantText },
+          data: { content: assistantText },
         } as Event;
       }
     }
