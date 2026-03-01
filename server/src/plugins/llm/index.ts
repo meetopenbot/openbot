@@ -90,6 +90,78 @@ async function toModelMessages(messages: SimpleMessage[]): Promise<ModelMessage[
   });
 }
 
+// Helper to find pending tool calls in history
+function getPendingToolCalls(messages: SimpleMessage[]): any[] {
+  const toolResults = new Set<string>();
+  let lastAssistantWithTools: any = null;
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (msg.role === "tool" && Array.isArray(msg.content)) {
+      msg.content.forEach((c: any) => {
+        if (c.toolCallId) toolResults.add(c.toolCallId);
+      });
+    }
+    if (msg.role === "assistant" && Array.isArray(msg.content)) {
+      if (msg.content.some((c: any) => c.type === "tool-call")) {
+        lastAssistantWithTools = msg;
+      }
+    }
+  }
+
+  if (lastAssistantWithTools) {
+    return lastAssistantWithTools.content.filter(
+      (c: any) => c.type === "tool-call" && !toolResults.has(c.toolCallId)
+    );
+  }
+  return [];
+}
+
+// Helper to insert tool result message in correct position (immediately after corresponding assistant msg)
+function insertToolResult(messages: SimpleMessage[], toolResultMsg: SimpleMessage) {
+  if (toolResultMsg.role !== "tool" || !Array.isArray(toolResultMsg.content)) return;
+  const toolCallId = toolResultMsg.content[0]?.toolCallId;
+  if (!toolCallId) return;
+
+  // Find the assistant message that called this tool
+  let assistantIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role === "assistant" && Array.isArray(msg.content)) {
+      if (msg.content.some((c: any) => c.toolCallId === toolCallId)) {
+        assistantIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (assistantIdx !== -1) {
+    // Find if there's already a tool message after this assistant message
+    let toolMsgIdx = -1;
+    for (let i = assistantIdx + 1; i < messages.length; i++) {
+      if (messages[i].role === "tool") {
+        toolMsgIdx = i;
+        break;
+      }
+      if (messages[i].role === "assistant") break;
+    }
+
+    if (toolMsgIdx !== -1) {
+      // Merge into existing tool message
+      const toolMsg = messages[toolMsgIdx];
+      if (Array.isArray(toolMsg.content)) {
+        toolMsg.content.push(...toolResultMsg.content);
+      }
+    } else {
+      // Insert new tool message after assistant
+      messages.splice(assistantIdx + 1, 0, toolResultMsg);
+    }
+  } else {
+    // Fallback: push to end
+    messages.push(toolResultMsg);
+  }
+}
+
 export interface LLMPluginOptions {
   model: LanguageModel;
   system?: string | ((context: RuntimeContext) => string | Promise<string>);
@@ -140,9 +212,51 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
       state.messages = [] as SimpleMessage[];
     }
 
-    // Add new message to history when this invocation is user-driven.
+    // 1. Add new message to history with correct positioning and unblocking logic.
     if (newMessage) {
-      state.messages.push(newMessage);
+      if (newMessage.role === "tool") {
+        insertToolResult(state.messages, newMessage);
+      } else {
+        // If a new user message arrives while tools are pending, we unblock by failing the tools.
+        if (newMessage.role === "user") {
+          const pending = getPendingToolCalls(state.messages);
+          if (pending.length > 0) {
+            console.warn(
+              `User message received while tools are pending. Failing pending tools to unblock: ${pending
+                .map((p: any) => p.toolName)
+                .join(", ")}`
+            );
+            for (const p of pending) {
+              insertToolResult(state.messages, {
+                role: "tool",
+                content: [
+                  {
+                    type: "tool-result",
+                    toolCallId: p.toolCallId,
+                    toolName: p.toolName,
+                    output: {
+                      type: "text",
+                      value: "Tool failed to respond in time (unblocked by user message).",
+                    },
+                  },
+                ],
+              });
+            }
+          }
+        }
+        state.messages.push(newMessage);
+      }
+    }
+
+    // 2. Check for pending tool calls. We MUST have results for all tool calls before continuing.
+    const pending = getPendingToolCalls(state.messages);
+    if (pending.length > 0) {
+      console.log(
+        `Waiting for ${pending.length} pending tool results: ${pending
+          .map((p: any) => p.toolName)
+          .join(", ")}`
+      );
+      return;
     }
 
     // Evaluate dynamic system prompt if it's a function

@@ -66,8 +66,21 @@ function EventItem({ event }: { event: any }) {
       );
     case "agent:output":
     case "agent:output-delta": {
-      const content = typeof data === 'string' ? data : (data?.content || data?.result);
-      if (!content) return null;
+      const rawContent = typeof data === 'string' ? data : (data?.content ?? data?.result ?? data?.message);
+      if (!rawContent) return null;
+
+      // If content is a UI node, render it directly
+      if (typeof rawContent === 'object' && rawContent.type && (rawContent.props || rawContent.children)) {
+        return (
+          <div className="px-2 py-1 mx-2">
+            <MelonyRenderer node={rawContent as any} />
+          </div>
+        );
+      }
+
+      // Otherwise, ensure it's a string for markdown
+      const content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent, null, 2);
+      
       return (
         <div className="px-2 py-1.5 bg-background/40 rounded border border-border/20 my-1 mx-2">
           <MelonyRenderer node={{ type: "markdown", props: { value: content, size: "sm" } } as any} />
@@ -89,10 +102,19 @@ function EventItem({ event }: { event: any }) {
       );
     default:
       if (data && typeof data === 'object' && (data.message || data.content)) {
+          const displayValue = data.message || data.content;
+          const isNode = typeof displayValue === 'object' && displayValue.type && (displayValue.props || displayValue.children);
+          
           return (
             <div className="flex items-start gap-2 py-1 px-2">
                <div className="mt-1.5 size-1 rounded-full bg-muted-foreground/20 shrink-0" />
-               <span className="text-[11px] text-muted-foreground">{data.message || data.content}</span>
+               <div className="text-[11px] text-muted-foreground">
+                  {isNode ? (
+                    <MelonyRenderer node={displayValue} />
+                  ) : (
+                    typeof displayValue === 'string' ? displayValue : JSON.stringify(displayValue, null, 2)
+                  )}
+               </div>
             </div>
           );
       }
@@ -327,9 +349,11 @@ export function Thread({
         }
 
         if (TEXT_EVENT_TYPES.has(event.type)) {
-          const content = typeof event.data?.content === "string" ? event.data.content : (typeof event.data?.result === "string" ? event.data.result : "");
+          const rawContent = event.data?.content ?? event.data?.result ?? event.data?.message;
+          if (!rawContent && (!event.data?.attachments || event.data.attachments.length === 0)) return null;
+
           const attachments = Array.isArray(event.data?.attachments) ? event.data.attachments : [];
-          if (!content && attachments.length === 0) return null;
+          const isNode = typeof rawContent === 'object' && rawContent.type && (rawContent.props || rawContent.children);
 
           return (
             <div
@@ -338,9 +362,19 @@ export function Thread({
             >
               <div className={`max-w-[85%] rounded-2xl ${isUserEvent ? "px-4 py-3 bg-foreground/5" : ""}`}>
                 <div className="flex flex-col gap-2">
-                  {content && (
+                  {rawContent && (
                     <div className={isUserEvent ? "text-[13px] leading-relaxed" : ""}>
-                      <MelonyRenderer node={{ type: "markdown", props: { value: content, size: "sm" } } as any} />
+                      {isNode ? (
+                        <MelonyRenderer node={rawContent as any} />
+                      ) : (
+                        <MelonyRenderer node={{ 
+                          type: "markdown", 
+                          props: { 
+                            value: typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent, null, 2), 
+                            size: "sm" 
+                          } 
+                        } as any} />
+                      )}
                     </div>
                   )}
                   {attachments.length > 0 && (

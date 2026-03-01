@@ -106,18 +106,13 @@ export function setupDelegation(
           const agentOutput = agentEvent.data as any;
 
           // THIS NEEDS TO BE IMPROVED. WE NEED TO KEEP A SINGLE AGENT OUTPUT VARIABLE.
-          if (typeof agentOutput?.result === "string") {
+          const value = agentOutput?.result ?? agentOutput?.content ?? agentOutput?.message;
+          if (typeof value === "string") {
             if (lastAgentOutput) lastAgentOutput += "\n\n";
-            lastAgentOutput += agentOutput.result;
-          } else if (typeof agentOutput?.result === "object") {
+            lastAgentOutput += value;
+          } else if (typeof value === "object" && value !== null) {
             if (lastAgentOutput) lastAgentOutput += "\n\n";
-            lastAgentOutput += JSON.stringify(agentOutput.result, null, 2);
-          } else if (typeof agentOutput?.content === "string") {
-            if (lastAgentOutput) lastAgentOutput += "\n\n";
-            lastAgentOutput += agentOutput.content;
-          } else if (typeof agentOutput?.content === "object") {
-            if (lastAgentOutput) lastAgentOutput += "\n\n";
-            lastAgentOutput += JSON.stringify(agentOutput.content, null, 2);
+            lastAgentOutput += JSON.stringify(value, null, 2);
           }
         }
       }
