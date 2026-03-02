@@ -1,6 +1,8 @@
 import { useMelony } from "@melony/react";
 import { MelonyRenderer, type UINode } from "@melony/ui-kit";
-import { useEffect, useRef, type ReactNode, useMemo } from "react";
+import { useEffect, useRef, type ReactNode, useMemo, useState } from "react";
+import { AgentAvatar } from "./AgentAvatar";
+import { useConfig } from "../hooks/use-config";
 
 const TEXT_EVENT_TYPES = new Set([
   "agent:output",
@@ -28,7 +30,7 @@ function hasRenderableContent(message: { content: any }): boolean {
 function StreamingIndicator() {
   return (
     <div className="flex items-start w-full animate-fade-in">
-      <div className="flex items-center gap-1.5 px-1 py-3">
+      <div className="flex items-center gap-1.5 py-3">
         <span className="size-1.5 rounded-full bg-foreground/30 animate-[pulse-dot_1.4s_ease-in-out_infinite]" />
         <span className="size-1.5 rounded-full bg-foreground/30 animate-[pulse-dot_1.4s_ease-in-out_0.2s_infinite]" />
         <span className="size-1.5 rounded-full bg-foreground/30 animate-[pulse-dot_1.4s_ease-in-out_0.4s_infinite]" />
@@ -134,75 +136,110 @@ function DelegationCard({
   const isCompleted = !!endEvent;
   const agentName = startEvent.meta?.agentName || startEvent.data.agent;
   const task = startEvent.data.task;
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isOutputExpanded, setIsOutputExpanded] = useState(false);
+  const [showToggle, setShowToggle] = useState(false);
+  const outputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (isCompleted && outputRef.current) {
+      // Check if content height exceeds the max-height (200px)
+      setShowToggle(outputRef.current.scrollHeight > 200);
     }
-  }, [subEvents.length]);
+  }, [isCompleted, endEvent?.data?.result]);
 
   return (
-    <div className="flex flex-col w-full items-start animate-fade-in my-2">
-      <div className="w-[90%] rounded-xl border border-border/60 bg-muted/30 overflow-hidden shadow-sm flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2.5 bg-muted/50 border-b border-border/40 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="size-2 rounded-full bg-primary animate-pulse" style={{ animationDuration: isCompleted ? '0s' : '2s', opacity: isCompleted ? 0.5 : 1 }} />
-            <span className="text-xs font-semibold uppercase tracking-wider text-foreground/70">
-              {agentName} Agent
-            </span>
-          </div>
-          {isCompleted ? (
-            <span className="text-[10px] bg-success/10 text-success px-2 py-0.5 rounded-full font-medium">Completed</span>
-          ) : (
-            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium animate-pulse">Processing</span>
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="p-4 flex flex-col gap-3 min-h-0">
-          <div className="text-[13px] text-foreground/80 font-medium italic">
-            &quot;{task}&quot;
-          </div>
-          
-          {/* Scrollable Events Area */}
-          <div 
-            ref={scrollRef}
-            className="mt-1 flex flex-col gap-0.5 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-border/60 scrollbar-track-transparent"
-          >
-            {subEvents.map((event, idx) => (
-              <EventItem key={event.id || idx} event={event} />
-            ))}
-            
-            {subEvents.length === 0 && !isCompleted && (
-               <div className="flex items-center gap-2 py-2 px-2 text-[11px] text-muted-foreground animate-pulse">
-                 <div className="size-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                 <span>Initializing...</span>
-               </div>
-            )}
-            <div className="h-2 shrink-0" />
-          </div>
-
-          {/* Result Summary if completed */}
-          {isCompleted && endEvent.data.result && (
-            <div className="mt-2 pt-3 border-t border-border/40 shrink-0">
-               <div className="text-[11px] text-muted-foreground uppercase tracking-widest mb-1 font-bold">Result</div>
-               <div className="max-h-[200px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-border/60 scrollbar-track-transparent">
-                 <div className="text-xs text-foreground/90 leading-relaxed">
-                   {typeof endEvent.data.result === 'string' ? (
-                     <MelonyRenderer node={{ type: "markdown", props: { value: endEvent.data.result, size: "sm" } } as any} />
-                   ) : (
-                     <pre className="whitespace-pre-wrap font-mono text-[10px] bg-background/40 p-2 rounded border border-border/20">
-                       {JSON.stringify(endEvent.data.result, null, 2)}
-                     </pre>
-                   )}
-                 </div>
-               </div>
+    <div className="flex flex-col w-full items-start animate-fade-in my-3 pl-4 border-l border-border/40">
+      <div 
+        className="flex flex-col w-full cursor-pointer group mb-2"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        {/* Agent Identification */}
+        <div className="flex items-center gap-2 mb-2 w-full">
+          <AgentAvatar name={agentName} className="size-5 rounded-md shadow-sm" />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/40 group-hover:text-foreground/60 transition-colors">
+            {agentName}
+          </span>
+          {!isCompleted && (
+            <div className="flex gap-0.5 ml-1">
+              <span className="size-1 rounded-full bg-primary/40 animate-pulse" />
+              <span className="size-1 rounded-full bg-primary/40 animate-pulse [animation-delay:0.2s]" />
             </div>
           )}
+          <div className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground/40 group-hover:text-muted-foreground transition-colors mr-2">
+            {isExpanded ? "Hide Details" : "Show Details"}
+            <svg 
+              className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-180" : ""}`} 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Task / Intent */}
+        <div className="text-[12px] text-foreground/70 font-medium italic leading-relaxed">
+          &quot;{task}&quot;
         </div>
       </div>
+      
+      {/* Sub-events */}
+      {isExpanded && (
+        <div className="flex flex-col gap-0.5 w-full mb-2">
+          {subEvents.map((event, idx) => (
+            <EventItem key={event.id || idx} event={event} />
+          ))}
+          
+          {subEvents.length === 0 && !isCompleted && (
+             <div className="flex items-center gap-2 py-1 px-2 text-[10px] text-muted-foreground/50 italic animate-pulse">
+               <div className="size-1 rounded-full bg-muted-foreground/30 shrink-0" />
+               <span>Starting...</span>
+             </div>
+          )}
+        </div>
+      )}
+
+      {/* Result if completed */}
+      {isCompleted && endEvent.data.result && (
+        <div className="mt-2 pt-2 border-t border-border/10 w-full">
+           <div className="text-[10px] text-muted-foreground/40 uppercase tracking-widest mb-1 font-bold">Output</div>
+           <div className="relative text-[12.5px] text-foreground/90 leading-relaxed">
+             <div 
+               ref={outputRef}
+               className={`overflow-hidden transition-all duration-200 ${!isOutputExpanded ? 'max-h-[200px]' : ''}`}
+             >
+               {typeof endEvent.data.result === 'string' ? (
+                 <MelonyRenderer node={{ type: "markdown", props: { value: endEvent.data.result, size: "sm" } } as any} />
+               ) : (
+                 <pre className="whitespace-pre-wrap font-mono text-[10px] bg-background/30 p-2 rounded-lg border border-border/10">
+                   {JSON.stringify(endEvent.data.result, null, 2)}
+                 </pre>
+               )}
+             </div>
+             {showToggle && !isOutputExpanded && (
+               <div className="absolute bottom-0 left-0 w-full h-24 bg-linear-to-t from-background to-transparent pointer-events-none" />
+             )}
+           </div>
+           {showToggle && (
+             <button 
+               onClick={() => setIsOutputExpanded(!isOutputExpanded)}
+               className="mt-2 text-[10px] text-muted-foreground hover:text-foreground transition-colors font-medium flex items-center gap-1"
+             >
+               {isOutputExpanded ? "Show less" : "Show more"}
+               <svg 
+                 className={`w-3 h-3 transition-transform ${isOutputExpanded ? "rotate-180" : ""}`} 
+                 fill="none" 
+                 viewBox="0 0 24 24" 
+                 stroke="currentColor"
+               >
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+               </svg>
+             </button>
+           )}
+        </div>
+      )}
     </div>
   );
 }
@@ -215,7 +252,27 @@ export function Thread({
   placeholderNode?: UINode;
 }) {
   const { messages, streaming } = useMelony();
+  const { data: config } = useConfig();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+
+  useEffect(() => {
+    const scrollContainer = bottomRef.current?.closest('.overflow-auto');
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+      // Consider "scrolled up" if we are more than 100px from the bottom
+      setIsScrolledUp(distanceToBottom > 100);
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll);
+    // Initial check
+    handleScroll();
+    
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const visibleMessages = messages
     .filter((m) => m.role !== "system")
@@ -223,7 +280,6 @@ export function Thread({
 
   const renderableEvents = useMemo(() => {
     const events: any[] = [];
-    const seenIds = new Set<string>();
     
     // Track delegation states per message to group them
     visibleMessages.forEach((msg, msgIndex) => {
@@ -236,13 +292,6 @@ export function Thread({
       }];
 
       content.forEach((event: any, eventIndex: number) => {
-        // Skip already seen IDs
-        if (event.id) {
-          if (seenIds.has(event.id)) return;
-          seenIds.add(event.id);
-        }
-
-        // Handle Delegation Events
         const delegationId = event.meta?.delegationId;
         if (delegationId) {
           if (!delegationMap.has(delegationId)) {
@@ -256,7 +305,6 @@ export function Thread({
           } else if (event.type === "delegation:end") {
             group.end = event;
           } else {
-            // Handle Text Delta (deduplication) for sub-events
             if (event.type === "agent:output-delta") {
               const hasFinalOutput = content.some((e: any) => e.type === "agent:output" && e.meta?.delegationId === delegationId);
               if (hasFinalOutput) return;
@@ -268,7 +316,6 @@ export function Thread({
           return;
         }
 
-        // Handle Text Delta (deduplication)
         if (event.type === "agent:output-delta") {
           const hasFinalOutput = content.some((e: any) => e.type === "agent:output");
           if (hasFinalOutput) return;
@@ -276,7 +323,6 @@ export function Thread({
           if (nextDelta) return;
         }
 
-        // Handle normal renderable events
         if (event.type === "ui" || TEXT_EVENT_TYPES.has(event.type)) {
           topLevelEvents.push(event);
         }
@@ -288,14 +334,14 @@ export function Thread({
           const group = delegationMap.get(item.delegationId);
           if (group?.start) {
             events.push({
-              key: `${msg.runId}-${msgIndex}-delegation-${item.delegationId}`,
+              key: `${msgIndex}-delegation-${item.delegationId}`,
               type: 'delegation',
               data: group
             });
           }
         } else {
           events.push({
-            key: `${msg.runId}-${msgIndex}-${item.type}-${idx}`,
+            key: `${msgIndex}-${item.type}-${idx}`,
             type: 'standard',
             event: item
           });
@@ -306,8 +352,15 @@ export function Thread({
     return events;
   }, [visibleMessages]);
 
+  const isScrolledUpRef = useRef(isScrolledUp);
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: streaming ? "auto" : "smooth" });
+    isScrolledUpRef.current = isScrolledUp;
+  }, [isScrolledUp]);
+
+  useEffect(() => {
+    if (!isScrolledUpRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: streaming ? "auto" : "smooth" });
+    }
   }, [renderableEvents, streaming]);
 
   if (renderableEvents.length === 0) {
@@ -323,7 +376,7 @@ export function Thread({
 
   return (
     <div className="flex flex-col flex-1 gap-5 w-full py-6 px-4">
-      {renderableEvents.map((item) => {
+      {renderableEvents.map((item, index) => {
         if (item.type === 'delegation') {
           return (
             <DelegationCard 
@@ -337,10 +390,44 @@ export function Thread({
 
         const { event } = item;
         const isUserEvent = event.type === "agent:input";
+        const isAssistant = !isUserEvent;
+        
+        let shouldShowHeader = false;
+        if (isAssistant) {
+          const prevItem = renderableEvents[index - 1];
+          if (!prevItem) {
+            shouldShowHeader = true;
+          } else if (prevItem.type === 'delegation') {
+            shouldShowHeader = true;
+          } else if (prevItem.type === 'standard') {
+            if (prevItem.event.type === 'agent:input') {
+              shouldShowHeader = true;
+            } else {
+              const prevAgentName = prevItem.event.meta?.agentName || "default";
+              const currAgentName = event.meta?.agentName || "default";
+              if (prevAgentName !== currAgentName) {
+                shouldShowHeader = true;
+              }
+            }
+          }
+        }
+
+        const displayName = (event.meta?.agentName || config?.name || "Assistant").toUpperCase();
+        const avatarName = event.meta?.agentName || "default";
+        
+        const agentHeader = (
+          <div className="flex items-center gap-2 mb-2 animate-fade-in">
+            <AgentAvatar name={avatarName} className="size-5 rounded-md shadow-sm bg-muted/20" />
+            <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-foreground/60 transition-colors hover:text-foreground/80">
+              {displayName}
+            </span>
+          </div>
+        );
 
         if (event.type === "ui") {
           return (
             <div key={item.key} className="flex flex-col w-full items-start animate-fade-in">
+              {shouldShowHeader && agentHeader}
               <div className="max-w-[85%]">
                 <MelonyRenderer node={event.data} />
               </div>
@@ -360,6 +447,7 @@ export function Thread({
               key={item.key}
               className={`flex flex-col w-full ${event.type === "agent:output-delta" ? "" : "animate-fade-in"} ${isUserEvent ? "items-end" : "items-start"}`}
             >
+              {shouldShowHeader && agentHeader}
               <div className={`max-w-[85%] rounded-2xl ${isUserEvent ? "px-4 py-3 bg-foreground/5" : ""}`}>
                 <div className="flex flex-col gap-2">
                   {rawContent && (
@@ -406,6 +494,23 @@ export function Thread({
       })}
       {streaming && <StreamingIndicator />}
       <div ref={bottomRef} className="h-0" />
+      <div className="sticky bottom-[120px] w-full flex justify-center z-50 pointer-events-none mt-4">
+        {isScrolledUp && (
+          <button
+            onClick={() => {
+              bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+              setIsScrolledUp(false);
+            }}
+            className="pointer-events-auto px-4 py-2 bg-background/80 backdrop-blur-md border border-border/60 text-foreground/80 rounded-full shadow-lg hover:bg-muted/80 hover:text-foreground transition-all animate-fade-in flex items-center justify-center gap-2 text-[13px] font-medium cursor-pointer"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14" />
+              <path d="M19 12l-7 7-7-7" />
+            </svg>
+            Scroll to bottom
+          </button>
+        )}
+      </div>
     </div>
   );
 }

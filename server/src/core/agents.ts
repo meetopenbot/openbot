@@ -46,6 +46,7 @@ export async function setupAgentRegistry(
   });
 
   const agentsDir = path.join(resolvedBaseDir, "agents");
+
   const [yamlAgents, tsAgents] = await Promise.all([
     discoverYamlAgents(agentsDir, pluginRegistry, model, options),
     discoverTsAgents(agentsDir, model, options),

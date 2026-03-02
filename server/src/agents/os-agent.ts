@@ -27,7 +27,7 @@ export const osAgent = (options: OSAgentOptions): MelonyPlugin<ChatState, ChatEv
     .use(approvalPlugin({
       rules: [
         { action: "action:executeCommand", message: "The agent wants to execute a terminal command. Please review carefully." },
-        { action: "action:writeFile", message: "The agent wants to write to a file." },
+        // { action: "action:writeFile", message: "The agent wants to write to a file." },
         { action: "action:deleteFile", message: "The agent wants to delete a file." },
       ],
     }))

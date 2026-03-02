@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Thread } from "../Thread";
 import { Composer } from "../Composer";
-import { ExecutionSidebar } from "../ExecutionSidebar";
+// import { ExecutionSidebar } from "../ExecutionSidebar";
 import { api } from "../../lib/api";
 
 interface ChatPageProps {
@@ -41,7 +41,7 @@ export function ChatPage({ sessionId, executionSidebarOpen }: ChatPageProps) {
           </div>
         </div>
       </div>
-      <ExecutionSidebar events={(melonyEvents ?? []) as any[]} open={executionSidebarOpen} />
+      {/* <ExecutionSidebar events={(melonyEvents ?? []) as any[]} open={executionSidebarOpen} /> */}
     </div>
   );
 }

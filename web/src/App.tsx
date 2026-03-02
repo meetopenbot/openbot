@@ -91,18 +91,18 @@ export function App() {
               sessionId={sessionId}
               currentTab={tab}
               onNavigate={navigate}
-              rightActions={tab === "chat" ? (
-                <button
-                  onClick={() => setExecutionSidebarOpen((v) => !v)}
-                  className="p-2 rounded-lg hover:bg-muted/80 text-muted-foreground/70 hover:text-foreground transition-all duration-150"
-                  aria-label={executionSidebarOpen ? "Collapse execution sidebar" : "Open execution sidebar"}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect width="18" height="18" x="3" y="3" rx="2" />
-                    <path d="M15 3v18" />
-                  </svg>
-                </button>
-              ) : null}
+              // rightActions={tab === "chat" ? (
+              //   <button
+              //     onClick={() => setExecutionSidebarOpen((v) => !v)}
+              //     className="p-2 rounded-lg hover:bg-muted/80 text-muted-foreground/70 hover:text-foreground transition-all duration-150"
+              //     aria-label={executionSidebarOpen ? "Collapse execution sidebar" : "Open execution sidebar"}
+              //   >
+              //     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              //       <rect width="18" height="18" x="3" y="3" rx="2" />
+              //       <path d="M15 3v18" />
+              //     </svg>
+              //   </button>
+              // ) : null}
             >
               {tab === "chat" && <ChatPage sessionId={sessionId} executionSidebarOpen={executionSidebarOpen} />}
               {tab === "agents" && <AgentsPage />}

@@ -36,6 +36,7 @@ export async function startServer(options: ServerOptions = {}) {
     openaiApiKey: options.openaiApiKey,
     anthropicApiKey: options.anthropicApiKey,
   });
+
   let runtime = await createRuntime();
 
   let reloadTimer: NodeJS.Timeout | null = null;
@@ -73,6 +74,7 @@ export async function startServer(options: ServerOptions = {}) {
   };
 
   const openBotDir = path.join(os.homedir(), ".openbot");
+
   const watcher = chokidar.watch(
     [
       path.join(openBotDir, "config.json"),
@@ -155,6 +157,7 @@ export async function startServer(options: ServerOptions = {}) {
     stopAutomationWorker();
     await cleanupWatcher();
   };
+
   process.once("SIGINT", () => {
     void cleanupBackground().finally(() => process.exit(0));
   });
@@ -503,7 +506,7 @@ export async function startServer(options: ServerOptions = {}) {
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
     const defaultName = cfg.name || "OpenBot";
-    
+
     let mdPath: string;
     if (name === defaultName || name === "default") {
       mdPath = path.join(resolvedBaseDir, "AGENT.md");
@@ -527,7 +530,7 @@ export async function startServer(options: ServerOptions = {}) {
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
     const defaultName = cfg.name || "OpenBot";
-    
+
     let mdPath: string;
     let agentDir: string;
     if (name === defaultName || name === "default") {
@@ -540,7 +543,7 @@ export async function startServer(options: ServerOptions = {}) {
 
     try {
       await fs.mkdir(agentDir, { recursive: true });
-      
+
       let frontmatter = {};
       try {
         const currentContent = await fs.readFile(mdPath, "utf-8");
@@ -701,7 +704,7 @@ export async function startServer(options: ServerOptions = {}) {
 
     try {
       await fs.mkdir(agentDir, { recursive: true });
-      
+
       const consolidated = matter.stringify(currentBody, frontmatter);
       await fs.writeFile(mdPath, consolidated, "utf-8");
 
@@ -746,10 +749,10 @@ export async function startServer(options: ServerOptions = {}) {
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
     const defaultName = cfg.name || "OpenBot";
-    
+
     const extensions = [".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"];
     const fileNames = ["avatar", "icon", "image", "logo"];
-    
+
     const searchDirs = [
       (name === defaultName || name === "default")
         ? path.join(resolvedBaseDir, "assets")

@@ -29,6 +29,7 @@ export async function setupPluginRegistry(resolvedBaseDir: string): Promise<Plug
   });
 
   const sharedPlugins = await loadPluginsFromDir(path.join(resolvedBaseDir, "plugins"));
+
   for (const p of sharedPlugins) {
     pluginRegistry.register(p);
     console.log(`[plugins] Loaded shared plugin: ${p.name}`);

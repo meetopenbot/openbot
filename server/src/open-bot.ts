@@ -30,6 +30,7 @@ export async function createOpenBot(options?: {
 
   // 2. Initialize agent runtimes
   const agentRuntimes = new Map<string, Runtime<ChatState, ChatEvent>>();
+
   for (const agent of agentRegistry.getAll()) {
     const builder = melony<ChatState, ChatEvent>();
     builder.use(agent.plugin);
@@ -39,10 +40,10 @@ export async function createOpenBot(options?: {
   // 3. Initialize manager runtime
   const managerBuilder = melony<ChatState, ChatEvent>();
   managerBuilder.use(createManagerPlugin(model, resolvedModelId, resolvedBaseDir, agentRegistry));
-  
+
   // 4. Setup delegation
   setupDelegation(managerBuilder, agentRuntimes);
-  
+
   const managerRuntime = managerBuilder.build();
 
   // 5. Trigger initialization for all runtimes
