@@ -75,6 +75,26 @@ export interface AutomationItem {
   updatedAt: string;
 }
 
+export interface InstalledPluginInfo {
+  id: string;
+  name: string;
+  description: string;
+  folder: string;
+  type: "tool" | "agent";
+  hasAgentMd: boolean;
+}
+
+export interface MarketplaceItem {
+  id: string;
+  name: string;
+  description: string;
+  source: {
+    type: "github" | "npm";
+    value: string;
+  };
+  tags?: string[];
+}
+
 export const api = {
   getConfig: () => request<AppConfig>("/api/config"),
 
@@ -92,6 +112,9 @@ export const api = {
 
   getAgents: () =>
     request<{ id: string; name: string; description: string; folder: string; isDefault?: boolean; hasAgentMd?: boolean }[]>("/api/agents"),
+
+  getInstalledPlugins: () =>
+    request<InstalledPluginInfo[]>("/api/plugins"),
 
   getPrompts: () =>
     request<{ label: string; icon: string }[]>("/api/prompts"),
@@ -153,6 +176,24 @@ export const api = {
     request<{ success: boolean }>(`/api/agents/${encodeURIComponent(agentId)}/config`, {
       method: "PUT",
       body: JSON.stringify(config),
+    }),
+
+  getMarketplaceAgents: () =>
+    request<MarketplaceItem[]>("/api/marketplace/agents"),
+
+  getMarketplacePlugins: () =>
+    request<MarketplaceItem[]>("/api/marketplace/plugins"),
+
+  installMarketplaceAgent: (id: string) =>
+    request<{ success: boolean; installedName: string; item: MarketplaceItem }>("/api/marketplace/install-agent", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    }),
+
+  installMarketplacePlugin: (id: string) =>
+    request<{ success: boolean; installedName: string; item: MarketplaceItem }>("/api/marketplace/install-plugin", {
+      method: "POST",
+      body: JSON.stringify({ id }),
     }),
 
   openFolder: (folder: string) =>

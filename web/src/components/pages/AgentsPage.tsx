@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "../../hooks/use-session";
-import { api, type AgentConfig } from "../../lib/api";
+import { api, type AgentConfig, type MarketplaceItem } from "../../lib/api";
 import { AgentAvatar } from "../AgentAvatar";
 import { ModelSelector } from "../ModelSelector";
 import { useModels } from "../../hooks/use-models";
@@ -455,9 +455,28 @@ function AgentEditForm({
 
 export function AgentsPage() {
   const { navigate, path } = useSession();
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"installed" | "marketplace-agents" | "marketplace-plugins">("installed");
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [installingAgentId, setInstallingAgentId] = useState<string | null>(null);
+  const [installingPluginId, setInstallingPluginId] = useState<string | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
+
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ["agents"],
     queryFn: api.getAgents,
+  });
+  const { data: plugins = [], isLoading: loadingPlugins } = useQuery({
+    queryKey: ["plugins"],
+    queryFn: api.getInstalledPlugins,
+  });
+  const { data: marketplaceAgents = [], isLoading: loadingMarketplaceAgents } = useQuery({
+    queryKey: ["marketplace", "agents"],
+    queryFn: api.getMarketplaceAgents,
+  });
+  const { data: marketplacePlugins = [], isLoading: loadingMarketplacePlugins } = useQuery({
+    queryKey: ["marketplace", "plugins"],
+    queryFn: api.getMarketplacePlugins,
   });
 
   const selectedAgentId = useMemo(() => {
@@ -476,8 +495,62 @@ export function AgentsPage() {
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
 
-  const handleCreateAgent = () => {
+  const handleCreateCustomAgent = () => {
+    setShowCreateMenu(false);
     navigate("/?tab=chat&msg=" + encodeURIComponent("/agent-creator I want to create a new agent. Ask me focused questions, then propose the final AGENT.md for approval before writing it."));
+  };
+
+  const handleGoToOfficialAgents = () => {
+    setShowCreateMenu(false);
+    setActiveTab("marketplace-agents");
+  };
+
+  const installedAgentKeys = useMemo(() => {
+    return new Set(
+      agents.map((agent) => [agent.id, agent.name].map((v) => (v || "").toLowerCase())).flat()
+    );
+  }, [agents]);
+
+  const installedPluginKeys = useMemo(() => {
+    return new Set(
+      plugins.map((plugin) => [plugin.id, plugin.name].map((v) => (v || "").toLowerCase())).flat()
+    );
+  }, [plugins]);
+
+  const isAgentInstalled = (item: MarketplaceItem) =>
+    installedAgentKeys.has(item.id.toLowerCase()) || installedAgentKeys.has(item.name.toLowerCase());
+
+  const isPluginInstalled = (item: MarketplaceItem) =>
+    installedPluginKeys.has(item.id.toLowerCase()) || installedPluginKeys.has(item.name.toLowerCase());
+
+  const handleInstallAgent = async (item: MarketplaceItem) => {
+    setInstallError(null);
+    setInstallingAgentId(item.id);
+    try {
+      await api.installMarketplaceAgent(item.id);
+      await queryClient.invalidateQueries({ queryKey: ["agents"] });
+      await queryClient.invalidateQueries({ queryKey: ["marketplace", "agents"] });
+    } catch (err) {
+      console.error(err);
+      setInstallError(`Failed to install agent "${item.name}"`);
+    } finally {
+      setInstallingAgentId(null);
+    }
+  };
+
+  const handleInstallPlugin = async (item: MarketplaceItem) => {
+    setInstallError(null);
+    setInstallingPluginId(item.id);
+    try {
+      await api.installMarketplacePlugin(item.id);
+      await queryClient.invalidateQueries({ queryKey: ["plugins"] });
+      await queryClient.invalidateQueries({ queryKey: ["marketplace", "plugins"] });
+    } catch (err) {
+      console.error(err);
+      setInstallError(`Failed to install plugin "${item.name}"`);
+    } finally {
+      setInstallingPluginId(null);
+    }
   };
 
   if (selectedAgentId && selectedAgent) {
@@ -508,60 +581,222 @@ export function AgentsPage() {
               <span className="px-1.5 py-0.5 rounded-[4px] bg-white/10 text-[9px] font-bold uppercase tracking-[0.05em] text-white/60 mt-0.5">Beta</span>
             </div>
             <p className="text-muted-foreground/80 text-base font-medium leading-tight">
-              Manage and chat with your AI agents
+              Install and manage your agents and plugins
             </p>
           </div>
-          
+
+          <div className="relative">
+            <button
+              onClick={() => setShowCreateMenu((value) => !value)}
+              className="rounded-xl bg-foreground px-5 py-2.5 text-[13.5px] font-semibold text-background transition-all duration-150 hover:opacity-90 flex items-center gap-2 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Create Agent
+            </button>
+            {showCreateMenu && (
+              <div className="absolute right-0 mt-2 w-60 rounded-xl border border-border/60 bg-background p-1 shadow-2xl z-20">
+                <button
+                  onClick={handleGoToOfficialAgents}
+                  className="w-full text-left rounded-lg px-3 py-2 text-sm hover:bg-muted/40 transition-colors"
+                >
+                  Install Official Agent
+                </button>
+                <button
+                  onClick={handleCreateCustomAgent}
+                  className="w-full text-left rounded-lg px-3 py-2 text-sm hover:bg-muted/40 transition-colors"
+                >
+                  Create Custom Agent
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 p-1 w-fit">
           <button
-            onClick={handleCreateAgent}
-            className="rounded-xl bg-foreground px-5 py-2.5 text-[13.5px] font-semibold text-background transition-all duration-150 hover:opacity-90 flex items-center gap-2 shadow-sm"
+            onClick={() => setActiveTab("installed")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${activeTab === "installed" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
           >
-            <Plus className="w-4 h-4" />
-            Create Agent
+            Installed
+          </button>
+          <button
+            onClick={() => setActiveTab("marketplace-agents")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${activeTab === "marketplace-agents" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Marketplace Agents
+          </button>
+          <button
+            onClick={() => setActiveTab("marketplace-plugins")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${activeTab === "marketplace-plugins" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Marketplace Plugins
           </button>
         </div>
 
-        {/* Grid */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {[1, 2, 4, 5, 6].map((i) => (
-              <div key={i} className="h-20 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-1 -mx-3">
-            {agents.map((agent) => (
-              <button
-                key={agent.id}
-                onClick={() => setSelectedAgentId(agent.id)}
-                className="flex items-center gap-3.5 p-3 rounded-[18px] hover:bg-white/5 transition-all group text-left border border-transparent hover:border-white/5"
-              >
-                <div className="relative shrink-0">
-                  <AgentAvatar 
-                    name={agent.isDefault ? "default" : agent.id} 
-                    className="w-[48px] h-[48px] rounded-[12px] shadow-sm transition-transform group-hover:scale-[1.05]" 
-                  />
-                  {agent.isDefault && (
-                    <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-blue-500 border-2 border-background flex items-center justify-center">
-                      <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+        {installError && (
+          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+            {installError}
+          </p>
+        )}
+
+        {activeTab === "installed" && (
+          <div className="flex flex-col gap-6">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Agents</h2>
+              {isLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {[1, 2, 4, 5, 6].map((i) => (
+                    <div key={i} className="h-20 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-1 -mx-3">
+                  {agents.map((agent) => (
+                    <button
+                      key={agent.id}
+                      onClick={() => setSelectedAgentId(agent.id)}
+                      className="flex items-center gap-3.5 p-3 rounded-[18px] hover:bg-white/5 transition-all group text-left border border-transparent hover:border-white/5"
+                    >
+                      <div className="relative shrink-0">
+                        <AgentAvatar
+                          name={agent.isDefault ? "default" : agent.id}
+                          className="w-[48px] h-[48px] rounded-[12px] shadow-sm transition-transform group-hover:scale-[1.05]"
+                        />
+                        {agent.isDefault && (
+                          <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-blue-500 border-2 border-background flex items-center justify-center">
+                            <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h3 className="font-semibold text-[15px] tracking-tight truncate">{agent.name}</h3>
+                          {!agent.isDefault && agent.hasAgentMd === false && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[8px] font-bold uppercase tracking-wider shrink-0 border border-purple-500/20">Code</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground/60 line-clamp-1 leading-snug font-medium">
+                          {agent.description || "No description provided"}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/20 group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Plugins</h2>
+              {loadingPlugins ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-20 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
+                  ))}
+                </div>
+              ) : plugins.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border/60 py-6 text-center text-sm text-muted-foreground">
+                  No plugins installed yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {plugins.map((plugin) => (
+                    <div key={plugin.id} className="rounded-2xl border border-border/50 bg-background/40 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-semibold text-sm">{plugin.name}</h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/40 border border-border/40 uppercase tracking-wider">
+                          Plugin
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground/70 mt-1">{plugin.description || "No description provided"}</p>
                     </div>
-                  )}
+                  ))}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <h3 className="font-semibold text-[15px] tracking-tight truncate">{agent.name}</h3>
-                    {!agent.isDefault && agent.hasAgentMd === false && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[8px] font-bold uppercase tracking-wider shrink-0 border border-purple-500/20">Code</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground/60 line-clamp-1 leading-snug font-medium">
-                    {agent.description || "No description provided"}
-                  </p>
-                </div>
-                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/20 group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0" />
-              </button>
-            ))}
+              )}
+            </div>
           </div>
+        )}
+
+        {activeTab === "marketplace-agents" && (
+          loadingMarketplaceAgents ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-24 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
+              ))}
+            </div>
+          ) : marketplaceAgents.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
+              No official agents found in the marketplace registry.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {marketplaceAgents.map((item) => {
+                const installed = isAgentInstalled(item);
+                const installing = installingAgentId === item.id;
+                return (
+                  <div key={item.id} className="rounded-2xl border border-border/50 bg-background/40 p-4 flex flex-col gap-3">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-semibold text-sm">{item.name}</h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/40 border border-border/40 uppercase tracking-wider">
+                          Agent
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground/70 mt-1">{item.description || "No description provided"}</p>
+                    </div>
+                    <button
+                      onClick={() => void handleInstallAgent(item)}
+                      disabled={installed || installing}
+                      className="rounded-lg border border-border/60 px-3 py-2 text-xs font-semibold hover:bg-muted/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {installed ? "Installed" : installing ? "Installing..." : "Install Agent"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+
+        {activeTab === "marketplace-plugins" && (
+          loadingMarketplacePlugins ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-24 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
+              ))}
+            </div>
+          ) : marketplacePlugins.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
+              No official plugins found in the marketplace registry.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {marketplacePlugins.map((item) => {
+                const installed = isPluginInstalled(item);
+                const installing = installingPluginId === item.id;
+                return (
+                  <div key={item.id} className="rounded-2xl border border-border/50 bg-background/40 p-4 flex flex-col gap-3">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-semibold text-sm">{item.name}</h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/40 border border-border/40 uppercase tracking-wider">
+                          Plugin
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground/70 mt-1">{item.description || "No description provided"}</p>
+                    </div>
+                    <button
+                      onClick={() => void handleInstallPlugin(item)}
+                      disabled={installed || installing}
+                      className="rounded-lg border border-border/60 px-3 py-2 text-xs font-semibold hover:bg-muted/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {installed ? "Installed" : installing ? "Installing..." : "Install Plugin"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )
         )}
       </div>
     </div>

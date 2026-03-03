@@ -20,6 +20,7 @@ import type { ModelProvider } from "./model-catalog.js";
 import { DEFAULT_MODEL_BY_PROVIDER, DEFAULT_MODEL_ID } from "./model-defaults.js";
 import { listAutomations, saveAutomations, type AutomationRecord } from "./automations.js";
 import { startAutomationWorker } from "./automation-worker.js";
+import { getMarketplaceRegistry, installMarketplaceAgent, installMarketplacePlugin } from "./marketplace.js";
 
 export interface ServerOptions {
   port?: string | number;
@@ -542,6 +543,80 @@ export async function startServer(options: ServerOptions = {}) {
       // ignore
     }
     res.json(agents);
+  });
+
+  app.get("/api/plugins", async (_req, res) => {
+    const cfg = loadConfig();
+    const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
+    const resolvedBaseDir = resolvePath(baseDir);
+    const pluginsDir = path.join(resolvedBaseDir, "plugins");
+
+    try {
+      const allPlugins = await listPlugins(pluginsDir);
+      const toolPlugins = allPlugins.filter((plugin) => plugin.type === "tool");
+      res.json(
+        toolPlugins.map((plugin) => {
+          const id = path.basename(plugin.folder);
+          const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(plugin.name);
+          return {
+            ...plugin,
+            id,
+            name: hasUnnamedDisplayName ? toTitleCaseFromSlug(id) : plugin.name,
+          };
+        })
+      );
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to list plugins" });
+    }
+  });
+
+  app.get("/api/marketplace/agents", async (_req, res) => {
+    try {
+      const registry = await getMarketplaceRegistry();
+      res.json(registry.agents);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to load marketplace agents" });
+    }
+  });
+
+  app.get("/api/marketplace/plugins", async (_req, res) => {
+    try {
+      const registry = await getMarketplaceRegistry();
+      res.json(registry.plugins);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to load marketplace plugins" });
+    }
+  });
+
+  app.post("/api/marketplace/install-agent", async (req, res) => {
+    const { id } = req.body as { id?: string };
+    if (typeof id !== "string" || !id.trim()) {
+      return res.status(400).json({ error: "Marketplace agent id is required" });
+    }
+    try {
+      const result = await installMarketplaceAgent(id.trim());
+      res.json({ success: true, installedName: result.installedName, item: result.agent });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to install agent" });
+    }
+  });
+
+  app.post("/api/marketplace/install-plugin", async (req, res) => {
+    const { id } = req.body as { id?: string };
+    if (typeof id !== "string" || !id.trim()) {
+      return res.status(400).json({ error: "Marketplace plugin id is required" });
+    }
+    try {
+      const result = await installMarketplacePlugin(id.trim());
+      res.json({ success: true, installedName: result.installedName, item: result.plugin });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to install plugin" });
+    }
   });
 
   app.get("/api/agents/:agentId/md", async (req, res) => {

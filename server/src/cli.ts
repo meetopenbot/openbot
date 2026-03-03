@@ -3,11 +3,17 @@ import { Command } from "commander";
 import * as readline from "node:readline/promises";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { execSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { saveConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
 import { startServer } from "./server.js";
-import { ensurePluginReady, getPluginMetadata, readAgentConfig } from "./registry/plugin-loader.js";
+import { getPluginMetadata } from "./registry/plugin-loader.js";
+import {
+  checkGitHubRepo,
+  checkNpmPackage,
+  parsePluginInstallSource,
+  parseAgentInstallSource,
+  installPluginFromSource,
+  installAgentFromSource,
+} from "./installers.js";
 
 const program = new Command();
 
@@ -16,169 +22,25 @@ program
   .description("OpenBot CLI - Secure and easy configuration")
   .version("0.2.3");
 
-/**
- * Check if a GitHub repository exists.
- */
-function checkGitHubRepo(repo: string): boolean {
-  try {
-    execSync(`git ls-remote https://github.com/${repo}.git`, { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Check if an NPM package exists.
- */
-function checkNpmPackage(pkg: string): boolean {
-  try {
-    execSync(`npm show ${pkg} version`, { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Install a plugin from a source (GitHub, local, or NPM).
- */
 async function installPlugin(source: string, quiet = false) {
-  const isGitHub = (source.includes("/") || source.startsWith("github:")) && !source.startsWith("/") && !source.startsWith(".");
-  const isNpm = source.startsWith("@") || source.startsWith("npm:");
-  
-  const repoUrl = isGitHub 
-    ? (source.startsWith("github:") ? `https://github.com/${source.slice(7)}.git` : `https://github.com/${source}.git`)
-    : source;
-
-  const tempDir = path.join(tmpdir(), `openbot-plugin-install-${Date.now()}`);
-
   try {
-    if (!quiet) console.log(`📦 Installing plugin from: ${isNpm ? source : repoUrl}`);
-
-    // 1. Fetch to temp directory
-    if (isGitHub) {
-      execSync(`git clone --depth 1 ${repoUrl} ${tempDir}`, { stdio: quiet ? "ignore" : "inherit" });
-    } else if (isNpm) {
-      const pkgName = source.startsWith("npm:") ? source.slice(4) : source;
-      await fs.mkdir(tempDir, { recursive: true });
-      execSync(`npm install ${pkgName} --prefix ${tempDir}`, { stdio: quiet ? "ignore" : "inherit" });
-      
-      // Move from node_modules to tempDir root for consistency
-      const pkgFolder = path.join(tempDir, "node_modules", pkgName);
-      const moveTemp = path.join(tmpdir(), `openbot-npm-move-${Date.now()}`);
-      await fs.rename(pkgFolder, moveTemp);
-      await fs.rm(tempDir, { recursive: true, force: true });
-      await fs.rename(moveTemp, tempDir);
-    } else {
-      const absoluteSource = path.resolve(source);
-      await fs.mkdir(tempDir, { recursive: true });
-      execSync(`cp -R ${absoluteSource}/. ${tempDir}`, { stdio: quiet ? "ignore" : "inherit" });
-    }
-
-    // 2. Identify name from metadata
-    const { name } = await getPluginMetadata(tempDir);
-
-    const baseDir = resolvePath(DEFAULT_BASE_DIR);
-    const targetDir = path.join(baseDir, "plugins", name);
-
-    // 3. Move to target directory
-    await fs.mkdir(path.dirname(targetDir), { recursive: true });
-    if (await fs.access(targetDir).then(() => true).catch(() => false)) {
-      if (!quiet) console.log(`⚠️  Plugin "${name}" already exists. Overwriting...`);
-      await fs.rm(targetDir, { recursive: true, force: true });
-    }
-    
-    await fs.rename(tempDir, targetDir);
-    if (!quiet) console.log(`✅ Moved to: ${targetDir}`);
-
-    // 4. Prepare
-    if (!quiet) console.log(`⚙️  Preparing plugin "${name}"...`);
-    await ensurePluginReady(targetDir);
-
-    if (!quiet) console.log(`\n🎉 Successfully installed plugin: ${name}`);
+    const parsed = parsePluginInstallSource(source);
+    const name = await installPluginFromSource(parsed, { quiet });
     return name;
   } catch (err) {
     if (!quiet) console.error("\n❌ Plugin installation failed:", err instanceof Error ? err.message : String(err));
-    try {
-      await fs.rm(tempDir, { recursive: true, force: true });
-    } catch { /* ignore */ }
     if (!quiet) process.exit(1);
     throw err;
   }
 }
 
-/**
- * Install an agent from a source (GitHub).
- */
 async function installAgent(source: string) {
-  const repoUrl = source.startsWith("github:") ? `https://github.com/${source.slice(7)}.git` : `https://github.com/${source}.git`;
-  const tempDir = path.join(tmpdir(), `openbot-agent-install-${Date.now()}`);
-
   try {
-    console.log(`🤖 Installing agent from: ${repoUrl}`);
-
-    // 1. Clone to temp directory
-    execSync(`git clone --depth 1 ${repoUrl} ${tempDir}`, { stdio: "inherit" });
-
-    // 2. Identify name from AGENT.md
-    const config = await readAgentConfig(tempDir);
-    const name = config.name || path.basename(source.replace(".git", ""));
-
-    const baseDir = resolvePath(DEFAULT_BASE_DIR);
-    const targetDir = path.join(baseDir, "plugins", name);
-
-    // 3. Move to target directory
-    await fs.mkdir(path.dirname(targetDir), { recursive: true });
-    if (await fs.access(targetDir).then(() => true).catch(() => false)) {
-      console.log(`⚠️  Agent "${name}" already exists. Overwriting...`);
-      await fs.rm(targetDir, { recursive: true, force: true });
-    }
-    
-    await fs.rename(tempDir, targetDir);
-    console.log(`✅ Moved to: ${targetDir}`);
-
-    // 4. Recursive plugin installation
-    if (config.plugins && Array.isArray(config.plugins)) {
-      for (const pluginItem of config.plugins) {
-        const pluginName = typeof pluginItem === "string" ? pluginItem : pluginItem.name;
-        
-        // Skip built-in plugins
-        if (["shell", "file-system"].includes(pluginName)) continue;
-
-        // Check if plugin exists locally
-        const pluginPath = path.join(baseDir, "plugins", pluginName);
-        const existsLocally = await fs.access(pluginPath).then(() => true).catch(() => false);
-        
-        if (!existsLocally) {
-          console.log(`🔍 Agent needs plugin "${pluginName}". Searching...`);
-          
-          // Try GitHub
-          const ghRepo = `meetopenbot/plugin-${pluginName}`;
-          if (checkGitHubRepo(ghRepo)) {
-            await installPlugin(ghRepo);
-            continue;
-          }
-
-          // Try NPM
-          const npmPkg = `@melony/plugin-${pluginName}`;
-          if (checkNpmPackage(npmPkg)) {
-            await installPlugin(npmPkg);
-            continue;
-          }
-
-          console.warn(`⚠️  Could not find plugin "${pluginName}" for agent "${name}". You may need to install it manually.`);
-        }
-      }
-    }
-
-    console.log(`\n🎉 Successfully installed agent: ${name}`);
+    const parsed = parseAgentInstallSource(source);
+    const name = await installAgentFromSource(parsed);
     return name;
   } catch (err) {
     console.error("\n❌ Agent installation failed:", err instanceof Error ? err.message : String(err));
-    try {
-      await fs.rm(tempDir, { recursive: true, force: true });
-    } catch { /* ignore */ }
     process.exit(1);
   }
 }
