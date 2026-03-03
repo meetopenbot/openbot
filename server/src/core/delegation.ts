@@ -1,14 +1,15 @@
-import { generateId, Runtime } from "melony";
+import { generateId, MelonyBuilder, Runtime } from "melony";
 import { ChatEvent, ChatState } from "../types.js";
 
 export function setupDelegation(
-  builder: any,
+  builder: MelonyBuilder<ChatState, ChatEvent>,
   agentRuntimes: Map<string, Runtime<ChatState, ChatEvent>>
 ) {
-  builder.on("action:delegateTask", async function* (event: any, context: any) {
+  builder.on("action:delegateTask", async function* (event: ChatEvent, context: { runId: string; state: ChatState }) {
     const { agent: agentName, toolCallId, task, attachments } = event.data;
     const agentRuntime = agentRuntimes.get(agentName);
 
+    // If the agent is not found, return an error
     if (!agentRuntime) {
       yield {
         type: "action:result",
