@@ -137,21 +137,11 @@ function DelegationCard({
   const agentName = startEvent.meta?.agentName || startEvent.data.agent;
   const task = startEvent.data.task;
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isOutputExpanded, setIsOutputExpanded] = useState(false);
-  const [showToggle, setShowToggle] = useState(false);
-  const outputRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (isCompleted && outputRef.current) {
-      // Check if content height exceeds the max-height (200px)
-      setShowToggle(outputRef.current.scrollHeight > 200);
-    }
-  }, [isCompleted, endEvent?.data?.result]);
 
   return (
     <div className="flex flex-col w-full items-start animate-fade-in my-3 pl-4 border-l border-border/40">
       <div 
-        className="flex flex-col w-full cursor-pointer group mb-2"
+        className="flex flex-col w-full cursor-pointer group mb-1"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         {/* Agent Identification */}
@@ -166,10 +156,19 @@ function DelegationCard({
               <span className="size-1 rounded-full bg-primary/40 animate-pulse [animation-delay:0.2s]" />
             </div>
           )}
-          <div className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground/40 group-hover:text-muted-foreground transition-colors mr-2">
-            {isExpanded ? "Hide Details" : "Show Details"}
+        </div>
+
+        {/* Task / Intent */}
+        <div className="text-[12px] text-foreground/70 font-medium italic leading-relaxed">
+          &quot;{task}&quot;
+        </div>
+
+        {/* Show Details Toggle */}
+        {!isExpanded && (
+          <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted-foreground/40 font-medium group-hover:text-muted-foreground transition-colors uppercase tracking-wider">
+            <span>Show Details</span>
             <svg 
-              className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-180" : ""}`} 
+              className="w-2.5 h-2.5" 
               fill="none" 
               viewBox="0 0 24 24" 
               stroke="currentColor"
@@ -177,67 +176,57 @@ function DelegationCard({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </div>
-        </div>
-
-        {/* Task / Intent */}
-        <div className="text-[12px] text-foreground/70 font-medium italic leading-relaxed">
-          &quot;{task}&quot;
-        </div>
+        )}
       </div>
       
-      {/* Sub-events */}
+      {/* Expanded Content (Sub-events + Result) */}
       {isExpanded && (
-        <div className="flex flex-col gap-0.5 w-full mb-2">
-          {subEvents.map((event, idx) => (
-            <EventItem key={event.id || idx} event={event} />
-          ))}
-          
-          {subEvents.length === 0 && !isCompleted && (
-             <div className="flex items-center gap-2 py-1 px-2 text-[10px] text-muted-foreground/50 italic animate-pulse">
-               <div className="size-1 rounded-full bg-muted-foreground/30 shrink-0" />
-               <span>Starting...</span>
-             </div>
-          )}
-        </div>
-      )}
+        <div className="flex flex-col w-full mt-2 animate-fade-in">
+          {/* Sub-events */}
+          <div className="flex flex-col gap-0.5 w-full mb-3">
+            {subEvents.map((event, idx) => (
+              <EventItem key={event.id || idx} event={event} />
+            ))}
+            
+            {subEvents.length === 0 && !isCompleted && (
+               <div className="flex items-center gap-2 py-1 px-2 text-[10px] text-muted-foreground/50 italic animate-pulse">
+                 <div className="size-1 rounded-full bg-muted-foreground/30 shrink-0" />
+                 <span>Starting...</span>
+               </div>
+            )}
+          </div>
 
-      {/* Result if completed */}
-      {isCompleted && endEvent.data.result && (
-        <div className="mt-2 pt-2 border-t border-border/10 w-full">
-           <div className="text-[10px] text-muted-foreground/40 uppercase tracking-widest mb-1 font-bold">Output</div>
-           <div className="relative text-[12.5px] text-foreground/90 leading-relaxed">
-             <div 
-               ref={outputRef}
-               className={`overflow-hidden transition-all duration-200 ${!isOutputExpanded ? 'max-h-[200px]' : ''}`}
-             >
-               {typeof endEvent.data.result === 'string' ? (
-                 <MelonyRenderer node={{ type: "markdown", props: { value: endEvent.data.result, size: "sm" } } as any} />
-               ) : (
-                 <pre className="whitespace-pre-wrap font-mono text-[10px] bg-background/30 p-2 rounded-lg border border-border/10">
-                   {JSON.stringify(endEvent.data.result, null, 2)}
-                 </pre>
-               )}
-             </div>
-             {showToggle && !isOutputExpanded && (
-               <div className="absolute bottom-0 left-0 w-full h-24 bg-linear-to-t from-background to-transparent pointer-events-none" />
-             )}
-           </div>
-           {showToggle && (
-             <button 
-               onClick={() => setIsOutputExpanded(!isOutputExpanded)}
-               className="mt-2 text-[10px] text-muted-foreground hover:text-foreground transition-colors font-medium flex items-center gap-1"
-             >
-               {isOutputExpanded ? "Show less" : "Show more"}
-               <svg 
-                 className={`w-3 h-3 transition-transform ${isOutputExpanded ? "rotate-180" : ""}`} 
-                 fill="none" 
-                 viewBox="0 0 24 24" 
-                 stroke="currentColor"
-               >
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-               </svg>
-             </button>
-           )}
+          {/* Result if completed */}
+          {isCompleted && endEvent.data.result && (
+            <div className="pt-3 border-t border-border/10 w-full mb-2">
+               <div className="text-[10px] text-muted-foreground/40 uppercase tracking-widest mb-1.5 font-bold">Output</div>
+               <div className="text-[12.5px] text-foreground/90 leading-relaxed">
+                 {typeof endEvent.data.result === 'string' ? (
+                   <MelonyRenderer node={{ type: "markdown", props: { value: endEvent.data.result, size: "sm" } } as any} />
+                 ) : (
+                   <pre className="whitespace-pre-wrap font-mono text-[10px] bg-background/30 p-2 rounded-lg border border-border/10">
+                     {JSON.stringify(endEvent.data.result, null, 2)}
+                   </pre>
+                 )}
+               </div>
+            </div>
+          )}
+
+          {/* Hide Details button */}
+          <button 
+            onClick={() => setIsExpanded(false)}
+            className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors font-medium flex items-center gap-1 uppercase tracking-wider"
+          >
+            Hide Details
+            <svg 
+              className="w-2.5 h-2.5 rotate-180" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
         </div>
       )}
     </div>
