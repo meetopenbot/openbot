@@ -56,10 +56,6 @@ export const ExtensionItem = ({
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2 mb-0.5">
         <h3 className="font-semibold text-[15px] tracking-tight truncate">{name}</h3>
-        <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider shrink-0 border ${type === "agent" ? "bg-purple-500/10 text-purple-500 border-purple-500/20" : "bg-blue-500/10 text-blue-500 border-blue-500/20"
-          }`}>
-          {type}
-        </span>
         {isCodeOnly && (
           <span className="px-1.5 py-0.5 rounded-full bg-orange-500/10 text-orange-500 text-[8px] font-bold uppercase tracking-wider shrink-0 border border-orange-500/20">Code</span>
         )}
