@@ -90,6 +90,7 @@ export interface AgentConfig {
   name: string;
   description: string;
   model?: string;
+  image?: string;
   plugins: (string | { name: string; config?: any })[];
   instructions: string;
   subscribe?: string[];
@@ -112,6 +113,7 @@ export async function readAgentConfig(agentDir: string): Promise<AgentConfig> {
     name: typeof config.name === "string" ? config.name : "",
     description: typeof config.description === "string" ? config.description : "",
     model: config.model,
+    image: config.image,
     plugins: config.plugins || [],
     instructions: parsed.content.trim() || "",
     subscribe: config.subscribe,
@@ -163,6 +165,7 @@ function composeAgentFromConfig(
 interface TSAgentDefinition {
   name?: string;
   description?: string;
+  image?: string;
   factory: (options: { model: LanguageModel; [key: string]: any }) => MelonyPlugin<ChatState, ChatEvent>;
   capabilities?: Record<string, string>;
   subscribe?: string[];
@@ -392,8 +395,8 @@ export async function discoverPlugins(
 
 export async function listPlugins(
   dir: string,
-): Promise<{ name: string; description: string; folder: string; type: "tool" | "agent"; hasAgentMd: boolean }[]> {
-  const plugins: { name: string; description: string; folder: string; type: "tool" | "agent"; hasAgentMd: boolean }[] = [];
+): Promise<{ name: string; description: string; folder: string; type: "tool" | "agent"; hasAgentMd: boolean; image?: string }[]> {
+  const plugins: { name: string; description: string; folder: string; type: "tool" | "agent"; hasAgentMd: boolean; image?: string }[] = [];
 
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -415,6 +418,7 @@ export async function listPlugins(
           folder: pluginDir,
           type: "agent",
           hasAgentMd: true,
+          image: config.image,
         });
       } else if (hasCode) {
         await ensurePluginReady(pluginDir);
@@ -444,6 +448,7 @@ export async function listPlugins(
               folder: pluginDir,
               type: "agent",
               hasAgentMd: false,
+              image: codeAgentDef.image,
             });
           } else if (toolEntry && typeof toolEntry.factory === "function") {
             plugins.push({

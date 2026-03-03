@@ -5,17 +5,14 @@ import { api, type AgentConfig, type MarketplaceItem } from "../../lib/api";
 import { AgentAvatar } from "../AgentAvatar";
 import { ModelSelector } from "../ModelSelector";
 import { useModels } from "../../hooks/use-models";
+import { ExtensionItem } from "../ExtensionItem";
 
 const ChevronLeft = ({ className }: { className?: string }) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6"/></svg>
-);
-
-const ChevronRight = ({ className }: { className?: string }) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m9 18 6-6-6-6"/></svg>
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6" /></svg>
 );
 
 const Plus = ({ className }: { className?: string }) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14" /><path d="M12 5v14" /></svg>
 );
 
 type PluginRow = {
@@ -67,14 +64,15 @@ function AgentEditForm({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Agent Config (YAML fields)
   const [name, setName] = useState(agentName);
   const [description, setDescription] = useState("");
   const [model, setModel] = useState("");
+  const [image, setImage] = useState("");
   const [subscribeText, setSubscribeText] = useState("");
   const [pluginRows, setPluginRows] = useState<PluginRow[]>([]);
-  
+
   // AGENT.md content
   const [mdContent, setMdContent] = useState("");
   const isCodeOnlyAgent = !isDefault && hasAgentMd === false;
@@ -89,10 +87,10 @@ function AgentEditForm({
 
     setLoading(true);
     setError(null);
-    
+
     const promises = [];
     const effectiveName = isDefault ? "default" : agentId;
-    
+
     if (isDefault) {
       promises.push(
         api.getConfig()
@@ -100,6 +98,7 @@ function AgentEditForm({
             setModel(config.model || "");
             setName(config.name || agentName);
             setDescription(config.description || "");
+            setImage(config.image || "");
           })
       );
     } else {
@@ -109,12 +108,13 @@ function AgentEditForm({
             setName(config.name || agentName);
             setDescription(config.description || "");
             setModel(config.model || "");
+            setImage(config.image || "");
             setSubscribeText((config.subscribe || []).join(", "));
             setPluginRows(configToPluginRows(config));
           })
       );
     }
-    
+
     promises.push(
       api.getAgentMd(effectiveName)
         .then((md) => setMdContent(md))
@@ -135,10 +135,11 @@ function AgentEditForm({
     const effectiveName = isDefault ? "default" : agentId;
     try {
       if (isDefault) {
-        await api.updateConfig({ 
+        await api.updateConfig({
           model: model.trim() || undefined,
           name: name.trim() || undefined,
-          description: description.trim() || undefined
+          description: description.trim() || undefined,
+          image: image.trim() || undefined,
         });
       } else {
         const plugins: Array<string | { name: string; config?: unknown }> = [];
@@ -186,13 +187,14 @@ function AgentEditForm({
           name: name.trim(),
           description: description.trim(),
           model: model.trim() || undefined,
+          image: image.trim() || undefined,
           plugins,
           subscribe,
         });
       }
 
       await api.updateAgentMd(effectiveName, mdContent);
-      
+
       await queryClient.invalidateQueries({ queryKey: ["agents"] });
       onUpdate?.();
     } catch (err) {
@@ -210,8 +212,8 @@ function AgentEditForm({
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         <div className="flex flex-col items-center gap-2">
-           <div className="w-6 h-6 border-2 border-t-transparent border-foreground/20 rounded-full animate-spin" />
-           <span className="text-sm">Loading agent details...</span>
+          <div className="w-6 h-6 border-2 border-t-transparent border-foreground/20 rounded-full animate-spin" />
+          <span className="text-sm">Loading agent details...</span>
         </div>
       </div>
     );
@@ -247,7 +249,7 @@ function AgentEditForm({
               </p>
               <div className="mt-2 p-3 rounded-xl bg-muted/50 border border-border/50 font-mono text-[11px] text-foreground/80 break-all text-left flex items-center justify-between group">
                 <code>{folder || "(folder unavailable)"}</code>
-                <button 
+                <button
                   onClick={() => folder && api.openFolder(folder)}
                   disabled={!folder}
                   className="ml-2 p-1.5 rounded-lg hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors"
@@ -289,7 +291,7 @@ function AgentEditForm({
           {isDefault && <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-bold uppercase tracking-wider">Default</span>}
         </div>
         <div className="flex items-center gap-3">
-           <button
+          <button
             onClick={handleSave}
             disabled={saving}
             className="rounded-xl bg-foreground px-5 py-2 text-[13px] font-medium text-background transition-all duration-150 hover:opacity-80 disabled:opacity-40"
@@ -330,7 +332,7 @@ function AgentEditForm({
             <h3 className="text-sm font-semibold tracking-tight">Configuration</h3>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Agent Details & Plugins</p>
           </div>
-          
+
           <div className="flex-1 overflow-auto p-5 flex flex-col gap-6">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Name</label>
@@ -359,6 +361,16 @@ function AgentEditForm({
                 onChange={(e) => setDescription(e.target.value)}
                 className="rounded-xl border border-border/60 bg-background/50 px-4 py-2.5 text-sm transition-all focus:border-foreground/30 focus:outline-none"
                 placeholder="short summary"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Image URL (optional)</label>
+              <input
+                value={image}
+                onChange={(e) => setImage(e.target.value)}
+                className="rounded-xl border border-border/60 bg-background/50 px-4 py-2.5 text-sm transition-all focus:border-foreground/30 focus:outline-none"
+                placeholder="https://..."
               />
             </div>
 
@@ -456,27 +468,17 @@ function AgentEditForm({
 export function AgentsPage() {
   const { navigate, path } = useSession();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"installed" | "marketplace-agents" | "marketplace-plugins">("installed");
-  const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [installingAgentId, setInstallingAgentId] = useState<string | null>(null);
-  const [installingPluginId, setInstallingPluginId] = useState<string | null>(null);
   const [installError, setInstallError] = useState<string | null>(null);
 
-  const { data: agents = [], isLoading } = useQuery({
+  const { data: agents = [], isLoading: loadingAgents } = useQuery({
     queryKey: ["agents"],
     queryFn: api.getAgents,
   });
-  const { data: plugins = [], isLoading: loadingPlugins } = useQuery({
-    queryKey: ["plugins"],
-    queryFn: api.getInstalledPlugins,
-  });
+
   const { data: marketplaceAgents = [], isLoading: loadingMarketplaceAgents } = useQuery({
     queryKey: ["marketplace", "agents"],
     queryFn: api.getMarketplaceAgents,
-  });
-  const { data: marketplacePlugins = [], isLoading: loadingMarketplacePlugins } = useQuery({
-    queryKey: ["marketplace", "plugins"],
-    queryFn: api.getMarketplacePlugins,
   });
 
   const selectedAgentId = useMemo(() => {
@@ -496,13 +498,7 @@ export function AgentsPage() {
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
 
   const handleCreateCustomAgent = () => {
-    setShowCreateMenu(false);
     navigate("/?tab=chat&msg=" + encodeURIComponent("/agent-creator I want to create a new agent. Ask me focused questions, then propose the final AGENT.md for approval before writing it."));
-  };
-
-  const handleGoToOfficialAgents = () => {
-    setShowCreateMenu(false);
-    setActiveTab("marketplace-agents");
   };
 
   const installedAgentKeys = useMemo(() => {
@@ -511,17 +507,8 @@ export function AgentsPage() {
     );
   }, [agents]);
 
-  const installedPluginKeys = useMemo(() => {
-    return new Set(
-      plugins.map((plugin) => [plugin.id, plugin.name].map((v) => (v || "").toLowerCase())).flat()
-    );
-  }, [plugins]);
-
   const isAgentInstalled = (item: MarketplaceItem) =>
     installedAgentKeys.has(item.id.toLowerCase()) || installedAgentKeys.has(item.name.toLowerCase());
-
-  const isPluginInstalled = (item: MarketplaceItem) =>
-    installedPluginKeys.has(item.id.toLowerCase()) || installedPluginKeys.has(item.name.toLowerCase());
 
   const handleInstallAgent = async (item: MarketplaceItem) => {
     setInstallError(null);
@@ -538,41 +525,43 @@ export function AgentsPage() {
     }
   };
 
-  const handleInstallPlugin = async (item: MarketplaceItem) => {
-    setInstallError(null);
-    setInstallingPluginId(item.id);
-    try {
-      await api.installMarketplacePlugin(item.id);
-      await queryClient.invalidateQueries({ queryKey: ["plugins"] });
-      await queryClient.invalidateQueries({ queryKey: ["marketplace", "plugins"] });
-    } catch (err) {
-      console.error(err);
-      setInstallError(`Failed to install plugin "${item.name}"`);
-    } finally {
-      setInstallingPluginId(null);
-    }
-  };
+  const allMarketplace = useMemo(() => {
+    return marketplaceAgents.map(a => ({ ...a, type: "agent" as const }));
+  }, [marketplaceAgents]);
+
+  const recommendedExtensions = useMemo(() => {
+    return allMarketplace.filter(item =>
+      item.tags?.includes("recommended") && !isAgentInstalled(item)
+    );
+  }, [allMarketplace, installedAgentKeys]);
+
+  const otherMarketplaceExtensions = useMemo(() => {
+    return allMarketplace.filter(item =>
+      !item.tags?.includes("recommended") && !isAgentInstalled(item)
+    );
+  }, [allMarketplace, installedAgentKeys]);
 
   if (selectedAgentId && selectedAgent) {
     return (
       <div className="flex-1 flex flex-col h-full bg-background relative overflow-hidden">
-        <AgentEditForm 
+        <AgentEditForm
           key={selectedAgent.id}
           agentId={selectedAgent.id}
           agentName={selectedAgent.name}
           folder={selectedAgent?.folder}
-          isDefault={selectedAgent?.isDefault} 
+          isDefault={selectedAgent?.isDefault}
           hasAgentMd={selectedAgent?.hasAgentMd}
           onBack={() => setSelectedAgentId(null)}
-          onUpdate={() => {}}
+          onUpdate={() => { }}
         />
       </div>
     );
   }
 
+
   return (
     <div className="flex-1 flex flex-col h-full bg-background overflow-auto">
-      <div className="max-w-5xl mx-auto w-full flex flex-col gap-8 p-6 md:p-8 lg:p-10">
+      <div className="max-w-5xl mx-auto w-full flex flex-col gap-12 p-6 md:p-8 lg:p-10">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
@@ -581,55 +570,16 @@ export function AgentsPage() {
               <span className="px-1.5 py-0.5 rounded-[4px] bg-white/10 text-[9px] font-bold uppercase tracking-[0.05em] text-white/60 mt-0.5">Beta</span>
             </div>
             <p className="text-muted-foreground/80 text-base font-medium leading-tight">
-              Install and manage your agents and plugins
+              Manage and discover agents for OpenBot
             </p>
           </div>
 
-          <div className="relative">
-            <button
-              onClick={() => setShowCreateMenu((value) => !value)}
-              className="rounded-xl bg-foreground px-5 py-2.5 text-[13.5px] font-semibold text-background transition-all duration-150 hover:opacity-90 flex items-center gap-2 shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              Create Agent
-            </button>
-            {showCreateMenu && (
-              <div className="absolute right-0 mt-2 w-60 rounded-xl border border-border/60 bg-background p-1 shadow-2xl z-20">
-                <button
-                  onClick={handleGoToOfficialAgents}
-                  className="w-full text-left rounded-lg px-3 py-2 text-sm hover:bg-muted/40 transition-colors"
-                >
-                  Install Official Agent
-                </button>
-                <button
-                  onClick={handleCreateCustomAgent}
-                  className="w-full text-left rounded-lg px-3 py-2 text-sm hover:bg-muted/40 transition-colors"
-                >
-                  Create Custom Agent
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 p-1 w-fit">
           <button
-            onClick={() => setActiveTab("installed")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${activeTab === "installed" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={handleCreateCustomAgent}
+            className="rounded-xl bg-foreground px-5 py-2.5 text-[13.5px] font-semibold text-background transition-all duration-150 hover:opacity-90 flex items-center gap-2 shadow-sm"
           >
-            Installed
-          </button>
-          <button
-            onClick={() => setActiveTab("marketplace-agents")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${activeTab === "marketplace-agents" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            Marketplace Agents
-          </button>
-          <button
-            onClick={() => setActiveTab("marketplace-plugins")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${activeTab === "marketplace-plugins" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            Marketplace Plugins
+            <Plus className="w-4 h-4" />
+            Create Agent
           </button>
         </div>
 
@@ -639,165 +589,104 @@ export function AgentsPage() {
           </p>
         )}
 
-        {activeTab === "installed" && (
-          <div className="flex flex-col gap-6">
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Agents</h2>
-              {isLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {[1, 2, 4, 5, 6].map((i) => (
-                    <div key={i} className="h-20 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-1 -mx-3">
-                  {agents.map((agent) => (
-                    <button
-                      key={agent.id}
-                      onClick={() => setSelectedAgentId(agent.id)}
-                      className="flex items-center gap-3.5 p-3 rounded-[18px] hover:bg-white/5 transition-all group text-left border border-transparent hover:border-white/5"
-                    >
-                      <div className="relative shrink-0">
-                        <AgentAvatar
-                          name={agent.isDefault ? "default" : agent.id}
-                          className="w-[48px] h-[48px] rounded-[12px] shadow-sm transition-transform group-hover:scale-[1.05]"
-                        />
-                        {agent.isDefault && (
-                          <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-blue-500 border-2 border-background flex items-center justify-center">
-                            <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <h3 className="font-semibold text-[15px] tracking-tight truncate">{agent.name}</h3>
-                          {!agent.isDefault && agent.hasAgentMd === false && (
-                            <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[8px] font-bold uppercase tracking-wider shrink-0 border border-purple-500/20">Code</span>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground/60 line-clamp-1 leading-snug font-medium">
-                          {agent.description || "No description provided"}
-                        </p>
-                      </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/20 group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
 
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Plugins</h2>
-              {loadingPlugins ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-20 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
-                  ))}
-                </div>
-              ) : plugins.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border/60 py-6 text-center text-sm text-muted-foreground">
-                  No plugins installed yet.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {plugins.map((plugin) => (
-                    <div key={plugin.id} className="rounded-2xl border border-border/50 bg-background/40 p-4">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="font-semibold text-sm">{plugin.name}</h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/40 border border-border/40 uppercase tracking-wider">
-                          Plugin
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground/70 mt-1">{plugin.description || "No description provided"}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === "marketplace-agents" && (
-          loadingMarketplaceAgents ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
-              ))}
-            </div>
-          ) : marketplaceAgents.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
-              No official agents found in the marketplace registry.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {marketplaceAgents.map((item) => {
-                const installed = isAgentInstalled(item);
-                const installing = installingAgentId === item.id;
-                return (
-                  <div key={item.id} className="rounded-2xl border border-border/50 bg-background/40 p-4 flex flex-col gap-3">
-                    <div>
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="font-semibold text-sm">{item.name}</h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/40 border border-border/40 uppercase tracking-wider">
-                          Agent
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground/70 mt-1">{item.description || "No description provided"}</p>
-                    </div>
-                    <button
-                      onClick={() => void handleInstallAgent(item)}
-                      disabled={installed || installing}
-                      className="rounded-lg border border-border/60 px-3 py-2 text-xs font-semibold hover:bg-muted/40 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {installed ? "Installed" : installing ? "Installing..." : "Install Agent"}
-                    </button>
+        {/* Sections */}
+        <div className="flex flex-col gap-12">
+          {/* Installed Section */}
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 mb-6 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500/50" />
+              Installed
+            </h2>
+            {loadingAgents ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-20 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 -mx-3">
+                {agents.map((agent) => (
+                  <ExtensionItem
+                    key={agent.id}
+                    id={agent.id}
+                    name={agent.name}
+                    description={agent.description}
+                    type="agent"
+                    isInstalled
+                    isDefault={agent.isDefault}
+                    isCodeOnly={!agent.isDefault && agent.hasAgentMd === false}
+                    image={agent.image}
+                    onClick={() => setSelectedAgentId(agent.id)}
+                  />
+                ))}
+                {agents.length === 0 && (
+                  <div className="col-span-full py-8 text-center text-sm text-muted-foreground bg-muted/5 rounded-2xl border border-dashed border-border/50 mx-3">
+                    No agents installed.
                   </div>
-                );
-              })}
-            </div>
-          )
-        )}
+                )}
+              </div>
+            )}
+          </section>
 
-        {activeTab === "marketplace-plugins" && (
-          loadingMarketplacePlugins ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
-              ))}
-            </div>
-          ) : marketplacePlugins.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
-              No official plugins found in the marketplace registry.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {marketplacePlugins.map((item) => {
-                const installed = isPluginInstalled(item);
-                const installing = installingPluginId === item.id;
-                return (
-                  <div key={item.id} className="rounded-2xl border border-border/50 bg-background/40 p-4 flex flex-col gap-3">
-                    <div>
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="font-semibold text-sm">{item.name}</h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/40 border border-border/40 uppercase tracking-wider">
-                          Plugin
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground/70 mt-1">{item.description || "No description provided"}</p>
-                    </div>
-                    <button
-                      onClick={() => void handleInstallPlugin(item)}
-                      disabled={installed || installing}
-                      className="rounded-lg border border-border/60 px-3 py-2 text-xs font-semibold hover:bg-muted/40 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {installed ? "Installed" : installing ? "Installing..." : "Install Plugin"}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )
-        )}
+          {/* Recommended Section */}
+          {recommendedExtensions.length > 0 && (
+            <section>
+              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 mb-6 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-500/50" />
+                Recommended
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 -mx-3">
+                {recommendedExtensions.map((item) => (
+                  <ExtensionItem
+                    key={item.id}
+                    id={item.id}
+                    name={item.name}
+                    description={item.description}
+                    type={item.type}
+                    image={item.image}
+                    onInstall={() => handleInstallAgent(item)}
+                    isInstalling={installingAgentId === item.id}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Marketplace Section */}
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 mb-6 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50" />
+              Marketplace
+            </h2>
+            {loadingMarketplaceAgents ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-20 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
+                ))}
+              </div>
+            ) : otherMarketplaceExtensions.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground bg-muted/5 rounded-2xl border border-dashed border-border/50 mx-3">
+                No marketplace items found.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 -mx-3">
+                {otherMarketplaceExtensions.map((item) => (
+                  <ExtensionItem
+                    key={item.id}
+                    id={item.id}
+                    name={item.name}
+                    description={item.description}
+                    type={item.type}
+                    image={item.image}
+                    onInstall={() => handleInstallAgent(item)}
+                    isInstalling={installingAgentId === item.id}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );

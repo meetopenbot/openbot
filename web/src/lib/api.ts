@@ -29,6 +29,7 @@ export interface AppConfig {
   name: string;
   description: string;
   model: string;
+  image?: string;
   defaultModelId: string;
   defaultModels: Record<ModelProvider, string>;
   hasOpenAIKey: boolean;
@@ -57,6 +58,7 @@ export interface AgentConfig {
   name: string;
   description: string;
   model?: string;
+  image?: string;
   plugins: Array<string | AgentPluginConfig>;
   subscribe?: string[];
 }
@@ -82,6 +84,7 @@ export interface InstalledPluginInfo {
   folder: string;
   type: "tool" | "agent";
   hasAgentMd: boolean;
+  image?: string;
 }
 
 export interface MarketplaceItem {
@@ -93,6 +96,7 @@ export interface MarketplaceItem {
     value: string;
   };
   tags?: string[];
+  image?: string;
 }
 
 export const api = {
@@ -102,6 +106,7 @@ export const api = {
     name?: string;
     description?: string;
     model?: string;
+    image?: string;
     openai_api_key?: string;
     anthropic_api_key?: string;
   }) => request<{ success: boolean }>("/api/config", { method: "POST", body: JSON.stringify(data) }),
@@ -111,7 +116,7 @@ export const api = {
   getSessionEvents: (id: string) => request<any[]>(`/api/sessions/${encodeURIComponent(id)}/events`),
 
   getAgents: () =>
-    request<{ id: string; name: string; description: string; folder: string; isDefault?: boolean; hasAgentMd?: boolean }[]>("/api/agents"),
+    request<{ id: string; name: string; description: string; folder: string; isDefault?: boolean; hasAgentMd?: boolean; image?: string }[]>("/api/agents"),
 
   getInstalledPlugins: () =>
     request<InstalledPluginInfo[]>("/api/plugins"),

@@ -13,6 +13,7 @@ export interface MarketplaceItem {
   description: string;
   source: MarketplaceSource;
   tags?: string[];
+  image?: string;
 }
 
 export interface MarketplaceRegistry {
@@ -47,6 +48,7 @@ function normalizeItem(item: unknown): MarketplaceItem {
     description?: unknown;
     source?: unknown;
     tags?: unknown;
+    image?: unknown;
   };
   if (typeof value.id !== "string" || !value.id.trim()) throw new Error("invalid item id");
   if (typeof value.name !== "string" || !value.name.trim()) throw new Error("invalid item name");
@@ -58,6 +60,7 @@ function normalizeItem(item: unknown): MarketplaceItem {
     description: value.description,
     source: normalizeSource(value.source),
     tags,
+    image: typeof value.image === "string" ? value.image.trim() : undefined,
   };
 }
 

@@ -6,6 +6,7 @@ export interface MelonyConfig {
   name?: string;
   description?: string;
   model?: string;
+  image?: string;
   openaiApiKey?: string;
   anthropicApiKey?: string;
   baseDir?: string;

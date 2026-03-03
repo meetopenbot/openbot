@@ -1,6 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTheme } from "@melony/ui-shadcn";
 import { useConfig, useUpdateConfig } from "../../hooks/use-config";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, type MarketplaceItem } from "../../lib/api";
+import { ExtensionItem } from "../ExtensionItem";
 
 type Theme = "light" | "dark" | "system";
 const MASKED_KEY_VALUE = "**********";
@@ -15,28 +18,67 @@ export function SettingsPage() {
   const { data: config } = useConfig();
   const updateConfig = useUpdateConfig();
   const { theme, setTheme } = useTheme();
+  const queryClient = useQueryClient();
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openaiEditing, setOpenaiEditing] = useState(false);
   const [anthropicEditing, setAnthropicEditing] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    if (config) {
-      setName(config.name || "");
-      setDescription(config.description || "");
+  const [installingPluginId, setInstallingPluginId] = useState<string | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
+
+  const { data: plugins = [], isLoading: loadingPlugins } = useQuery({
+    queryKey: ["plugins"],
+    queryFn: api.getInstalledPlugins,
+  });
+
+  const { data: marketplacePlugins = [], isLoading: loadingMarketplacePlugins } = useQuery({
+    queryKey: ["marketplace", "plugins"],
+    queryFn: api.getMarketplacePlugins,
+  });
+
+  const installedPluginKeys = useMemo(() => {
+    return new Set(
+      plugins.map((plugin) => [plugin.id, plugin.name].map((v) => (v || "").toLowerCase())).flat()
+    );
+  }, [plugins]);
+
+  const isPluginInstalled = (item: MarketplaceItem) =>
+    installedPluginKeys.has(item.id.toLowerCase()) || installedPluginKeys.has(item.name.toLowerCase());
+
+  const handleInstallPlugin = async (item: MarketplaceItem) => {
+    setInstallError(null);
+    setInstallingPluginId(item.id);
+    try {
+      await api.installMarketplacePlugin(item.id);
+      await queryClient.invalidateQueries({ queryKey: ["plugins"] });
+      await queryClient.invalidateQueries({ queryKey: ["marketplace", "plugins"] });
+    } catch (err) {
+      console.error(err);
+      setInstallError(`Failed to install plugin "${item.name}"`);
+    } finally {
+      setInstallingPluginId(null);
     }
-  }, [config]);
+  };
+
+  const recommendedPlugins = useMemo(() => {
+    return marketplacePlugins.filter(item =>
+      item.tags?.includes("recommended") && !isPluginInstalled(item)
+    );
+  }, [marketplacePlugins, installedPluginKeys]);
+
+  const otherMarketplacePlugins = useMemo(() => {
+    return marketplacePlugins.filter(item =>
+      !item.tags?.includes("recommended") && !isPluginInstalled(item)
+    );
+  }, [marketplacePlugins, installedPluginKeys]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateConfig.mutate(
       {
-        name: name || undefined,
-        description: description || undefined,
         openai_api_key: openaiKey || undefined,
         anthropic_api_key: anthropicKey || undefined,
       },
@@ -91,37 +133,6 @@ export function SettingsPage() {
 
           {/* API Keys */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-8">
-            <section className="flex flex-col gap-4">
-              <div className="flex flex-col gap-0.5">
-                <h3 className="text-[13px] font-medium">Default Agent</h3>
-                <p className="text-xs text-muted-foreground/60">
-                  Customize the name and description of the main orchestrator
-                </p>
-              </div>
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground/70">Name</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="OpenBot"
-                    className="w-full rounded-xl border border-border/60 bg-transparent px-4 py-2.5 text-[13px] placeholder:text-muted-foreground/40 transition-colors focus:border-foreground/20 focus:outline-none"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground/70">Description</label>
-                  <input
-                    type="text"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="The main orchestrator and system settings"
-                    className="w-full rounded-xl border border-border/60 bg-transparent px-4 py-2.5 text-[13px] placeholder:text-muted-foreground/40 transition-colors focus:border-foreground/20 focus:outline-none"
-                  />
-                </div>
-              </div>
-            </section>
-
             <section className="flex flex-col gap-4">
               <div className="flex flex-col gap-0.5">
                 <h3 className="text-[13px] font-medium">API Keys</h3>
@@ -181,6 +192,104 @@ export function SettingsPage() {
               </button>
             </div>
           </form>
+
+          <section className="flex flex-col gap-6 border-t border-border/40 pt-10">
+            <div className="flex flex-col gap-0.5">
+              <h3 className="text-[13px] font-medium">Plugins</h3>
+              <p className="text-xs text-muted-foreground/60">
+                Install and manage system extensions
+              </p>
+            </div>
+
+            {installError && (
+              <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+                {installError}
+              </p>
+            )}
+
+            <div className="flex flex-col gap-8">
+              {/* Installed Plugins */}
+              <div>
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Installed</h4>
+                {loadingPlugins ? (
+                  <div className="flex flex-col gap-2">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="h-16 rounded-xl bg-muted/10 border border-border/20 animate-pulse" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1 -mx-3">
+                    {plugins.map((plugin) => (
+                      <ExtensionItem
+                        key={plugin.id}
+                        id={plugin.id}
+                        name={plugin.name}
+                        description={plugin.description}
+                        type="plugin"
+                        isInstalled
+                        image={plugin.image}
+                      />
+                    ))}
+                    {plugins.length === 0 && (
+                      <div className="py-6 text-center text-xs text-muted-foreground bg-muted/5 rounded-xl border border-dashed border-border/50 mx-3">
+                        No plugins installed.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Recommended Plugins */}
+              {recommendedPlugins.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Recommended</h4>
+                  <div className="flex flex-col gap-1 -mx-3">
+                    {recommendedPlugins.map((item) => (
+                      <ExtensionItem
+                        key={item.id}
+                        id={item.id}
+                        name={item.name}
+                        description={item.description}
+                        type="plugin"
+                        image={item.image}
+                        onInstall={() => handleInstallPlugin(item)}
+                        isInstalling={installingPluginId === item.id}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Marketplace Plugins */}
+              {otherMarketplacePlugins.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Marketplace</h4>
+                  {loadingMarketplacePlugins ? (
+                    <div className="flex flex-col gap-2">
+                      {[1, 2].map((i) => (
+                        <div key={i} className="h-16 rounded-xl bg-muted/10 border border-border/20 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1 -mx-3">
+                      {otherMarketplacePlugins.map((item) => (
+                        <ExtensionItem
+                          key={item.id}
+                          id={item.id}
+                          name={item.name}
+                          description={item.description}
+                          type="plugin"
+                          image={item.image}
+                          onInstall={() => handleInstallPlugin(item)}
+                          isInstalling={installingPluginId === item.id}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
 
         </div>
     </div>

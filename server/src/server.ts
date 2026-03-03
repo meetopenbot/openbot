@@ -477,12 +477,13 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.post("/api/config", async (req, res) => {
-    const { openai_api_key, anthropic_api_key, model, name, description } = req.body;
+    const { openai_api_key, anthropic_api_key, model, name, description, image } = req.body;
     const updates: Record<string, string> = {};
 
     if (name) updates.name = name.trim();
     if (description) updates.description = description.trim();
     if (model) updates.model = model.trim();
+    if (image !== undefined) updates.image = image.trim();
     if (openai_api_key && openai_api_key !== "••••••••••••••••")
       updates.openaiApiKey = openai_api_key.trim();
     if (anthropic_api_key && anthropic_api_key !== "••••••••••••••••")
@@ -522,6 +523,7 @@ export async function startServer(options: ServerOptions = {}) {
         folder: resolvedBaseDir,
         isDefault: true,
         hasAgentMd: true,
+        image: cfg.image,
       },
     ];
 
