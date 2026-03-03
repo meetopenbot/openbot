@@ -129,11 +129,13 @@ program
 
     // 2. Try as Plugin
     const baseDir = resolvePath(DEFAULT_BASE_DIR);
+    const agentPath = path.join(baseDir, "agents", name);
     const pluginPath = path.join(baseDir, "plugins", name);
-    const existsLocally = await fs.access(pluginPath).then(() => true).catch(() => false);
+    const agentExists = await fs.access(agentPath).then(() => true).catch(() => false);
+    const pluginExists = await fs.access(pluginPath).then(() => true).catch(() => false);
 
-    if (existsLocally) {
-      console.log(`✅ Plugin "${name}" is already installed locally.`);
+    if (agentExists || pluginExists) {
+      console.log(`✅ Agent or Plugin "${name}" is already installed locally.`);
       return;
     }
 
@@ -199,6 +201,54 @@ plugin
     console.log("------------------------------------------");
     for (const p of plugins) {
       console.log(`${p.name.padEnd(20)} (${p.version}) - ${p.description}`);
+    }
+    console.log("------------------------------------------\n");
+  });
+
+const agent = program.command("agent").description("Manage OpenBot agents");
+
+agent
+  .command("install <source>")
+  .description("Install a custom agent from GitHub (user/repo) or a local path")
+  .action(async (source: string) => {
+    await installAgent(source);
+  });
+
+agent
+  .command("list")
+  .description("List all installed custom agents")
+  .action(async () => {
+    const baseDir = resolvePath(DEFAULT_BASE_DIR);
+    const agentsDir = path.join(baseDir, "agents");
+
+    try {
+      await fs.access(agentsDir);
+    } catch {
+      console.log("No custom agents found.");
+      return;
+    }
+
+    const entries = await fs.readdir(agentsDir, { withFileTypes: true });
+    const agents = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
+
+      const agentDir = path.join(agentsDir, entry.name);
+      const { name, version, description } = await getPluginMetadata(agentDir);
+      agents.push({ name, version, description });
+    }
+
+    if (agents.length === 0) {
+      console.log("No custom agents found.");
+      return;
+    }
+
+    console.log("\n🤖 Installed Custom Agents:");
+    console.log("------------------------------------------");
+    for (const a of agents) {
+      console.log(`${a.name.padEnd(20)} (${a.version}) - ${a.description}`);
     }
     console.log("------------------------------------------\n");
   });

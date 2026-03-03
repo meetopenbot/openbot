@@ -14,6 +14,8 @@ export interface MelonyConfig {
 }
 
 export const DEFAULT_BASE_DIR = "~/.openbot";
+export const DEFAULT_PLUGINS_DIR = "plugins";
+export const DEFAULT_AGENTS_DIR = "agents";
 
 export function loadConfig(): MelonyConfig {
   const configPath = path.join(os.homedir(), ".openbot", "config.json");

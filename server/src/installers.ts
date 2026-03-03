@@ -140,8 +140,8 @@ export async function installAgentFromSource(source: AgentInstallSource, options
   const quiet = !!options.quiet;
   const tempDir = path.join(tmpdir(), `openbot-agent-install-${Date.now()}`);
   const baseDir = getBaseDir();
-  const pluginRoot = path.join(baseDir, "plugins");
-  await fs.mkdir(pluginRoot, { recursive: true });
+  const agentRoot = path.join(baseDir, "agents");
+  await fs.mkdir(agentRoot, { recursive: true });
 
   try {
     log(`🤖 Installing agent from: ${githubRepoToCloneUrl(source.value)}`, quiet);
@@ -149,7 +149,7 @@ export async function installAgentFromSource(source: AgentInstallSource, options
 
     const config = await readAgentConfig(tempDir);
     const name = config.name || path.basename(source.value).replace(/^agent-/, "");
-    const targetDir = path.join(pluginRoot, name);
+    const targetDir = path.join(agentRoot, name);
     if (await directoryExists(targetDir)) {
       log(`⚠️  Agent "${name}" already exists. Overwriting...`, quiet);
       await fs.rm(targetDir, { recursive: true, force: true });

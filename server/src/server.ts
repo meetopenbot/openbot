@@ -80,6 +80,7 @@ export async function startServer(options: ServerOptions = {}) {
     [
       path.join(openBotDir, "config.json"),
       path.join(openBotDir, "AGENT.md"),
+      path.join(openBotDir, "agents", "**", "*"),
       path.join(openBotDir, "plugins", "**", "*"),
     ],
     {
@@ -182,14 +183,14 @@ export async function startServer(options: ServerOptions = {}) {
     agentIdOrName: string,
     resolvedBaseDir: string,
   ): Promise<string | null> => {
-    const pluginsDir = path.join(resolvedBaseDir, "plugins");
-    const directFolder = path.join(pluginsDir, agentIdOrName);
+    const agentsDir = path.join(resolvedBaseDir, "agents");
+    const directFolder = path.join(agentsDir, agentIdOrName);
     if (await fileExists(path.join(directFolder, "AGENT.md"))) {
       return directFolder;
     }
 
     try {
-      const allPlugins = await listPlugins(pluginsDir);
+      const allPlugins = await listPlugins(agentsDir);
       const match = allPlugins.find((plugin) =>
         plugin.type === "agent"
         && (path.basename(plugin.folder) === agentIdOrName || plugin.name === agentIdOrName)
@@ -510,7 +511,7 @@ export async function startServer(options: ServerOptions = {}) {
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
-    const pluginsDir = path.join(resolvedBaseDir, "plugins");
+    const agentsDir = path.join(resolvedBaseDir, "agents");
 
     const defaultName = cfg.name || "OpenBot";
     const defaultDescription = cfg.description || "The main orchestrator and system settings";
@@ -528,7 +529,7 @@ export async function startServer(options: ServerOptions = {}) {
     ];
 
     try {
-      const allPlugins = await listPlugins(pluginsDir);
+      const allPlugins = await listPlugins(agentsDir);
       const agentPlugins = allPlugins.filter(p => p.type === "agent");
       agents.push(
         ...agentPlugins.map((plugin) => {
@@ -893,7 +894,7 @@ export async function startServer(options: ServerOptions = {}) {
     const searchDirs = [
       (name === defaultName || name === "default")
         ? path.join(resolvedBaseDir, "assets")
-        : path.join(resolvedBaseDir, "plugins", name, "assets"),
+        : path.join(resolvedBaseDir, "agents", name, "assets"),
       path.join(process.cwd(), "server", "src", "agents", name, "assets"),
       path.join(process.cwd(), "server", "src", "assets", "agents", name),
       path.join(process.cwd(), "server", "src", "agents", "assets"),

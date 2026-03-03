@@ -88,9 +88,12 @@ export async function setupPluginRegistry(
     isBuiltIn: true,
   });
 
-  // ── Community plugins from ~/.openbot/plugins/ ───────────────────
+  // ── Custom agents and plugins ────────────────────────────────────
 
+  const agentsDir = path.join(resolvedBaseDir, "agents");
   const pluginsDir = path.join(resolvedBaseDir, "plugins");
+
+  await discoverPlugins(agentsDir, registry, model, options);
   await discoverPlugins(pluginsDir, registry, model, options);
 
   return registry;
