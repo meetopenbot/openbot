@@ -2,16 +2,16 @@ import { z } from "zod";
 import { memoryPlugin, memoryToolDefinitions, createMemoryPromptBuilder } from "../plugins/memory/index.js";
 import { topicAgent } from "../agents/topic-agent.js";
 import { llmPlugin } from "../plugins/llm/index.js";
-import { AgentRegistry } from "../registry/index.js";
+import { PluginRegistry } from "../registry/index.js";
 
 export function createManagerPlugin(
   model: any,
   resolvedModelId: string,
   resolvedBaseDir: string,
-  agentRegistry: AgentRegistry
+  registry: PluginRegistry
 ) {
-  const agentNames = agentRegistry.getNames();
-  const allAgents = agentRegistry.getAll();
+  const agentNames = registry.getAgentNames();
+  const allAgents = registry.getAgents();
   const buildMemoryPrompt = createMemoryPromptBuilder(resolvedBaseDir);
 
   const agentDescriptions = allAgents

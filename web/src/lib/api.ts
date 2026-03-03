@@ -91,7 +91,7 @@ export const api = {
   getSessionEvents: (id: string) => request<any[]>(`/api/sessions/${encodeURIComponent(id)}/events`),
 
   getAgents: () =>
-    request<{ name: string; description: string; folder: string; isDefault?: boolean; isTs?: boolean }[]>("/api/agents"),
+    request<{ id: string; name: string; description: string; folder: string; isDefault?: boolean; hasAgentMd?: boolean }[]>("/api/agents"),
 
   getPrompts: () =>
     request<{ label: string; icon: string }[]>("/api/prompts"),
@@ -134,23 +134,23 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  getAgentMd: async (name: string) => {
-    const res = await fetch(`${BASE_URL}/api/agents/${encodeURIComponent(name)}/md`);
+  getAgentMd: async (agentId: string) => {
+    const res = await fetch(`${BASE_URL}/api/agents/${encodeURIComponent(agentId)}/md`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.text();
   },
 
-  updateAgentMd: (name: string, md: string) =>
-    request<{ success: boolean }>(`/api/agents/${encodeURIComponent(name)}/md`, {
+  updateAgentMd: (agentId: string, md: string) =>
+    request<{ success: boolean }>(`/api/agents/${encodeURIComponent(agentId)}/md`, {
       method: "PUT",
       body: JSON.stringify({ md }),
     }),
 
-  getAgentConfig: (name: string) =>
-    request<AgentConfig>(`/api/agents/${encodeURIComponent(name)}/config`),
+  getAgentConfig: (agentId: string) =>
+    request<AgentConfig>(`/api/agents/${encodeURIComponent(agentId)}/config`),
 
-  updateAgentConfig: (name: string, config: AgentConfig) =>
-    request<{ success: boolean }>(`/api/agents/${encodeURIComponent(name)}/config`, {
+  updateAgentConfig: (agentId: string, config: AgentConfig) =>
+    request<{ success: boolean }>(`/api/agents/${encodeURIComponent(agentId)}/config`, {
       method: "PUT",
       body: JSON.stringify(config),
     }),

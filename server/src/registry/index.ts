@@ -1,9 +1,17 @@
 export { PluginRegistry } from "./plugin-registry.js";
-export type { PluginRegistryEntry } from "./plugin-registry.js";
+export type {
+  PluginRegistryEntry,
+  AnyPluginRegistryEntry,
+  ToolPluginRegistryEntry,
+  AgentPluginRegistryEntry,
+} from "./plugin-registry.js";
 
-export { AgentRegistry } from "./agent-registry.js";
-export type { AgentRegistryEntry } from "./agent-registry.js";
+export {
+  discoverPlugins,
+  listPlugins,
+  readAgentConfig,
+  getPluginMetadata,
+  ensurePluginReady,
+} from "./plugin-loader.js";
 
-export { discoverYamlAgents, listYamlAgents } from "./yaml-agent-loader.js";
-export { discoverTsAgents } from "./ts-agent-loader.js";
-export { loadPluginsFromDir } from "./plugin-loader.js";
+export type { AgentConfig } from "./plugin-loader.js";

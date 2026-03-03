@@ -6,7 +6,7 @@ import { generateId } from "melony";
 import { createOpenBot } from "./open-bot.js";
 import { loadConfig, saveConfig, isConfigured, resolvePath, DEFAULT_BASE_DIR, DEFAULT_AGENT_MD } from "./config.js";
 import { loadSession, saveSession, logEvent, loadEvents, listSessions } from "./session.js";
-import { listYamlAgents } from "./registry/index.js";
+import { listPlugins } from "./registry/index.js";
 import { exec } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -79,7 +79,6 @@ export async function startServer(options: ServerOptions = {}) {
     [
       path.join(openBotDir, "config.json"),
       path.join(openBotDir, "AGENT.md"),
-      path.join(openBotDir, "agents", "**", "*"),
       path.join(openBotDir, "plugins", "**", "*"),
     ],
     {
@@ -167,6 +166,38 @@ export async function startServer(options: ServerOptions = {}) {
 
   app.use(cors());
   app.use(express.json({ limit: "20mb" }));
+
+  const fileExists = async (targetPath: string) =>
+    fs.access(targetPath).then(() => true).catch(() => false);
+
+  const toTitleCaseFromSlug = (value: string) =>
+    value
+      .split(/[-_]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ") || "Agent";
+
+  const resolveAgentFolder = async (
+    agentIdOrName: string,
+    resolvedBaseDir: string,
+  ): Promise<string | null> => {
+    const pluginsDir = path.join(resolvedBaseDir, "plugins");
+    const directFolder = path.join(pluginsDir, agentIdOrName);
+    if (await fileExists(path.join(directFolder, "AGENT.md"))) {
+      return directFolder;
+    }
+
+    try {
+      const allPlugins = await listPlugins(pluginsDir);
+      const match = allPlugins.find((plugin) =>
+        plugin.type === "agent"
+        && (path.basename(plugin.folder) === agentIdOrName || plugin.name === agentIdOrName)
+      );
+      return match?.folder ?? null;
+    } catch {
+      return null;
+    }
+  };
 
   const getUploadsDir = () => {
     const cfg = loadConfig();
@@ -477,41 +508,58 @@ export async function startServer(options: ServerOptions = {}) {
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
-    const agentsDir = path.join(resolvedBaseDir, "agents");
+    const pluginsDir = path.join(resolvedBaseDir, "plugins");
 
     const defaultName = cfg.name || "OpenBot";
     const defaultDescription = cfg.description || "The main orchestrator and system settings";
 
     const agents: any[] = [
       {
+        id: "default",
         name: defaultName,
         description: defaultDescription,
         folder: resolvedBaseDir,
         isDefault: true,
+        hasAgentMd: true,
       },
     ];
 
     try {
-      const customAgents = await listYamlAgents(agentsDir);
-      agents.push(...customAgents);
+      const allPlugins = await listPlugins(pluginsDir);
+      const agentPlugins = allPlugins.filter(p => p.type === "agent");
+      agents.push(
+        ...agentPlugins.map((plugin) => {
+          const id = path.basename(plugin.folder);
+          const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(plugin.name);
+          return {
+            ...plugin,
+            id,
+            name: hasUnnamedDisplayName ? toTitleCaseFromSlug(id) : plugin.name,
+          };
+        })
+      );
     } catch {
       // ignore
     }
     res.json(agents);
   });
 
-  app.get("/api/agents/:name/md", async (req, res) => {
-    const { name } = req.params;
+  app.get("/api/agents/:agentId/md", async (req, res) => {
+    const { agentId } = req.params;
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
     const defaultName = cfg.name || "OpenBot";
 
     let mdPath: string;
-    if (name === defaultName || name === "default") {
+    if (agentId === defaultName || agentId === "default") {
       mdPath = path.join(resolvedBaseDir, "AGENT.md");
     } else {
-      mdPath = path.join(resolvedBaseDir, "agents", name, "AGENT.md");
+      const pluginFolder = await resolveAgentFolder(agentId, resolvedBaseDir);
+      if (!pluginFolder) {
+        return res.status(404).send("");
+      }
+      mdPath = path.join(pluginFolder, "AGENT.md");
     }
 
     try {
@@ -523,8 +571,8 @@ export async function startServer(options: ServerOptions = {}) {
     }
   });
 
-  app.put("/api/agents/:name/md", async (req, res) => {
-    const { name } = req.params;
+  app.put("/api/agents/:agentId/md", async (req, res) => {
+    const { agentId } = req.params;
     const { md } = req.body;
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
@@ -532,17 +580,21 @@ export async function startServer(options: ServerOptions = {}) {
     const defaultName = cfg.name || "OpenBot";
 
     let mdPath: string;
-    let agentDir: string;
-    if (name === defaultName || name === "default") {
-      agentDir = resolvedBaseDir;
+    let pluginDir: string;
+    if (agentId === defaultName || agentId === "default") {
+      pluginDir = resolvedBaseDir;
       mdPath = path.join(resolvedBaseDir, "AGENT.md");
     } else {
-      agentDir = path.join(resolvedBaseDir, "agents", name);
-      mdPath = path.join(agentDir, "AGENT.md");
+      const pluginFolder = await resolveAgentFolder(agentId, resolvedBaseDir);
+      if (!pluginFolder) {
+        return res.status(404).json({ error: "Agent not found" });
+      }
+      pluginDir = pluginFolder;
+      mdPath = path.join(pluginDir, "AGENT.md");
     }
 
     try {
-      await fs.mkdir(agentDir, { recursive: true });
+      await fs.mkdir(pluginDir, { recursive: true });
 
       let frontmatter = {};
       try {
@@ -562,18 +614,22 @@ export async function startServer(options: ServerOptions = {}) {
     }
   });
 
-  app.get("/api/agents/:name/config", async (req, res) => {
-    const { name } = req.params;
+  app.get("/api/agents/:agentId/config", async (req, res) => {
+    const { agentId } = req.params;
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
     const defaultName = cfg.name || "OpenBot";
 
     let mdPath: string;
-    if (name === defaultName || name === "default") {
+    if (agentId === defaultName || agentId === "default") {
       mdPath = path.join(resolvedBaseDir, "AGENT.md");
     } else {
-      mdPath = path.join(resolvedBaseDir, "agents", name, "AGENT.md");
+      const pluginFolder = await resolveAgentFolder(agentId, resolvedBaseDir);
+      if (!pluginFolder) {
+        return res.status(404).json({ error: "Agent not found or invalid format" });
+      }
+      mdPath = path.join(pluginFolder, "AGENT.md");
     }
 
     try {
@@ -585,16 +641,16 @@ export async function startServer(options: ServerOptions = {}) {
       }
 
       res.json({
-        name: typeof parsed.name === "string" ? parsed.name : (name === defaultName || name === "default" ? defaultName : name),
-        description: typeof parsed.description === "string" ? parsed.description : (name === defaultName || name === "default" ? cfg.description || "" : ""),
-        model: typeof parsed.model === "string" ? parsed.model : (name === defaultName || name === "default" ? cfg.model : undefined),
+        name: typeof parsed.name === "string" ? parsed.name : (agentId === defaultName || agentId === "default" ? defaultName : ""),
+        description: typeof parsed.description === "string" ? parsed.description : (agentId === defaultName || agentId === "default" ? cfg.description || "" : ""),
+        model: typeof parsed.model === "string" ? parsed.model : (agentId === defaultName || agentId === "default" ? cfg.model : undefined),
         plugins: Array.isArray(parsed.plugins) ? parsed.plugins : [],
         subscribe: Array.isArray(parsed.subscribe)
           ? parsed.subscribe.filter((item: unknown) => typeof item === "string")
           : [],
       });
     } catch {
-      if (name === defaultName || name === "default") {
+      if (agentId === defaultName || agentId === "default") {
         // Fallback for default agent if AGENT.md is missing or unreadable
         return res.json({
           name: defaultName,
@@ -609,8 +665,8 @@ export async function startServer(options: ServerOptions = {}) {
     }
   });
 
-  app.put("/api/agents/:name/config", async (req, res) => {
-    const { name } = req.params;
+  app.put("/api/agents/:agentId/config", async (req, res) => {
+    const { agentId } = req.params;
     const body = req.body as {
       name?: string;
       description?: string;
@@ -661,14 +717,18 @@ export async function startServer(options: ServerOptions = {}) {
     const resolvedBaseDir = resolvePath(baseDir);
     const defaultName = cfg.name || "OpenBot";
 
-    let agentDir: string;
+    let pluginDir: string;
     let mdPath: string;
-    if (name === defaultName || name === "default") {
-      agentDir = resolvedBaseDir;
+    if (agentId === defaultName || agentId === "default") {
+      pluginDir = resolvedBaseDir;
       mdPath = path.join(resolvedBaseDir, "AGENT.md");
     } else {
-      agentDir = path.join(resolvedBaseDir, "agents", name);
-      mdPath = path.join(agentDir, "AGENT.md");
+      const pluginFolder = await resolveAgentFolder(agentId, resolvedBaseDir);
+      if (!pluginFolder) {
+        return res.status(404).json({ error: "Agent not found" });
+      }
+      pluginDir = pluginFolder;
+      mdPath = path.join(pluginDir, "AGENT.md");
     }
 
     // Read current content to preserve the body (instructions)
@@ -703,12 +763,12 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     try {
-      await fs.mkdir(agentDir, { recursive: true });
+      await fs.mkdir(pluginDir, { recursive: true });
 
       const consolidated = matter.stringify(currentBody, frontmatter);
       await fs.writeFile(mdPath, consolidated, "utf-8");
 
-      if (name === defaultName || name === "default") {
+      if (agentId === defaultName || agentId === "default") {
         // For the default agent, sync changes back to config.json
         saveConfig({
           name: normalizedName,
@@ -756,7 +816,7 @@ export async function startServer(options: ServerOptions = {}) {
     const searchDirs = [
       (name === defaultName || name === "default")
         ? path.join(resolvedBaseDir, "assets")
-        : path.join(resolvedBaseDir, "agents", name, "assets"),
+        : path.join(resolvedBaseDir, "plugins", name, "assets"),
       path.join(process.cwd(), "server", "src", "agents", name, "assets"),
       path.join(process.cwd(), "server", "src", "assets", "agents", name),
       path.join(process.cwd(), "server", "src", "agents", "assets"),

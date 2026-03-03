@@ -4,7 +4,6 @@ import { createModel, parseModelString } from "./models.js";
 import { DEFAULT_MODEL_ID } from "./model-defaults.js";
 import { ChatEvent, ChatState } from "./types.js";
 import { setupPluginRegistry } from "./core/plugins.js";
-import { setupAgentRegistry } from "./core/agents.js";
 import { createManagerPlugin } from "./core/manager.js";
 import { setupDelegation } from "./core/delegation.js";
 import { runOpenBot } from "./core/router.js";
@@ -24,22 +23,21 @@ export async function createOpenBot(options?: {
   const resolvedModelId = `${provider}/${modelId}`;
   const model = createModel(options);
 
-  // 1. Setup registries
-  const pluginRegistry = await setupPluginRegistry(resolvedBaseDir);
-  const agentRegistry = await setupAgentRegistry(resolvedBaseDir, pluginRegistry, model as any, options);
+  // 1. Setup unified registry (built-in tools + agents + community plugins)
+  const registry = await setupPluginRegistry(resolvedBaseDir, model as any, options);
 
   // 2. Initialize agent runtimes
   const agentRuntimes = new Map<string, Runtime<ChatState, ChatEvent>>();
 
-  for (const agent of agentRegistry.getAll()) {
+  for (const agent of registry.getAgents()) {
     const builder = melony<ChatState, ChatEvent>();
-    builder.use(agent.plugin);
+    builder.use(agent.plugin!);
     agentRuntimes.set(agent.name, builder.build());
   }
 
   // 3. Initialize manager runtime
   const managerBuilder = melony<ChatState, ChatEvent>();
-  managerBuilder.use(createManagerPlugin(model, resolvedModelId, resolvedBaseDir, agentRegistry));
+  managerBuilder.use(createManagerPlugin(model, resolvedModelId, resolvedBaseDir, registry));
 
   // 4. Setup delegation
   setupDelegation(managerBuilder, agentRuntimes);

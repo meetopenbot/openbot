@@ -13,7 +13,7 @@ export interface AgentCreatorOptions {
 export const agentCreatorAgent = (options: AgentCreatorOptions): MelonyPlugin<ChatState, ChatEvent> => (builder) => {
   const { model } = options;
   const baseDir = resolvePath(DEFAULT_BASE_DIR);
-  const agentsDir = path.join(baseDir, "agents");
+  const pluginsDir = path.join(baseDir, "plugins");
 
   builder
     .use(fileSystemPlugin({ baseDir }))
@@ -24,7 +24,7 @@ export const agentCreatorAgent = (options: AgentCreatorOptions): MelonyPlugin<Ch
 
 Configuration storage:
 1. The Default Agent (the main orchestrator, usually named "OpenBot") is defined in: ${baseDir}/AGENT.md.
-2. Custom Agents live in their own subdirectories: ${agentsDir}/<agent-name>/AGENT.md.
+2. Custom Agents live in their own subdirectories: ${pluginsDir}/<agent-name>/AGENT.md.
 
 The AGENT.md file uses Markdown with a YAML frontmatter block at the top.
 
@@ -54,7 +54,7 @@ Official plugin catalog (prefer these):
 - search: search/retrieval tools
 
 Tool Usage:
-1. Use \`listFiles\` to explore existing agents in ${agentsDir}.
+1. Use \`listFiles\` to explore existing agents in ${pluginsDir}.
 2. Use \`readFile\` to inspect an existing agent's AGENT.md before updating it.
 3. Use \`writeFile\` to create or update an agent's AGENT.md.
 
@@ -62,8 +62,8 @@ Rules:
 1. Do not write files until user explicitly approves the proposed changes.
 2. For updates, ALWAYS read the current AGENT.md first using \`readFile\`, then propose changes.
 3. For the Default Agent, ALWAYS use ${baseDir}/AGENT.md.
-4. For Custom Agents, ALWAYS use ${agentsDir}/<name>/AGENT.md.
-5. If you're unsure which agent to update, use \`listFiles\` on ${agentsDir} to see available agents.
+4. For Custom Agents, ALWAYS use ${pluginsDir}/<name>/AGENT.md.
+5. If you're unsure which agent to update, use \`listFiles\` on ${pluginsDir} to see available agents.
 6. Prefer official plugins.
 7. Keep frontmatter minimal; include only meaningful fields.
 8. If required info is missing, ask focused follow-up questions.

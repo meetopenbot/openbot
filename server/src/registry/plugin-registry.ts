@@ -1,43 +1,56 @@
 import { MelonyPlugin } from "melony";
 import { z } from "zod";
+import type { ChatState, ChatEvent } from "../types.js";
 
 /**
- * Describes a registered plugin that YAML agents can reference by name.
+ * Unified plugin registry entry.
  *
- * Each entry bundles:
- *  - tool definitions (Zod schemas the LLM sees)
- *  - a factory that produces the Melony plugin (event handlers)
- *  - an optional UI factory for status/rendering plugins
+ * Every extension in OpenBot is a "plugin". The `type` field determines
+ * whether it contributes tools ("tool") or acts as a delegatable agent ("agent").
  */
 export interface PluginRegistryEntry {
-  /** Short kebab-case name used in AGENT.md (e.g. "shell", "file-system") */
   name: string;
-  /** Human-readable description shown in logs */
   description: string;
-  /** Tool schemas exposed to the LLM when this plugin is included */
+  folder?: string;
+  isBuiltIn?: boolean;
+}
+
+export interface ToolPluginRegistryEntry extends PluginRegistryEntry {
+  type: "tool";
+  plugin: (options?: any) => MelonyPlugin<any, any>;
   toolDefinitions: Record<string, {
     description: string;
     inputSchema: z.ZodType<any>;
   }>;
-  /** Creates a fresh plugin instance with event handlers */
-  factory: (options?: any) => MelonyPlugin<any, any>;
 }
 
+export interface AgentPluginRegistryEntry extends PluginRegistryEntry {
+  type: "agent";
+  plugin: MelonyPlugin<ChatState, ChatEvent>;
+  capabilities?: Record<string, string>;
+  subscribe?: string[];
+}
+
+export type AnyPluginRegistryEntry = ToolPluginRegistryEntry | AgentPluginRegistryEntry;
+
 /**
- * Plugin Registry
+ * Unified Plugin Registry
  *
- * Maps plugin names to their factories and tool definitions.
- * Built-in plugins are registered at startup; community plugins
- * can be added via npm packages or local directories (future).
+ * Holds both tool plugins and agent plugins in a single registry.
+ * Built-in entries are registered at startup; community plugins
+ * are discovered from ~/.openbot/plugins/.
  */
 export class PluginRegistry {
-  private plugins = new Map<string, PluginRegistryEntry>();
+  private plugins = new Map<string, AnyPluginRegistryEntry>();
 
-  register(entry: PluginRegistryEntry): void {
+  register(entry: AnyPluginRegistryEntry): void {
+    if (this.plugins.has(entry.name)) {
+      console.warn(`Plugin "${entry.name}" is already registered — overwriting`);
+    }
     this.plugins.set(entry.name, entry);
   }
 
-  get(name: string): PluginRegistryEntry | undefined {
+  get(name: string): AnyPluginRegistryEntry | undefined {
     return this.plugins.get(name);
   }
 
@@ -45,11 +58,28 @@ export class PluginRegistry {
     return this.plugins.has(name);
   }
 
-  getAll(): PluginRegistryEntry[] {
+  getAll(): AnyPluginRegistryEntry[] {
     return Array.from(this.plugins.values());
   }
 
   getNames(): string[] {
     return Array.from(this.plugins.keys());
+  }
+
+  getAgents(): AgentPluginRegistryEntry[] {
+    return this.getAll().filter(p => p.type === "agent");
+  }
+
+  getTools(): ToolPluginRegistryEntry[] {
+    return this.getAll().filter(p => p.type === "tool");
+  }
+
+  /** Returns agent names as a tuple suitable for z.enum(). */
+  getAgentNames(): [string, ...string[]] {
+    const names = this.getAgents().map(a => a.name);
+    if (names.length === 0) {
+      throw new Error("No agents registered — at least one agent is required");
+    }
+    return names as [string, ...string[]];
   }
 }

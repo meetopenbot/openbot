@@ -7,8 +7,7 @@ import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { saveConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
 import { startServer } from "./server.js";
-import { ensurePluginReady, getPluginMetadata } from "./registry/plugin-loader.js";
-import { readAgentConfig } from "./registry/yaml-agent-loader.js";
+import { ensurePluginReady, getPluginMetadata, readAgentConfig } from "./registry/plugin-loader.js";
 
 const program = new Command();
 
@@ -127,7 +126,7 @@ async function installAgent(source: string) {
     const name = config.name || path.basename(source.replace(".git", ""));
 
     const baseDir = resolvePath(DEFAULT_BASE_DIR);
-    const targetDir = path.join(baseDir, "agents", name);
+    const targetDir = path.join(baseDir, "plugins", name);
 
     // 3. Move to target directory
     await fs.mkdir(path.dirname(targetDir), { recursive: true });

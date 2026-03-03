@@ -45,7 +45,23 @@ function configToPluginRows(config: AgentConfig): PluginRow[] {
   return rows;
 }
 
-function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agentName: string; isDefault?: boolean; isTs?: boolean; onUpdate?: () => void; onBack?: () => void }) {
+function AgentEditForm({
+  agentId,
+  agentName,
+  folder,
+  isDefault,
+  hasAgentMd,
+  onUpdate,
+  onBack,
+}: {
+  agentId: string;
+  agentName: string;
+  folder?: string;
+  isDefault?: boolean;
+  hasAgentMd?: boolean;
+  onUpdate?: () => void;
+  onBack?: () => void;
+}) {
   const queryClient = useQueryClient();
   const { data: models = [] } = useModels();
   const [loading, setLoading] = useState(true);
@@ -61,12 +77,13 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
   
   // AGENT.md content
   const [mdContent, setMdContent] = useState("");
+  const isCodeOnlyAgent = !isDefault && hasAgentMd === false;
 
   useEffect(() => {
-    if (isTs) {
+    if (isCodeOnlyAgent) {
       setLoading(false);
       setName(agentName);
-      setDescription("TypeScript Agent");
+      setDescription("Code-only agent");
       return;
     }
 
@@ -74,7 +91,7 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
     setError(null);
     
     const promises = [];
-    const effectiveName = isDefault ? "default" : agentName;
+    const effectiveName = isDefault ? "default" : agentId;
     
     if (isDefault) {
       promises.push(
@@ -110,12 +127,12 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
         setError("Failed to load agent details");
       })
       .finally(() => setLoading(false));
-  }, [agentName, isDefault, isTs]);
+  }, [agentId, agentName, isDefault, isCodeOnlyAgent]);
 
   const handleSave = async () => {
     setError(null);
     setSaving(true);
-    const effectiveName = isDefault ? "default" : agentName;
+    const effectiveName = isDefault ? "default" : agentId;
     try {
       if (isDefault) {
         await api.updateConfig({ 
@@ -200,7 +217,7 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
     );
   }
 
-  if (isTs) {
+  if (isCodeOnlyAgent) {
     return (
       <div className="flex flex-col h-full bg-background overflow-hidden">
         <div className="flex items-center justify-between border-b border-border/50 px-6 py-4 bg-background/50 backdrop-blur-sm sticky top-0 z-10 shrink-0">
@@ -212,9 +229,9 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <AgentAvatar name={agentName} className="w-8 h-8 rounded-lg" />
+            <AgentAvatar name={agentId} className="w-8 h-8 rounded-lg" />
             <h2 className="text-lg font-semibold tracking-tight">{agentName}</h2>
-            <span className="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[10px] font-bold uppercase tracking-wider">TS Agent</span>
+            <span className="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[10px] font-bold uppercase tracking-wider">Code Only</span>
           </div>
         </div>
 
@@ -224,14 +241,15 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
             </div>
             <div className="flex flex-col gap-2">
-              <h3 className="text-xl font-semibold text-foreground">TypeScript Agent</h3>
+              <h3 className="text-xl font-semibold text-foreground">Code-only Agent</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                This agent is defined entirely in TypeScript. To modify its behavior, capabilities, or configuration, please edit the source files directly in:
+                This agent has no <code>AGENT.md</code>. To modify its behavior, capabilities, or configuration, edit files directly in:
               </p>
               <div className="mt-2 p-3 rounded-xl bg-muted/50 border border-border/50 font-mono text-[11px] text-foreground/80 break-all text-left flex items-center justify-between group">
-                <code>~/.openbot/agents/{agentName}</code>
+                <code>{folder || "(folder unavailable)"}</code>
                 <button 
-                  onClick={() => api.openFolder(`~/.openbot/agents/${agentName}`)}
+                  onClick={() => folder && api.openFolder(folder)}
+                  disabled={!folder}
                   className="ml-2 p-1.5 rounded-lg hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors"
                   title="Open folder"
                 >
@@ -242,7 +260,7 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full mt-4">
               <div className="p-4 rounded-2xl border border-border/40 bg-muted/10 text-left">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Definition</span>
-                <p className="text-xs text-muted-foreground">Look for <code>index.ts</code> or <code>index.js</code> exports.</p>
+                <p className="text-xs text-muted-foreground">Look for an exported <code>agent</code> definition in <code>index.ts</code> or <code>index.js</code>.</p>
               </div>
               <div className="p-4 rounded-2xl border border-border/40 bg-muted/10 text-left">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">Dependencies</span>
@@ -266,7 +284,7 @@ function AgentEditForm({ agentName, isDefault, isTs, onUpdate, onBack }: { agent
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <AgentAvatar name={isDefault ? "default" : agentName} className="w-8 h-8 rounded-lg" />
+          <AgentAvatar name={isDefault ? "default" : agentId} className="w-8 h-8 rounded-lg" />
           <h2 className="text-lg font-semibold tracking-tight">{agentName}</h2>
           {isDefault && <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-bold uppercase tracking-wider">Default</span>}
         </div>
@@ -442,35 +460,37 @@ export function AgentsPage() {
     queryFn: api.getAgents,
   });
 
-  const selectedAgentName = useMemo(() => {
+  const selectedAgentId = useMemo(() => {
     return new URLSearchParams(path).get("agentId");
   }, [path]);
 
-  const setSelectedAgentName = (name: string | null) => {
+  const setSelectedAgentId = (id: string | null) => {
     const params = new URLSearchParams(path);
-    if (name) {
-      params.set("agentId", name);
+    if (id) {
+      params.set("agentId", id);
     } else {
       params.delete("agentId");
     }
     navigate("?" + params.toString());
   };
 
-  const selectedAgent = agents.find(a => a.name === selectedAgentName);
+  const selectedAgent = agents.find(a => a.id === selectedAgentId);
 
   const handleCreateAgent = () => {
     navigate("/?tab=chat&msg=" + encodeURIComponent("/agent-creator I want to create a new agent. Ask me focused questions, then propose the final AGENT.md for approval before writing it."));
   };
 
-  if (selectedAgentName) {
+  if (selectedAgentId && selectedAgent) {
     return (
       <div className="flex-1 flex flex-col h-full bg-background relative overflow-hidden">
         <AgentEditForm 
-          key={selectedAgentName}
-          agentName={selectedAgentName} 
+          key={selectedAgent.id}
+          agentId={selectedAgent.id}
+          agentName={selectedAgent.name}
+          folder={selectedAgent?.folder}
           isDefault={selectedAgent?.isDefault} 
-          isTs={selectedAgent?.isTs}
-          onBack={() => setSelectedAgentName(null)}
+          hasAgentMd={selectedAgent?.hasAgentMd}
+          onBack={() => setSelectedAgentId(null)}
           onUpdate={() => {}}
         />
       </div>
@@ -512,13 +532,13 @@ export function AgentsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-1 -mx-3">
             {agents.map((agent) => (
               <button
-                key={agent.name}
-                onClick={() => setSelectedAgentName(agent.name)}
+                key={agent.id}
+                onClick={() => setSelectedAgentId(agent.id)}
                 className="flex items-center gap-3.5 p-3 rounded-[18px] hover:bg-white/5 transition-all group text-left border border-transparent hover:border-white/5"
               >
                 <div className="relative shrink-0">
                   <AgentAvatar 
-                    name={agent.isDefault ? "default" : agent.name} 
+                    name={agent.isDefault ? "default" : agent.id} 
                     className="w-[48px] h-[48px] rounded-[12px] shadow-sm transition-transform group-hover:scale-[1.05]" 
                   />
                   {agent.isDefault && (
@@ -530,8 +550,8 @@ export function AgentsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <h3 className="font-semibold text-[15px] tracking-tight truncate">{agent.name}</h3>
-                    {agent.isTs && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[8px] font-bold uppercase tracking-wider shrink-0 border border-purple-500/20">TS</span>
+                    {!agent.isDefault && agent.hasAgentMd === false && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[8px] font-bold uppercase tracking-wider shrink-0 border border-purple-500/20">Code</span>
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground/60 line-clamp-1 leading-snug font-medium">
