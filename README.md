@@ -17,6 +17,8 @@
 
 OpenBot is more than just a chatbot. It's an orchestrator that lives in your terminal and browser, delegating complex tasks to specialized agents. It's designed to be local-first, event-driven, and infinitely extensible.
 
+💬 Join the community on Discord: https://discord.gg/XYYXvN2ebB
+
 ![OpenBot Banner](./screen-j-dilla-2.png)
 
 ## 🧠 The "Manager-Agent" Philosophy
@@ -74,14 +76,22 @@ Unlike most chatbots, OpenBot has a long-term memory. It can:
 Get up and running in seconds:
 
 ```bash
-# 1. Install OpenBot globally
+# 1. One-line installer
+curl -fsSL https://raw.githubusercontent.com/meetopenbot/openbot/main/install.sh | bash
+
+# 2. Install OpenBot globally (manual)
 npm i -g openbot
 
-# 2. Start the server
+# 3. Start the server
 openbot server
 
-# 3. Launch the web UI (in a new terminal)
+# 4. Launch the web UI (in a new terminal)
 npx openbot-web
+```
+
+Prefer a single command? Run both server and web together:
+```bash
+openbot up
 ```
 
 Once the UI is open, head to the **Settings** tab to configure your AI providers (OpenAI, Anthropic, etc.). No configuration files required.
@@ -180,3 +190,7 @@ We love contributors! Whether it's adding a new plugin, a specialized agent, or 
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=meetopenbot/openbot&type=Date" />
  </picture>
 </a>
+
+---
+
+Need help or want to share feedback? Join us on Discord: https://discord.gg/XYYXvN2ebB
