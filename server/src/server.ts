@@ -93,6 +93,14 @@ export async function startServer(options: ServerOptions = {}) {
     ],
     {
       ignoreInitial: true,
+      ignored: [
+        "**/node_modules/**",
+        "**/dist/**",
+        "**/.git/**",
+        "**/package-lock.json",
+        "**/pnpm-lock.yaml",
+        "**/yarn.lock",
+      ],
       awaitWriteFinish: {
         stabilityThreshold: 300,
         pollInterval: 100,
