@@ -1,6 +1,6 @@
 {
   "name": "openbot-web",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "type": "module",
   "bin": {
     "openbot-web": "./bin/cli.js"
