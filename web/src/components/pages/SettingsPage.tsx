@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useTheme } from "@melony/ui-shadcn";
 import { useConfig, useUpdateConfig } from "../../hooks/use-config";
 import { useQuery, useQueryClient } from "@tanstack/react-query";

@@ -12,14 +12,6 @@ interface AppSidebarProps {
   onNavigate: (path: string) => void;
 }
 
-// function executionDotClass(state?: string): string {
-//   if (state === "COMPLETED") return "bg-emerald-500";
-//   if (state === "FAILED") return "bg-red-500";
-//   if (state === "WAITING_APPROVAL") return "bg-amber-500";
-//   if (state === "EXECUTING") return "bg-sky-500";
-//   return "bg-muted-foreground/25";
-// }
-
 export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProps) {
   const { open } = useSidebar();
   const { data: sessions = [] } = useSessions();
@@ -99,7 +91,6 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
         <div className="flex flex-col gap-px">
           {sessions.map((session: SessionInfo) => {
             const isActive = session.id === sessionId && currentTab === "chat";
-            // const execState = session.execution?.state;
 
             return (
               <button
@@ -116,16 +107,6 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
                   <span className="block truncate">
                     {session.title || session.id.slice(0, 12)}
                   </span>
-                  {/* {(badge || execStep) && (
-                    <span className="mt-0.5 flex items-center gap-1.5 text-[10px] font-normal text-muted-foreground/80">
-                      {badge && (
-                        <span className="rounded border border-border/60 bg-muted/40 px-1 py-[1px] leading-none">
-                          {badge}
-                        </span>
-                      )}
-                      {execStep && <span className="truncate">{execStep}</span>}
-                    </span>
-                  )} */}
                 </span>
               </button>
             );

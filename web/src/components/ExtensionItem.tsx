@@ -8,7 +8,6 @@ export const ExtensionItem = ({
   id,
   name,
   description,
-  type,
   isInstalled,
   isDefault,
   isCodeOnly,

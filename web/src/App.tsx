@@ -2,7 +2,7 @@ import { MelonyProvider } from "@melony/react";
 import { MelonyUIProvider } from "@melony/ui-kit";
 import { shadcnElements, ThemeProvider } from "@melony/ui-shadcn";
 import { MelonyClient } from "melony/client";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "./hooks/use-session";
 import { useConfig } from "./hooks/use-config";
@@ -24,7 +24,6 @@ export function App() {
   const queryClient = useQueryClient();
   const { sessionId, path, navigate, ensureSessionInUrl } = useSession();
   const { data: config, isLoading: configLoading } = useConfig();
-  const [executionSidebarOpen, setExecutionSidebarOpen] = useState(true);
 
   const tab = useMemo(() => {
     return new URLSearchParams(path).get("tab") || "chat";
@@ -104,7 +103,7 @@ export function App() {
               //   </button>
               // ) : null}
             >
-              {tab === "chat" && <ChatPage sessionId={sessionId} executionSidebarOpen={executionSidebarOpen} />}
+              {tab === "chat" && <ChatPage sessionId={sessionId} />}
               {tab === "agents" && <AgentsPage />}
               {tab === "automations" && <AutomationsPage />}
               {tab === "settings" && <SettingsPage />}
