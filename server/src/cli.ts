@@ -20,7 +20,7 @@ const program = new Command();
 program
   .name("openbot")
   .description("OpenBot CLI - Secure and easy configuration")
-  .version("0.2.3");
+  .version("0.2.5");
 
 async function installPlugin(source: string, quiet = false) {
   try {
