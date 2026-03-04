@@ -2,6 +2,7 @@ import { useState, useCallback, type ReactNode } from "react";
 import { SidebarContext, useSidebar } from "../../hooks/use-sidebar";
 import { useSessions } from "../../hooks/use-sessions";
 import { AppSidebar } from "./AppSidebar";
+import { UpdateBadge } from "./UpdateBadge";
 
 const SIDEBAR_WIDTH = 272;
 
@@ -72,6 +73,9 @@ export function AppLayout({ children, sessionId, currentTab, onNavigate, rightAc
                 <path d="M12 5v14" />
               </svg>
             </button>
+            <div className="ml-2 flex items-center">
+              <UpdateBadge />
+            </div>
             {currentTab === "chat" && (
               <h1 className="ml-2 text-sm font-medium text-foreground/85 truncate max-w-[55vw]">
                 {headerTitle}

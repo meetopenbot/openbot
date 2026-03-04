@@ -21,6 +21,7 @@ import { DEFAULT_MODEL_BY_PROVIDER, DEFAULT_MODEL_ID } from "./model-defaults.js
 import { listAutomations, saveAutomations, type AutomationRecord } from "./automations.js";
 import { startAutomationWorker } from "./automation-worker.js";
 import { getMarketplaceRegistry, installMarketplaceAgent, installMarketplacePlugin } from "./marketplace.js";
+import { getVersionStatus } from "./version.js";
 
 export interface ServerOptions {
   port?: string | number;
@@ -236,6 +237,16 @@ export async function startServer(options: ServerOptions = {}) {
     }
   });
 
+  app.get("/api/version", async (_req, res) => {
+    try {
+      const status = await getVersionStatus();
+      res.json(status);
+    } catch (err) {
+      console.error("Failed to check version:", err);
+      res.status(500).json({ error: "Failed to check version" });
+    }
+  });
+
   app.post("/api/models/preview", async (req, res) => {
     const { provider, apiKey } = req.body as {
       provider?: string;
@@ -269,6 +280,7 @@ export async function startServer(options: ServerOptions = {}) {
         sessions: "GET /api/sessions",
         agents: "GET /api/agents",
         prompts: "GET /api/prompts",
+        version: "GET /api/version",
       },
     });
   });

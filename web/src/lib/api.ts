@@ -215,4 +215,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  getVersion: () =>
+    request<{ current: string; latest: string; updateAvailable: boolean }>("/api/version"),
 };
