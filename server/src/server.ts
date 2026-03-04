@@ -32,6 +32,8 @@ export interface ServerOptions {
 
 export async function startServer(options: ServerOptions = {}) {
   const config = loadConfig();
+  const baseDir = config.baseDir || DEFAULT_BASE_DIR;
+  const resolvedBaseDir = resolvePath(baseDir);
   const PORT = Number(options.port ?? config.port ?? process.env.PORT ?? 4001);
   const app = express();
 
@@ -76,14 +78,18 @@ export async function startServer(options: ServerOptions = {}) {
     }, 800);
   };
 
-  const openBotDir = path.join(os.homedir(), ".openbot");
+  const openBotDir = resolvedBaseDir;
+  const agentsDir = path.join(openBotDir, "agents");
+  const pluginsDir = path.join(openBotDir, "plugins");
+  await fs.mkdir(agentsDir, { recursive: true });
+  await fs.mkdir(pluginsDir, { recursive: true });
 
   const watcher = chokidar.watch(
     [
       path.join(openBotDir, "config.json"),
       path.join(openBotDir, "AGENT.md"),
-      path.join(openBotDir, "agents", "**", "*"),
-      path.join(openBotDir, "plugins", "**", "*"),
+      agentsDir,
+      pluginsDir,
     ],
     {
       ignoreInitial: true,
@@ -505,6 +511,7 @@ export async function startServer(options: ServerOptions = {}) {
 
     if (Object.keys(updates).length > 0) {
       saveConfig(updates);
+      scheduleReload();
     }
 
     res.json({ success: true });
@@ -630,6 +637,7 @@ export async function startServer(options: ServerOptions = {}) {
     }
     try {
       const result = await installMarketplaceAgent(id.trim());
+      scheduleReload();
       res.json({ success: true, installedName: result.installedName, item: result.agent });
     } catch (error) {
       console.error(error);
@@ -644,6 +652,7 @@ export async function startServer(options: ServerOptions = {}) {
     }
     try {
       const result = await installMarketplacePlugin(id.trim());
+      scheduleReload();
       res.json({ success: true, installedName: result.installedName, item: result.plugin });
     } catch (error) {
       console.error(error);
@@ -714,6 +723,7 @@ export async function startServer(options: ServerOptions = {}) {
 
       const consolidated = matter.stringify(md, frontmatter);
       await fs.writeFile(mdPath, consolidated, "utf-8");
+      scheduleReload();
       res.json({ success: true });
     } catch (err) {
       console.error(err);

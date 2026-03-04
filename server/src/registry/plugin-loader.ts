@@ -198,7 +198,7 @@ async function loadToolPluginsFromDir(dir: string): Promise<ToolPluginRegistryEn
       if (!indexPath) continue;
 
       try {
-        const module = await import(pathToFileURL(indexPath).href);
+        const module = await import(pathToFileURL(indexPath).href + `?update=${Date.now()}`);
         const entryData = module.plugin || module.default || module.entry;
 
         if (entryData && typeof entryData.factory === "function") {
@@ -276,7 +276,7 @@ export async function discoverPlugins(
     if (!indexPath) continue;
 
     try {
-      const module = await import(pathToFileURL(indexPath).href);
+      const module = await import(pathToFileURL(indexPath).href + `?update=${Date.now()}`);
       const codeAgentDef: TSAgentDefinition | undefined = module.agent;
       const entryData = module.plugin || module.default || module.entry;
 
@@ -334,7 +334,7 @@ export async function discoverPlugins(
         const indexPath = await findIndexFile(agentDir);
         if (!indexPath) continue;
 
-        const module = await import(pathToFileURL(indexPath).href);
+        const module = await import(pathToFileURL(indexPath).href + `?update=${Date.now()}`);
         const definition: TSAgentDefinition = module.agent || module.plugin || module.default || module.entry;
 
         if (definition && typeof definition.factory === "function") {
@@ -460,7 +460,7 @@ export async function listPlugins(
         }
 
         try {
-          const module = await import(pathToFileURL(indexPath).href);
+          const module = await import(pathToFileURL(indexPath).href + `?update=${Date.now()}`);
           const codeAgentDef: TSAgentDefinition | undefined = module.agent;
           const toolEntry = module.plugin || module.default || module.entry;
 
