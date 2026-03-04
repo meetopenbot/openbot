@@ -68,7 +68,7 @@ export const ExtensionItem = ({
     ) : (
       <div className="shrink-0">
         <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg border border-border/40 group-hover:bg-foreground group-hover:text-background transition-colors">
-          {isInstalling ? "..." : "Install"}
+          {isInstalling ? "Installing..." : "Install"}
         </span>
       </div>
     )}

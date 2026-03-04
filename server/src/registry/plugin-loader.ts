@@ -13,6 +13,14 @@ import type { ChatState, ChatEvent } from "../types.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
+function toTitleCaseFromSlug(value: string): string {
+  return value
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Agent";
+}
+
 async function fileExists(filePath: string): Promise<boolean> {
   return fs.access(filePath).then(() => true).catch(() => false);
 }
@@ -274,7 +282,11 @@ export async function discoverPlugins(
 
       if (codeAgentDef && typeof codeAgentDef.factory === "function") {
         const meta = await getPluginMetadata(pluginDir);
-        const name = codeAgentDef.name || meta.name || "Unnamed Agent";
+        const folderName = path.basename(pluginDir);
+        let name = codeAgentDef.name || meta.name;
+        if (!name || /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(name)) {
+          name = toTitleCaseFromSlug(folderName);
+        }
         const description = codeAgentDef.description || meta.description || "Code Agent";
         registry.register({
           name,
@@ -288,8 +300,13 @@ export async function discoverPlugins(
         console.log(`[plugins] Loaded code-only agent: ${name} — ${description}`);
       } else if (entryData && typeof entryData.factory === "function") {
         const meta = await getPluginMetadata(pluginDir);
+        const folderName = path.basename(pluginDir);
+        let name = entryData.name || meta.name;
+        if (!name || /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(name)) {
+          name = toTitleCaseFromSlug(folderName);
+        }
         const pluginEntry: ToolPluginRegistryEntry = {
-          name: entryData.name || meta.name || "Unnamed Tool",
+          name,
           description: entryData.description || meta.description || "Tool plugin",
           type: "tool",
           plugin: entryData.factory,
@@ -323,7 +340,10 @@ export async function discoverPlugins(
         if (definition && typeof definition.factory === "function") {
           const config = await readAgentConfig(agentDir);
           const meta = await getPluginMetadata(agentDir);
-          const name = config.name || definition.name || meta.name || "Unnamed Agent";
+          let name = config.name || definition.name || meta.name;
+          if (!name || /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(name)) {
+            name = toTitleCaseFromSlug(folderName);
+          }
           const description = definition.description || config.description || "TS Agent";
 
           registry.register({
@@ -341,7 +361,10 @@ export async function discoverPlugins(
         // Declarative Agent — AGENT.md only, auto-wrapped with llmPlugin.
         const config = await readAgentConfig(agentDir);
         const meta = await getPluginMetadata(agentDir);
-        const resolvedName = config.name || meta.name || "Unnamed Agent";
+        let resolvedName = config.name || meta.name;
+        if (!resolvedName || /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(resolvedName)) {
+          resolvedName = toTitleCaseFromSlug(folderName);
+        }
         const resolvedDescription = config.description || meta.description || "No description";
 
         const agentModel = config.model

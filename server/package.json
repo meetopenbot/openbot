@@ -3,6 +3,9 @@
   "version": "0.2.5",
   "private": false,
   "type": "module",
+  "engines": {
+    "node": ">=20.12.0"
+  },
   "scripts": {
     "dev": "tsx watch src/cli.ts server",
     "build": "tsc",

@@ -7,6 +7,7 @@ import { createOpenBot } from "./open-bot.js";
 import { loadConfig, saveConfig, isConfigured, resolvePath, DEFAULT_BASE_DIR, DEFAULT_AGENT_MD } from "./config.js";
 import { loadSession, saveSession, logEvent, loadEvents, listSessions } from "./session.js";
 import { listPlugins } from "./registry/index.js";
+import { readAgentConfig } from "./registry/plugin-loader.js";
 import { exec } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -916,13 +917,33 @@ export async function startServer(options: ServerOptions = {}) {
     const resolvedBaseDir = resolvePath(baseDir);
     const defaultName = cfg.name || "OpenBot";
 
+    // 1. Resolve agent folder
+    let agentFolder: string | null = null;
+    if (name === defaultName || name === "default") {
+      agentFolder = resolvedBaseDir;
+    } else {
+      agentFolder = await resolveAgentFolder(name, resolvedBaseDir);
+    }
+
+    // 2. Check for remote image in AGENT.md if folder exists
+    if (agentFolder) {
+      try {
+        const { image } = await readAgentConfig(agentFolder);
+        if (image && (image.startsWith("http://") || image.startsWith("https://"))) {
+          return res.redirect(image);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     const extensions = [".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"];
     const fileNames = ["avatar", "icon", "image", "logo"];
 
     const searchDirs = [
       (name === defaultName || name === "default")
         ? path.join(resolvedBaseDir, "assets")
-        : path.join(resolvedBaseDir, "agents", name, "assets"),
+        : (agentFolder ? path.join(agentFolder, "assets") : path.join(resolvedBaseDir, "agents", name, "assets")),
       path.join(process.cwd(), "server", "src", "agents", name, "assets"),
       path.join(process.cwd(), "server", "src", "assets", "agents", name),
       path.join(process.cwd(), "server", "src", "agents", "assets"),
@@ -932,7 +953,8 @@ export async function startServer(options: ServerOptions = {}) {
     for (const dir of searchDirs) {
       for (const fileName of fileNames) {
         for (const ext of extensions) {
-          const baseName = (dir.endsWith("assets") && !dir.includes(name)) ? name : fileName;
+          const isAgentSpecificDir = dir.includes(name) || (agentFolder && dir.includes(agentFolder));
+          const baseName = (dir.endsWith("assets") && !isAgentSpecificDir) ? name : fileName;
           const p = path.join(dir, `${baseName}${ext}`);
           try {
             await fs.access(p);
@@ -1013,6 +1035,7 @@ export async function startServer(options: ServerOptions = {}) {
     console.log(`OpenBot server listening at http://localhost:${PORT}`);
     console.log(`  - Chat endpoint: POST /api/chat`);
     console.log(`  - REST endpoints: /api/config, /api/sessions, /api/agents`);
+    console.log(`\n🚀 TIP: Use 'openbot up' to run both the server and web dashboard together.`);
     if (options.openaiApiKey) console.log("  - Using OpenAI API Key from CLI");
     if (options.anthropicApiKey)
       console.log("  - Using Anthropic API Key from CLI");

@@ -22,6 +22,17 @@ openbot server [options]
 - `--openai-api-key <key>`: OpenAI API Key (can also be set via `OPENAI_API_KEY` env var).
 - `--anthropic-api-key <key>`: Anthropic API Key (can also be set via `ANTHROPIC_API_KEY` env var).
 
+### `up`
+Starts both the OpenBot server and web dashboard together using `concurrently`.
+
+```bash
+openbot up [options]
+```
+**Options:**
+- `-p, --port <number>`: Port to listen on (passed to `openbot server`).
+- `--openai-api-key <key>`: OpenAI API Key (passed to `openbot server`).
+- `--anthropic-api-key <key>`: Anthropic API Key (passed to `openbot server`).
+
 ### `add <name>`
 Conveniently add an official agent or plugin. It auto-resolves names from the `meetopenbot` GitHub organization or official NPM registry.
 

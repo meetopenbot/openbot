@@ -99,7 +99,7 @@ export async function installMarketplaceAgent(agentId: string) {
   if (agent.source.type !== "github") {
     throw new Error(`Marketplace agent "${agentId}" has unsupported source type "${agent.source.type}"`);
   }
-  const installedName = await installAgentFromSource({ type: "github", value: agent.source.value });
+  const installedName = await installAgentFromSource({ type: "github", value: agent.source.value }, { id: agent.id });
   return { installedName, agent };
 }
 
@@ -107,6 +107,6 @@ export async function installMarketplacePlugin(pluginId: string) {
   const registry = await getMarketplaceRegistry(true);
   const plugin = registry.plugins.find((entry) => entry.id === pluginId);
   if (!plugin) throw new Error(`Plugin "${pluginId}" was not found in marketplace`);
-  const installedName = await installPluginFromSource(plugin.source);
+  const installedName = await installPluginFromSource(plugin.source, { id: plugin.id });
   return { installedName, plugin };
 }

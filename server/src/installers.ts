@@ -3,17 +3,22 @@ import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { resolvePath, DEFAULT_BASE_DIR, loadConfig } from "./config.js";
-import { getPluginMetadata, readAgentConfig, ensurePluginReady } from "./registry/plugin-loader.js";
+import { readAgentConfig, ensurePluginReady } from "./registry/plugin-loader.js";
 
-export type PluginInstallSource =
+export type ExtensionType = "agent" | "plugin";
+
+export type InstallSource =
   | { type: "github"; value: string }
   | { type: "npm"; value: string }
   | { type: "local"; value: string };
 
-export type AgentInstallSource = { type: "github"; value: string };
+// Backward compatibility types
+export type PluginInstallSource = InstallSource;
+export type AgentInstallSource = InstallSource;
 
 interface InstallOptions {
   quiet?: boolean;
+  id?: string;
 }
 
 const BUILT_IN_PLUGIN_NAMES = new Set(["shell", "file-system", "approval"]);
@@ -29,10 +34,6 @@ function log(message: string, quiet?: boolean) {
   if (!quiet) console.log(message);
 }
 
-function githubRepoToCloneUrl(repo: string) {
-  return `https://github.com/${repo}.git`;
-}
-
 function getBaseDir() {
   const cfg = loadConfig();
   const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
@@ -45,7 +46,8 @@ async function directoryExists(targetPath: string) {
 
 export function checkGitHubRepo(repo: string): boolean {
   try {
-    run("git", ["ls-remote", githubRepoToCloneUrl(repo)], { quiet: true });
+    const url = `https://github.com/${repo}.git`;
+    run("git", ["ls-remote", url], { quiet: true });
     return true;
   } catch {
     return false;
@@ -61,7 +63,7 @@ export function checkNpmPackage(pkg: string): boolean {
   }
 }
 
-export function parsePluginInstallSource(source: string): PluginInstallSource {
+export function parseSource(source: string): InstallSource {
   const normalized = source.trim();
   const isGithub = (normalized.includes("/") || normalized.startsWith("github:"))
     && !normalized.startsWith("/")
@@ -83,27 +85,38 @@ export function parsePluginInstallSource(source: string): PluginInstallSource {
   return { type: "local", value: path.resolve(normalized) };
 }
 
-export function parseAgentInstallSource(source: string): AgentInstallSource {
-  const normalized = source.trim();
-  if (normalized.startsWith("github:")) {
-    return { type: "github", value: normalized.slice(7) };
-  }
-  return { type: "github", value: normalized };
-}
-
-export async function installPluginFromSource(source: PluginInstallSource, options: InstallOptions = {}) {
+export async function installExtension(
+  type: ExtensionType,
+  source: InstallSource,
+  options: InstallOptions = {}
+) {
   const quiet = !!options.quiet;
-  const tempDir = path.join(tmpdir(), `openbot-plugin-install-${Date.now()}`);
   const baseDir = getBaseDir();
-  const pluginRoot = path.join(baseDir, "plugins");
-  await fs.mkdir(pluginRoot, { recursive: true });
+  const targetRoot = path.join(baseDir, type === "agent" ? "agents" : "plugins");
+  await fs.mkdir(targetRoot, { recursive: true });
+
+  // 1. Determine the folder name (the "id") - ALWAYS based on source or explicit id
+  let id = options.id;
+  if (!id) {
+    if (source.type === "github") {
+      id = path.basename(source.value); // e.g. "agent-browser"
+    } else if (source.type === "npm") {
+      id = source.value.split("/").pop(); // e.g. "@melony/plugin-test" -> "plugin-test"
+    } else {
+      id = path.basename(source.value);
+    }
+  }
+
+  const targetDir = path.join(targetRoot, id!);
+  const tempDir = path.join(tmpdir(), `openbot-install-${Date.now()}-${id}`);
 
   try {
+    log(`📦 Installing ${type} "${id}" from ${source.type}...`, quiet);
+
     if (source.type === "github") {
-      log(`📦 Installing plugin from: ${githubRepoToCloneUrl(source.value)}`, quiet);
-      run("git", ["clone", "--depth", "1", githubRepoToCloneUrl(source.value), tempDir], { quiet });
+      const url = `https://github.com/${source.value}.git`;
+      run("git", ["clone", "--depth", "1", url, tempDir], { quiet });
     } else if (source.type === "npm") {
-      log(`📦 Installing plugin from: ${source.value}`, quiet);
       await fs.mkdir(tempDir, { recursive: true });
       run("npm", ["install", source.value, "--prefix", tempDir], { quiet });
       const pkgFolder = path.join(tempDir, "node_modules", source.value);
@@ -112,59 +125,39 @@ export async function installPluginFromSource(source: PluginInstallSource, optio
       await fs.rm(tempDir, { recursive: true, force: true });
       await fs.rename(moveTemp, tempDir);
     } else {
-      log(`📦 Installing plugin from: ${source.value}`, quiet);
       await fs.mkdir(tempDir, { recursive: true });
       await fs.cp(source.value, tempDir, { recursive: true });
     }
 
-    const { name } = await getPluginMetadata(tempDir);
-    const targetDir = path.join(pluginRoot, name);
     if (await directoryExists(targetDir)) {
-      log(`⚠️  Plugin "${name}" already exists. Overwriting...`, quiet);
+      log(`⚠️  Removing existing folder: ${targetDir}`, quiet);
       await fs.rm(targetDir, { recursive: true, force: true });
     }
 
     await fs.rename(tempDir, targetDir);
-    log(`✅ Moved to: ${targetDir}`, quiet);
-    log(`⚙️  Preparing plugin "${name}"...`, quiet);
+    log(`✅ Installed to: ${targetDir}`, quiet);
+
+    // Prepare dependencies and build
     await ensurePluginReady(targetDir);
-    log(`\n🎉 Successfully installed plugin: ${name}`, quiet);
-    return name;
-  } catch (error) {
-    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-    throw error;
-  }
-}
 
-export async function installAgentFromSource(source: AgentInstallSource, options: InstallOptions = {}) {
-  const quiet = !!options.quiet;
-  const tempDir = path.join(tmpdir(), `openbot-agent-install-${Date.now()}`);
-  const baseDir = getBaseDir();
-  const agentRoot = path.join(baseDir, "agents");
-  await fs.mkdir(agentRoot, { recursive: true });
-
-  try {
-    log(`🤖 Installing agent from: ${githubRepoToCloneUrl(source.value)}`, quiet);
-    run("git", ["clone", "--depth", "1", githubRepoToCloneUrl(source.value), tempDir], { quiet });
-
-    const config = await readAgentConfig(tempDir);
-    const name = config.name || path.basename(source.value).replace(/^agent-/, "");
-    const targetDir = path.join(agentRoot, name);
-    if (await directoryExists(targetDir)) {
-      log(`⚠️  Agent "${name}" already exists. Overwriting...`, quiet);
-      await fs.rm(targetDir, { recursive: true, force: true });
+    // If it's an agent, check for missing plugins
+    if (type === "agent") {
+      await installMissingPluginsFromAgent(targetDir, { quiet });
     }
 
-    await fs.rename(tempDir, targetDir);
-    log(`✅ Moved to: ${targetDir}`, quiet);
-    await installMissingPluginsFromAgent(targetDir, { quiet });
-    log(`\n🎉 Successfully installed agent: ${name}`, quiet);
-    return name;
+    log(`🎉 Successfully installed ${type}: ${id}`, quiet);
+    return id;
   } catch (error) {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
     throw error;
   }
 }
+
+// Backward compatibility aliases
+export const installPluginFromSource = (source: InstallSource, opts: InstallOptions) => installExtension("plugin", source, opts);
+export const installAgentFromSource = (source: InstallSource, opts: InstallOptions) => installExtension("agent", source, opts);
+export const parsePluginInstallSource = parseSource;
+export const parseAgentInstallSource = parseSource;
 
 export async function installMissingPluginsFromAgent(
   agentFolder: string,
@@ -178,24 +171,28 @@ export async function installMissingPluginsFromAgent(
     const pluginName = typeof pluginItem === "string" ? pluginItem : pluginItem.name;
     if (!pluginName || BUILT_IN_PLUGIN_NAMES.has(pluginName)) continue;
 
+    // Check if it already exists as a folder in plugins/
     const pluginPath = path.join(baseDir, "plugins", pluginName);
-    const existsLocally = await directoryExists(pluginPath);
-    if (existsLocally) continue;
+    const prefixedPluginPath = path.join(baseDir, "plugins", `plugin-${pluginName}`);
+    
+    if (await (directoryExists(pluginPath)) || await (directoryExists(prefixedPluginPath))) {
+      continue;
+    }
 
     log(`🔍 Agent needs plugin "${pluginName}". Searching...`, quiet);
 
     const ghRepo = `meetopenbot/plugin-${pluginName}`;
     if (checkGitHubRepo(ghRepo)) {
-      await installPluginFromSource({ type: "github", value: ghRepo }, { quiet });
+      await installExtension("plugin", { type: "github", value: ghRepo }, { quiet });
       continue;
     }
 
     const npmPkg = `@melony/plugin-${pluginName}`;
     if (checkNpmPackage(npmPkg)) {
-      await installPluginFromSource({ type: "npm", value: npmPkg }, { quiet });
+      await installExtension("plugin", { type: "npm", value: npmPkg }, { quiet });
       continue;
     }
 
-    log(`⚠️  Could not find plugin "${pluginName}" for this agent. You may need to install it manually.`, quiet);
+    log(`⚠️  Could not find plugin "${pluginName}" for this agent.`, quiet);
   }
 }

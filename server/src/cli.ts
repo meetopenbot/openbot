@@ -3,6 +3,7 @@ import { Command } from "commander";
 import * as readline from "node:readline/promises";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { spawn } from "node:child_process";
 import { saveConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
 import { startServer } from "./server.js";
 import { getPluginMetadata } from "./registry/plugin-loader.js";
@@ -16,16 +17,35 @@ import {
 } from "./installers.js";
 
 const program = new Command();
+const REQUIRED_NODE_VERSION = "20.12.0";
+
+function checkNodeVersion() {
+  const [major, minor, patch] = process.versions.node.split(".").map(Number);
+  const [reqMajor, reqMinor, reqPatch] = REQUIRED_NODE_VERSION.split(".").map(Number);
+
+  const isOld = 
+    major < reqMajor || 
+    (major === reqMajor && minor < reqMinor) || 
+    (major === reqMajor && minor === reqMinor && patch < reqPatch);
+
+  if (isOld) {
+    console.warn(`\n⚠️  WARNING: You are using Node.js ${process.version}.`);
+    console.warn(`   OpenBot works best with Node.js >=${REQUIRED_NODE_VERSION}.`);
+    console.warn(`   You may encounter "ERR_REQUIRE_ESM" or other compatibility issues on older versions.\n`);
+  }
+}
+
+checkNodeVersion();
 
 program
   .name("openbot")
   .description("OpenBot CLI - Secure and easy configuration")
   .version("0.2.5");
 
-async function installPlugin(source: string, quiet = false) {
+async function installPlugin(source: string, id?: string, quiet = false) {
   try {
     const parsed = parsePluginInstallSource(source);
-    const name = await installPluginFromSource(parsed, { quiet });
+    const name = await installPluginFromSource(parsed, { quiet, id });
     return name;
   } catch (err) {
     if (!quiet) console.error("\n❌ Plugin installation failed:", err instanceof Error ? err.message : String(err));
@@ -34,15 +54,19 @@ async function installPlugin(source: string, quiet = false) {
   }
 }
 
-async function installAgent(source: string) {
+async function installAgent(source: string, id?: string) {
   try {
     const parsed = parseAgentInstallSource(source);
-    const name = await installAgentFromSource(parsed);
+    const name = await installAgentFromSource(parsed, { id });
     return name;
   } catch (err) {
     console.error("\n❌ Agent installation failed:", err instanceof Error ? err.message : String(err));
     process.exit(1);
   }
+}
+
+function shellEscape(arg: string) {
+  return `'${arg.replace(/'/g, `'\\''`)}'`;
 }
 
 program
@@ -102,6 +126,8 @@ program
     console.log("Alternatively, you can set the environment variable:");
     console.log(provider === "openai" ? "  export OPENAI_API_KEY=your-key" : "  export ANTHROPIC_API_KEY=your-key");
     console.log("------------------------------------------");
+    console.log("\n🚀 TIP: Use 'openbot up' to start the server and web UI together.");
+    console.log("------------------------------------------\n");
 
     rl.close();
   });
@@ -117,13 +143,54 @@ program
   });
 
 program
+  .command("up")
+  .description("Start OpenBot server and web dashboard together")
+  .option("-p, --port <number>", "Port to listen on")
+  .option("--openai-api-key <key>", "OpenAI API Key")
+  .option("--anthropic-api-key <key>", "Anthropic API Key")
+  .action(async (options) => {
+    const serverArgs = ["openbot", "server"];
+    if (options.port) serverArgs.push("--port", String(options.port));
+    if (options.openaiApiKey) serverArgs.push("--openai-api-key", options.openaiApiKey);
+    if (options.anthropicApiKey) serverArgs.push("--anthropic-api-key", options.anthropicApiKey);
+
+    const serverCommand = serverArgs.map(shellEscape).join(" ");
+
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        "npx",
+        [
+          "-y",
+          "concurrently",
+          "--kill-others",
+          "--names",
+          "SERVER,WEBUI",
+          "--prefix",
+          "{name}",
+          "--prefix-colors",
+          "blue.bold,green.bold",
+          serverCommand,
+          "openbot-web",
+        ],
+        { stdio: "inherit" }
+      );
+
+      child.on("error", reject);
+      child.on("exit", (code) => {
+        if (typeof code === "number") process.exitCode = code;
+        resolve();
+      });
+    });
+  });
+
+program
   .command("add <name>")
   .description("Add an agent or plugin by name (auto-resolves to GitHub/NPM)")
   .action(async (name: string) => {
     // 1. Try as Agent
     const agentRepo = `meetopenbot/agent-${name}`;
     if (checkGitHubRepo(agentRepo)) {
-      await installAgent(agentRepo);
+      await installAgent(agentRepo, `agent-${name}`);
       return;
     }
 
@@ -142,14 +209,14 @@ program
     // Check GitHub Plugin
     const pluginGhRepo = `meetopenbot/plugin-${name}`;
     if (checkGitHubRepo(pluginGhRepo)) {
-      await installPlugin(pluginGhRepo);
+      await installPlugin(pluginGhRepo, `plugin-${name}`);
       return;
     }
 
     // Check NPM Plugin
     const pluginNpmPkg = `@melony/plugin-${name}`;
     if (checkNpmPackage(pluginNpmPkg)) {
-      await installPlugin(pluginNpmPkg);
+      await installPlugin(pluginNpmPkg, `plugin-${name}`);
       return;
     }
 
