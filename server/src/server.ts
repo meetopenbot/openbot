@@ -1,7 +1,6 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import chokidar from "chokidar";
 import { generateId } from "melony";
 import { createOpenBot } from "./open-bot.js";
 import { loadConfig, saveConfig, isConfigured, resolvePath, DEFAULT_BASE_DIR, DEFAULT_AGENT_MD } from "./config.js";
@@ -13,7 +12,6 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import yaml from "js-yaml";
 import matter from "gray-matter";
 import type { ChatEvent, ChatRequest, ChatState } from "./types.js";
 import { fetchProviderModels, getModelCatalog } from "./model-catalog.js";
@@ -84,46 +82,11 @@ export async function startServer(options: ServerOptions = {}) {
   await fs.mkdir(agentsDir, { recursive: true });
   await fs.mkdir(pluginsDir, { recursive: true });
 
-  const watcher = chokidar.watch(
-    [
-      path.join(openBotDir, "config.json"),
-      path.join(openBotDir, "AGENT.md"),
-      agentsDir,
-      pluginsDir,
-    ],
-    {
-      ignoreInitial: true,
-      ignored: [
-        "**/node_modules/**",
-        "**/dist/**",
-        "**/.git/**",
-        "**/package-lock.json",
-        "**/pnpm-lock.yaml",
-        "**/yarn.lock",
-      ],
-      awaitWriteFinish: {
-        stabilityThreshold: 300,
-        pollInterval: 100,
-      },
-    }
-  );
-
-  watcher
-    .on("add", scheduleReload)
-    .on("change", scheduleReload)
-    .on("unlink", scheduleReload)
-    .on("addDir", scheduleReload)
-    .on("unlinkDir", scheduleReload)
-    .on("error", (error) => {
-      console.error("[hot-reload] Watcher error", error);
-    });
-
   const cleanupWatcher = async () => {
     if (reloadTimer) {
       clearTimeout(reloadTimer);
       reloadTimer = null;
     }
-    await watcher.close();
   };
 
   const runAutomation = async (automation: AutomationRecord, scheduledAt: Date) => {
@@ -902,11 +865,17 @@ export async function startServer(options: ServerOptions = {}) {
         });
       }
 
+      scheduleReload();
       res.json({ success: true });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Failed to write AGENT.md" });
     }
+  });
+
+  app.post("/api/actions/reload", async (_req, res) => {
+    scheduleReload();
+    res.json({ success: true, message: "Reload scheduled" });
   });
 
   app.post("/api/actions/open-folder", async (req, res) => {

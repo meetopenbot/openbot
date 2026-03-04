@@ -203,6 +203,9 @@ export const api = {
       body: JSON.stringify({ folder }),
     }),
 
+  reload: () =>
+    request<{ success: boolean }>("/api/actions/reload", { method: "POST" }),
+
   uploadImage: (data: { name: string; mimeType: string; dataBase64: string }) =>
     request<AttachmentRef>("/api/uploads/image", {
       method: "POST",

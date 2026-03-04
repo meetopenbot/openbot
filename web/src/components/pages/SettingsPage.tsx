@@ -291,6 +291,35 @@ export function SettingsPage() {
             </div>
           </section>
 
+          <section className="flex flex-col gap-4 border-t border-border/40 pt-10 pb-20">
+            <div className="flex flex-col gap-0.5">
+              <h3 className="text-[13px] font-medium">System</h3>
+              <p className="text-xs text-muted-foreground/60">
+                Advanced maintenance operations
+              </p>
+            </div>
+            <div className="flex flex-col items-start gap-4">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await api.reload();
+                    setSaved(true);
+                    setTimeout(() => setSaved(false), 2000);
+                  } catch (err) {
+                    console.error("Reload failed", err);
+                  }
+                }}
+                className="rounded-xl border border-border/60 px-4 py-2.5 text-[13px] font-medium text-foreground transition-all duration-150 hover:border-border hover:bg-foreground/5"
+              >
+                Reload Runtime
+              </button>
+              <p className="text-[11px] text-muted-foreground/50">
+                Reloads agents and plugins from disk. Use this if you've manually modified configuration files.
+              </p>
+            </div>
+          </section>
+
         </div>
     </div>
   );

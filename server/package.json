@@ -1,6 +1,6 @@
 {
   "name": "openbot",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "private": false,
   "type": "module",
   "engines": {
@@ -20,7 +20,6 @@
     "@melony/ui-kit": "^0.1.30",
     "@types/cors": "^2.8.19",
     "ai": "^6.0.42",
-    "chokidar": "^5.0.0",
     "commander": "^14.0.2",
     "cors": "^2.8.6",
     "dotenv": "^16.4.5",
