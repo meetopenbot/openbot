@@ -40,7 +40,7 @@ checkNodeVersion();
 program
   .name("openbot")
   .description("OpenBot CLI - Secure and easy configuration")
-  .version("0.2.6");
+  .version("0.2.7");
 
 async function installPlugin(source: string, id?: string, quiet = false) {
   try {
