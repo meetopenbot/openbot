@@ -20,14 +20,6 @@ type PluginRow = {
   configText: string;
 };
 
-const OFFICIAL_PLUGINS: Array<{ name: string; description: string }> = [
-  { name: "shell", description: "Execute shell commands" },
-  { name: "file-system", description: "Read and write files" },
-  { name: "approval", description: "Require approval for sensitive actions" },
-  { name: "browser-tools", description: "Web automation and browsing tools" },
-  { name: "search", description: "Search and retrieval tools" },
-];
-
 function configToPluginRows(config: AgentConfig): PluginRow[] {
   const rows = (config.plugins || []).map((plugin) => {
     if (typeof plugin === "string") {
@@ -205,8 +197,13 @@ function AgentEditForm({
     }
   };
 
+  const { data: registryPlugins = [] } = useQuery({
+    queryKey: ["registry", "plugins"],
+    queryFn: api.getRegistryPlugins,
+  });
+
   const selectedPluginNames = pluginRows.map((row) => row.name).filter(Boolean);
-  const nextPluginToAdd = OFFICIAL_PLUGINS.find((plugin) => !selectedPluginNames.includes(plugin.name));
+  const nextPluginToAdd = registryPlugins.find((plugin) => !selectedPluginNames.includes(plugin.name));
 
   if (loading) {
     return (
@@ -403,7 +400,7 @@ function AgentEditForm({
                             }}
                             className="flex-1 rounded-lg border border-border/60 bg-background px-2 py-1.5 text-[13px] focus:outline-none"
                           >
-                            {[...OFFICIAL_PLUGINS, ...(!OFFICIAL_PLUGINS.some((p) => p.name === row.name) && row.name ? [{ name: row.name, description: "Custom plugin (existing)" }] : [])].map((plugin) => {
+                            {[...registryPlugins, ...(!registryPlugins.some((p) => p.name === row.name) && row.name ? [{ name: row.name, description: "Custom plugin (existing)" }] : [])].map((plugin) => {
                               const alreadySelectedElsewhere = pluginRows.some((item, itemIndex) => itemIndex !== index && item.name === plugin.name);
                               return (
                                 <option key={plugin.name} value={plugin.name} disabled={alreadySelectedElsewhere}>

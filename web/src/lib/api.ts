@@ -121,6 +121,9 @@ export const api = {
   getInstalledPlugins: () =>
     request<InstalledPluginInfo[]>("/api/plugins"),
 
+  getRegistryPlugins: () =>
+    request<{ name: string; description: string; isBuiltIn?: boolean }[]>("/api/registry/plugins"),
+
   getPrompts: () =>
     request<{ label: string; icon: string }[]>("/api/prompts"),
 

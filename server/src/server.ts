@@ -574,6 +574,22 @@ export async function startServer(options: ServerOptions = {}) {
     }
   });
 
+  app.get("/api/registry/plugins", async (_req, res) => {
+    try {
+      const tools = runtime.registry.getTools();
+      res.json(
+        tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          isBuiltIn: !!t.isBuiltIn,
+        }))
+      );
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to list registry plugins" });
+    }
+  });
+
   app.get("/api/marketplace/agents", async (_req, res) => {
     try {
       const registry = await getMarketplaceRegistry();

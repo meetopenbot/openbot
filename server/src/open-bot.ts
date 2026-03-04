@@ -60,6 +60,7 @@ export async function createOpenBot(options?: {
 
   // 6. Return the runtime
   return {
+    registry,
     run: (event: ChatEvent, context: { runId: string; state: ChatState }) =>
       runOpenBot(event, context, managerRuntime, agentRuntimes),
   };
