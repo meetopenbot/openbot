@@ -1,6 +1,6 @@
 {
   "name": "openbot",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "private": false,
   "type": "module",
   "engines": {
