@@ -9,7 +9,7 @@ export function UpdateBadge() {
     <button
       onClick={() => {
         alert(
-          `New version ${status.latest} is available!\n\nRun this in your terminal:\nnpm install -g openbot@latest`
+          `New version ${status.latest} is available!\n\nRun this one-liner in your terminal:\ncurl -fsSL https://raw.githubusercontent.com/meetopenbot/openbot/main/install.sh | bash`
         );
       }}
       className="group flex items-center gap-2 px-2.5 py-1 text-[11px] font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/15 border border-blue-500/20 rounded-full transition-all duration-200"
