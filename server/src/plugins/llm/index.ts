@@ -1,5 +1,5 @@
 import { MelonyPlugin, Event, RuntimeContext } from "melony";
-import { streamText, LanguageModel, ModelMessage } from "ai";
+import { streamText, LanguageModel, ModelMessage, Output } from "ai";
 import { z } from "zod";
 import { SimpleMessage } from "../../types.js";
 
@@ -180,6 +180,11 @@ export interface LLMPluginOptions {
   usageEventType?: string;
   usageScope?: string;
   modelId?: string;
+  /**
+   * Optional Zod schema for structured output.
+   * If provided, the plugin uses `streamObject` instead of `streamText`.
+   */
+  outputSchema?: z.ZodType<any>;
 }
 
 /**
@@ -188,20 +193,21 @@ export interface LLMPluginOptions {
  * It can also automatically trigger events based on tool calls.
  */
 export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => (builder) => {
-  const {
-    model,
-    system,
-    toolDefinitions = {},
-    actionEventPrefix = "action:",
-    promptInputType = "agent:input",
-    actionResultInputType = "action:result",
-    completionEventType = "agent:output",
-    usageEventType = "usage:update",
-    usageScope = "default",
-    modelId,
-  } = options;
+    const {
+      model,
+      system,
+      toolDefinitions = {},
+      actionEventPrefix = "action:",
+      promptInputType = "agent:input",
+      actionResultInputType = "action:result",
+      completionEventType = "agent:output",
+      usageEventType = "usage:update",
+      usageScope = "default",
+      modelId,
+      outputSchema,
+    } = options;
 
-  async function* routeToLLM(
+    async function* routeToLLM(
     newMessage: SimpleMessage | undefined,
     context: RuntimeContext,
     silent: boolean = false
@@ -276,18 +282,40 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
       system: systemPrompt,
       messages: modelMessages,
       tools: toolDefinitions,
+      output: outputSchema ? Output.object({ schema: outputSchema }) : undefined,
       onError: (error) => {
         console.error("streamText error:::::", JSON.stringify(error, null, 2));
       },
     });
 
-    for await (const delta of result.textStream) {
-      assistantMessage.content += delta;
-      if (!silent) {
+    if (outputSchema) {
+      for await (const delta of result.partialOutputStream) {
+        if (!silent) {
+          yield {
+            type: "agent:output-delta",
+            data: { delta: "", content: JSON.stringify(delta) },
+          } as Event;
+        }
+      }
+
+      const finalObject = await result.output;
+      assistantMessage.content = JSON.stringify(finalObject);
+
+      if (completionEventType && !silent) {
         yield {
-          type: "agent:output-delta",
-          data: { delta, content: assistantMessage.content },
+          type: completionEventType,
+          data: finalObject,
         } as Event;
+      }
+    } else {
+      for await (const delta of result.textStream) {
+        assistantMessage.content += delta;
+        if (!silent) {
+          yield {
+            type: "agent:output-delta",
+            data: { delta, content: assistantMessage.content },
+          } as Event;
+        }
       }
     }
 
@@ -317,10 +345,13 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
       state.messages = state.messages.filter((m: SimpleMessage) => m !== assistantMessage);
     } else {
       if (completionEventType && !silent) {
-        yield {
-          type: completionEventType,
-          data: { content: assistantText },
-        } as Event;
+        // If it's structured output, we already yielded the final object
+        if (!outputSchema) {
+          yield {
+            type: completionEventType,
+            data: { content: assistantText },
+          } as Event;
+        }
       }
     }
 

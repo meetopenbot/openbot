@@ -127,6 +127,9 @@ export interface ChatState {
   pendingAgentTasks?: Record<string, { toolCallId: string }>;
   /** Isolated state per agent, keyed by agent name */
   agentStates?: Record<string, AgentState>;
+
+  /** Dynamic top-level state for session-wide data (e.g. project_plan, todos) */
+  [key: string]: any;
 }
 
 export interface ChatRequest {

@@ -2,12 +2,14 @@ import { MelonyProvider } from "@melony/react";
 import { MelonyUIProvider } from "@melony/ui-kit";
 import { shadcnElements, ThemeProvider } from "@melony/ui-shadcn";
 import { MelonyClient } from "melony/client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "./hooks/use-session";
 import { useConfig } from "./hooks/use-config";
+import { cn } from "./lib/utils";
 import { AppLayout, AppLayoutProvider } from "./components/layout/AppLayout";
 import { ChatPage } from "./components/pages/ChatPage";
+import { SessionStateSidebar } from "./components/SessionStateSidebar";
 import { AgentsPage } from "./components/pages/AgentsPage";
 import { AutomationsPage } from "./components/pages/AutomationsPage";
 import { SettingsPage } from "./components/pages/SettingsPage";
@@ -24,6 +26,7 @@ export function App() {
   const queryClient = useQueryClient();
   const { sessionId, path, navigate, ensureSessionInUrl } = useSession();
   const { data: config, isLoading: configLoading } = useConfig();
+  const [sessionStateSidebarOpen, setSessionStateSidebarOpen] = useState(true);
 
   const tab = useMemo(() => {
     return new URLSearchParams(path).get("tab") || "chat";
@@ -90,20 +93,25 @@ export function App() {
               sessionId={sessionId}
               currentTab={tab}
               onNavigate={navigate}
-              // rightActions={tab === "chat" ? (
-              //   <button
-              //     onClick={() => setExecutionSidebarOpen((v) => !v)}
-              //     className="p-2 rounded-lg hover:bg-muted/80 text-muted-foreground/70 hover:text-foreground transition-all duration-150"
-              //     aria-label={executionSidebarOpen ? "Collapse execution sidebar" : "Open execution sidebar"}
-              //   >
-              //     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              //       <rect width="18" height="18" x="3" y="3" rx="2" />
-              //       <path d="M15 3v18" />
-              //     </svg>
-              //   </button>
-              // ) : null}
+              rightActions={tab === "chat" ? (
+                <button
+                  onClick={() => setSessionStateSidebarOpen((v) => !v)}
+                  className={cn(
+                    "p-2 rounded-lg transition-all duration-150",
+                    sessionStateSidebarOpen 
+                      ? "bg-primary/10 text-primary" 
+                      : "hover:bg-muted/80 text-muted-foreground/70 hover:text-foreground"
+                  )}
+                  aria-label={sessionStateSidebarOpen ? "Hide session data" : "Show session data"}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="18" height="18" x="3" y="3" rx="2" />
+                    <path d="M15 3v18" />
+                  </svg>
+                </button>
+              ) : null}
             >
-              {tab === "chat" && <ChatPage sessionId={sessionId} />}
+              {tab === "chat" && <ChatPage sessionId={sessionId} showSidebar={sessionStateSidebarOpen} />}
               {tab === "agents" && <AgentsPage />}
               {tab === "automations" && <AutomationsPage />}
               {tab === "settings" && <SettingsPage />}

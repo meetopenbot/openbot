@@ -1022,7 +1022,6 @@ export async function startServer(options: ServerOptions = {}) {
     console.log(`OpenBot server listening at http://localhost:${PORT}`);
     console.log(`  - Chat endpoint: POST /api/chat`);
     console.log(`  - REST endpoints: /api/config, /api/sessions, /api/agents`);
-    console.log(`\n🚀 TIP: Use 'openbot up' to run both the server and web dashboard together.`);
     if (options.openaiApiKey) console.log("  - Using OpenAI API Key from CLI");
     if (options.anthropicApiKey)
       console.log("  - Using Anthropic API Key from CLI");

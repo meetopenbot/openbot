@@ -1,12 +1,63 @@
 import { generateId, MelonyBuilder, Runtime } from "melony";
 import { ChatEvent, ChatState } from "../types.js";
 
+/**
+ * Simple helper to set a value in an object by a dot-separated path.
+ */
+function setByPath(obj: any, path: string, value: any) {
+  const parts = path.split(".");
+  let current = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    if (!(part in current)) {
+      current[part] = {};
+    }
+    current = current[part];
+  }
+  current[parts[parts.length - 1]] = value;
+}
+
 export function setupDelegation(
   builder: MelonyBuilder<ChatState, ChatEvent>,
   agentRuntimes: Map<string, Runtime<ChatState, ChatEvent>>
 ) {
+  builder.on("action:updateState", async function* (event: ChatEvent, context: { runId: string; state: ChatState }) {
+    const { path, value, toolCallId } = event.data;
+    const state = context.state as any;
+
+    try {
+      setByPath(state, path, value);
+      
+      // Emit a state update event for the client
+      // We can send the whole top-level key that was modified
+      const topLevelKey = path.split(".")[0];
+      yield {
+        type: "state:update",
+        data: { key: topLevelKey, value: state[topLevelKey] },
+      } as ChatEvent;
+
+      yield {
+        type: "action:result",
+        data: {
+          action: "updateState",
+          result: `Successfully updated state at path "${path}".`,
+          toolCallId,
+        },
+      } as ChatEvent;
+    } catch (error: any) {
+      yield {
+        type: "action:result",
+        data: {
+          action: "updateState",
+          result: `Error updating state: ${error.message}`,
+          toolCallId,
+        },
+      } as ChatEvent;
+    }
+  });
+
   builder.on("action:delegateTask", async function* (event: ChatEvent, context: { runId: string; state: ChatState }) {
-    const { agent: agentName, toolCallId, task, attachments } = event.data;
+    const { agent: agentName, toolCallId, task, stateKey, attachments } = event.data;
     const agentRuntime = agentRuntimes.get(agentName);
 
     // If the agent is not found, return an error
@@ -106,14 +157,24 @@ export function setupDelegation(
         if (agentEvent.type === "agent:output") {
           const agentOutput = agentEvent.data as any;
 
-          // THIS NEEDS TO BE IMPROVED. WE NEED TO KEEP A SINGLE AGENT OUTPUT VARIABLE.
-          const value = agentOutput?.result ?? agentOutput?.content ?? agentOutput?.message;
-          if (typeof value === "string") {
-            if (lastAgentOutput) lastAgentOutput += "\n\n";
-            lastAgentOutput += value;
-          } else if (typeof value === "object" && value !== null) {
+          // DETERMINISTIC SYNC: If agent returns structured data and stateKey is provided
+          const value = agentOutput?.result ?? agentOutput?.content ?? agentOutput?.message ?? agentOutput;
+
+          if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+            if (stateKey) {
+              context.state[stateKey] = value;
+              // Emit a state update event for the client
+              yield {
+                type: "state:update",
+                data: { key: stateKey, value },
+              } as ChatEvent;
+            }
+
             if (lastAgentOutput) lastAgentOutput += "\n\n";
             lastAgentOutput += JSON.stringify(value, null, 2);
+          } else if (typeof value === "string") {
+            if (lastAgentOutput) lastAgentOutput += "\n\n";
+            lastAgentOutput += value;
           }
         }
       }

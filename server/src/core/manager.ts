@@ -40,8 +40,22 @@ ${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ""}
         usageScope: "manager",
         system: async (context: any) => {
           const memoryPrompt = await buildMemoryPrompt(context);
+          const state = context.state as any;
 
-          return `
+          // Deterministically inject any custom state keys into the prompt
+          const standardKeys = ["messages", "agentStates", "usage", "cwd", "workspaceRoot", "title", "sessionId", "pendingAgentTasks"];
+          const customState: Record<string, any> = {};
+          for (const key of Object.keys(state)) {
+            if (!standardKeys.includes(key)) {
+              customState[key] = state[key];
+            }
+          }
+
+          const statePrompt = Object.keys(customState).length > 0
+            ? `\n\n<session_state>\n${JSON.stringify(customState, null, 2)}\n</session_state>`
+            : "";
+
+          const finalSystemPrompt = `
 
 <orchestrator>
 Your goal is to solve user requests by delegating tasks to expert sub-agents.
@@ -51,11 +65,18 @@ Your goal is to solve user requests by delegating tasks to expert sub-agents.
 3. **Context**: Provide a clear, detailed task for the sub-agent. Pass any relevant user attachments.
 4. **Report**: Summarize the sub-agent's work concisely for the user.
 5. **Memory**: Use your memory tools (\`remember\`, \`recall\`) to maintain context across sessions.
+6. **State**: Use \`updateState\` to modify any value in the <session_state>.
 </orchestrator>
+
+${statePrompt}
 
 <agents>
 ${agentDescriptions}
-</agents>${memoryPrompt}`;
+</agents>${memoryPrompt}`
+
+          console.log("finalSystemPrompt:::::", finalSystemPrompt);
+
+          return finalSystemPrompt;
         },
         promptInputType: "agent:input",
         actionResultInputType: "action:result",
@@ -67,6 +88,7 @@ ${agentDescriptions}
             inputSchema: z.object({
               agent: z.enum(agentNames as [string, ...string[]]).describe("The name of the agent to use"),
               task: z.string().describe("The task for the agent to perform"),
+              stateKey: z.string().optional().describe("Optional key to store structured JSON result in the session state"),
               attachments: z.array(
                 z.object({
                   id: z.string(),
@@ -76,6 +98,13 @@ ${agentDescriptions}
                   url: z.string(),
                 })
               ).optional().describe("Attachments to pass through to the agent"),
+            }),
+          },
+          updateState: {
+            description: "Update a value in the session state using a JSON path.",
+            inputSchema: z.object({
+              path: z.string().describe("The JSON path to the value (e.g. 'project_plan.todos.0.status')"),
+              value: z.any().describe("The new value to set"),
             }),
           },
         },

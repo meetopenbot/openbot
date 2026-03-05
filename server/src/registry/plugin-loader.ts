@@ -5,6 +5,7 @@ import { execSync } from "node:child_process";
 import { MelonyPlugin } from "melony";
 import { LanguageModel } from "ai";
 import matter from "gray-matter";
+import { z } from "zod";
 import { PluginRegistry, ToolPluginRegistryEntry } from "./plugin-registry.js";
 import { llmPlugin } from "../plugins/llm/index.js";
 import { createModel } from "../models.js";
@@ -94,6 +95,28 @@ export async function ensurePluginReady(pluginDir: string) {
 
 // ── AGENT.md Config ──────────────────────────────────────────────────
 
+function jsonToZod(schema: any): z.ZodType<any> {
+  if (typeof schema === "string") {
+    if (schema === "string") return z.string();
+    if (schema === "number") return z.number();
+    if (schema === "boolean") return z.boolean();
+  }
+  if (Array.isArray(schema)) {
+    // If it's a simple array like ["string"], take the first item
+    if (schema.length === 1) return z.array(jsonToZod(schema[0]));
+    // For anything else, treat as array of any (or you could improve this)
+    return z.array(z.any());
+  }
+  if (typeof schema === "object" && schema !== null) {
+    const shape: any = {};
+    for (const [key, value] of Object.entries(schema)) {
+      shape[key] = jsonToZod(value);
+    }
+    return z.object(shape);
+  }
+  return z.any();
+}
+
 export interface AgentConfig {
   name: string;
   description: string;
@@ -102,6 +125,7 @@ export interface AgentConfig {
   plugins: (string | { name: string; config?: any })[];
   instructions: string;
   subscribe?: string[];
+  outputSchema?: any;
 }
 
 export async function readAgentConfig(agentDir: string): Promise<AgentConfig> {
@@ -125,6 +149,7 @@ export async function readAgentConfig(agentDir: string): Promise<AgentConfig> {
     plugins: config.plugins || [],
     instructions: parsed.content.trim() || "",
     subscribe: config.subscribe,
+    outputSchema: config.outputSchema,
   };
 }
 
@@ -162,6 +187,7 @@ function composeAgentFromConfig(
       model,
       system: config.instructions,
       toolDefinitions: allToolDefinitions,
+      outputSchema: config.outputSchema ? jsonToZod(config.outputSchema) : undefined,
     }));
   };
 

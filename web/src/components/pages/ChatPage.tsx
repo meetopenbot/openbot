@@ -3,14 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Thread } from "../Thread";
 import { Composer } from "../Composer";
-// import { ExecutionSidebar } from "../ExecutionSidebar";
+import { SessionStateSidebar } from "../SessionStateSidebar";
 import { api } from "../../lib/api";
 
 interface ChatPageProps {
   sessionId: string;
+  showSidebar?: boolean;
 }
 
-export function ChatPage({ sessionId }: ChatPageProps) {
+export function ChatPage({ sessionId, showSidebar = true }: ChatPageProps) {
   const { reset } = useMelony();
   const [loadedSessions, setLoadedSessions] = useState<Set<string>>(new Set());
   const prevSessionRef = useRef<string | null>(null);
@@ -40,7 +41,7 @@ export function ChatPage({ sessionId }: ChatPageProps) {
           </div>
         </div>
       </div>
-      {/* <ExecutionSidebar events={(melonyEvents ?? []) as any[]} open={executionSidebarOpen} /> */}
+      {showSidebar && <SessionStateSidebar />}
     </div>
   );
 }
