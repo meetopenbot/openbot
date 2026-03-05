@@ -1,12 +1,4 @@
-import { ui, UINode } from '@melony/ui-kit';
+import { block, UIBlock } from '../block.js';
 
-export const resourceCardWidget = (title: string, subtitle?: string, children: UINode[] = []) =>
-  ui.box({
-    border: true,
-    radius: 'lg',
-    padding: 'md',
-  }, [
-    ui.heading(title, { level: 4 }),
-    ui.text(subtitle ?? '', { size: 'sm', color: 'mutedForeground' }),
-    ...children,
-  ]);
+export const resourceCardWidget = (title: string, subtitle?: string, children: UIBlock[] = []) =>
+  block('resource-card', { title, subtitle, children });

@@ -1,5 +1,5 @@
 import { MelonyPlugin, Event } from "melony";
-import { ui } from "@melony/ui-kit/server";
+import { uiEvent } from "../../ui/block.js";
 import { z } from "zod";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -188,7 +188,7 @@ export const fileSystemPlugin = (options: FileSystemPluginOptions = {}): MelonyP
   });
 
   builder.on("file-system:status" as any, async function* (event: FileSystemStatusEvent) {
-    yield ui.event(
+    yield uiEvent(
       statusWidget(event.data.message, event.data.severity)
     );
   });

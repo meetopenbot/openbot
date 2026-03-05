@@ -1,4 +1,4 @@
-import { ui } from '@melony/ui-kit/server';
+import { block } from '../block.js';
 
 export const codeSnippet = (code: string, language: string = 'text') =>
-  ui.markdown(`\`\`\`${language}\n${code}\n\`\`\``);
+  block('code-snippet', { code, language });

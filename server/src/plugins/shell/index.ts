@@ -1,5 +1,5 @@
 import { MelonyPlugin, Event } from "melony";
-import { ui } from "@melony/ui-kit/server";
+import { uiEvent } from "../../ui/block.js";
 import { z } from "zod";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
@@ -124,7 +124,7 @@ export const shellPlugin = (options: ShellPluginOptions = {}): MelonyPlugin<any,
   });
 
   builder.on("shell:status" as any, async function* (event: ShellStatusEvent) {
-    yield ui.event(
+    yield uiEvent(
       statusWidget(event.data.message, event.data.severity)
     );
   });

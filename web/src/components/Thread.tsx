@@ -1,8 +1,8 @@
 import { useMelony } from "@melony/react";
-import { MelonyRenderer, type UINode } from "@melony/ui-kit";
 import { useEffect, useRef, type ReactNode, useMemo, useState } from "react";
 import { AgentAvatar } from "./AgentAvatar";
 import { useConfig } from "../hooks/use-config";
+import { WidgetRenderer, type UIBlock } from "./WidgetRenderer";
 
 const TEXT_EVENT_TYPES = new Set([
   "agent:output",
@@ -21,7 +21,7 @@ function hasRenderableContent(message: { content: any }): boolean {
   }
   if (!Array.isArray(message.content)) return false;
   return message.content.some((event: any) => (
-    event.type === "ui" ||
+    (event.type === "ui" && event.data?.placement !== "sidebar") ||
     TEXT_EVENT_TYPES.has(event.type) ||
     DELEGATION_EVENT_TYPES.has(event.type)
   ));
@@ -71,11 +71,11 @@ function EventItem({ event }: { event: any }) {
       const rawContent = typeof data === 'string' ? data : (data?.content ?? data?.result ?? data?.message);
       if (!rawContent) return null;
 
-      // If content is a UI node, render it directly
-      if (typeof rawContent === 'object' && rawContent.type && (rawContent.props || rawContent.children)) {
+      // If content is a UI block, render it directly
+      if (typeof rawContent === 'object' && rawContent.type === "ui-block") {
         return (
           <div className="px-2 py-1 mx-2">
-            <MelonyRenderer node={rawContent as any} />
+            <WidgetRenderer block={rawContent as any} />
           </div>
         );
       }
@@ -85,14 +85,15 @@ function EventItem({ event }: { event: any }) {
       
       return (
         <div className="px-2 py-1.5 bg-background/40 rounded border border-border/20 my-1 mx-2">
-          <MelonyRenderer node={{ type: "markdown", props: { value: content, size: "sm" } } as any} />
+          <WidgetRenderer block={{ type: "ui-block", widget: "text", props: { value: content }, placement: "thread" }} />
         </div>
       );
     }
     case "ui":
+      if (data?.placement === "sidebar") return null;
       return (
         <div className="px-2 py-1 mx-2">
-          <MelonyRenderer node={data} />
+          <WidgetRenderer block={data} />
         </div>
       );
     case "agent:sub-action":
@@ -105,14 +106,14 @@ function EventItem({ event }: { event: any }) {
     default:
       if (data && typeof data === 'object' && (data.message || data.content)) {
           const displayValue = data.message || data.content;
-          const isNode = typeof displayValue === 'object' && displayValue.type && (displayValue.props || displayValue.children);
+          const isBlock = typeof displayValue === 'object' && displayValue.type === "ui-block";
           
           return (
             <div className="flex items-start gap-2 py-1 px-2">
                <div className="mt-1.5 size-1 rounded-full bg-muted-foreground/20 shrink-0" />
                <div className="text-[11px] text-muted-foreground">
-                  {isNode ? (
-                    <MelonyRenderer node={displayValue} />
+                  {isBlock ? (
+                    <WidgetRenderer block={displayValue} />
                   ) : (
                     typeof displayValue === 'string' ? displayValue : JSON.stringify(displayValue, null, 2)
                   )}
@@ -202,7 +203,7 @@ function DelegationCard({
                <div className="text-[10px] text-muted-foreground/40 uppercase tracking-widest mb-1.5 font-bold">Output</div>
                <div className="text-[12.5px] text-foreground/90 leading-relaxed">
                  {typeof endEvent.data.result === 'string' ? (
-                   <MelonyRenderer node={{ type: "markdown", props: { value: endEvent.data.result, size: "sm" } } as any} />
+                   <WidgetRenderer block={{ type: "ui-block", widget: "text", props: { value: endEvent.data.result }, placement: "thread" }} />
                  ) : (
                    <pre className="whitespace-pre-wrap font-mono text-[10px] bg-background/30 p-2 rounded-lg border border-border/10">
                      {JSON.stringify(endEvent.data.result, null, 2)}
@@ -238,7 +239,7 @@ export function Thread({
   placeholderNode,
 }: {
   placeholder?: ReactNode;
-  placeholderNode?: UINode;
+  placeholderNode?: any;
 }) {
   const { messages, streaming } = useMelony();
   const { data: config } = useConfig();
@@ -313,6 +314,8 @@ export function Thread({
         }
 
         if (event.type === "ui" || TEXT_EVENT_TYPES.has(event.type)) {
+          // Filter out sidebar widgets from the thread
+          if (event.type === "ui" && event.data?.placement === "sidebar") return;
           topLevelEvents.push(event);
         }
       });
@@ -357,7 +360,7 @@ export function Thread({
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] py-12 gap-8">
         <div className="flex flex-col gap-3">
           {placeholder}
-          {!placeholder && placeholderNode && <MelonyRenderer node={placeholderNode} />}
+          {!placeholder && placeholderNode && <WidgetRenderer block={placeholderNode} />}
         </div>
       </div>
     );
@@ -418,7 +421,7 @@ export function Thread({
             <div key={item.key} className="flex flex-col w-full items-start animate-fade-in">
               {shouldShowHeader && agentHeader}
               <div className="max-w-[85%]">
-                <MelonyRenderer node={event.data} />
+                <WidgetRenderer block={event.data} />
               </div>
             </div>
           );
@@ -429,7 +432,7 @@ export function Thread({
           if (!rawContent && (!event.data?.attachments || event.data.attachments.length === 0)) return null;
 
           const attachments = Array.isArray(event.data?.attachments) ? event.data.attachments : [];
-          const isNode = typeof rawContent === 'object' && rawContent.type && (rawContent.props || rawContent.children);
+          const isBlock = typeof rawContent === 'object' && rawContent.type === "ui-block";
 
           return (
             <div
@@ -441,15 +444,16 @@ export function Thread({
                 <div className="flex flex-col gap-2">
                   {rawContent && (
                     <div className={isUserEvent ? "text-[13px] leading-relaxed" : ""}>
-                      {isNode ? (
-                        <MelonyRenderer node={rawContent as any} />
+                      {isBlock ? (
+                        <WidgetRenderer block={rawContent as any} />
                       ) : (
-                        <MelonyRenderer node={{ 
-                          type: "markdown", 
+                        <WidgetRenderer block={{ 
+                          type: "ui-block", 
+                          widget: "text", 
                           props: { 
                             value: typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent, null, 2), 
-                            size: "sm" 
-                          } 
+                          },
+                          placement: "thread"
                         } as any} />
                       )}
                     </div>

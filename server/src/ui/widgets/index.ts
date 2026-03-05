@@ -6,6 +6,7 @@ import { progressStep } from './progress-step.js';
 import { approvalCard } from './approval-card.js';
 import { actionList } from './action-list.js';
 import { emptyState } from './empty-state.js';
+import { todoList } from './todo-list.js';
 
 export const widgets = {
   keyValue,
@@ -16,6 +17,7 @@ export const widgets = {
   approvalCard,
   actionList,
   emptyState,
+  todoList,
 };
 
 export default widgets;

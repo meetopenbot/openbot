@@ -1,5 +1,5 @@
 import { MelonyPlugin, generateId } from "melony";
-import { ui } from "@melony/ui-kit/server";
+import { uiEvent } from "../../ui/block.js";
 import { widgets } from "../../ui/widgets/index.js";
 import type { ApprovalCardData } from "../../ui/widgets/approval-card.js";
 
@@ -169,7 +169,7 @@ export const approvalPlugin = (options: ApprovalPluginOptions): MelonyPlugin<any
     // Use suspend(event) to emit the UI and halt execution of any handlers for this event.
     // This effectively "pauses" the run for user input.
     const approvalData = buildApprovalData(event, rule);
-    suspend(ui.event(
+    suspend(uiEvent(
       widgets.approvalCard(
         "Approval Required",
         approvalData,
@@ -192,7 +192,7 @@ export const approvalPlugin = (options: ApprovalPluginOptions): MelonyPlugin<any
     if (originalEvent) {
       delete state.pendingApprovals[id];
 
-      yield ui.event(widgets.status("Action approved", "success"));
+      yield uiEvent(widgets.status("Action approved", "success"));
 
       // Re-emit the original event with approved: true.
       // The interceptor will see it, but bypass because of meta.approved.
@@ -213,7 +213,7 @@ export const approvalPlugin = (options: ApprovalPluginOptions): MelonyPlugin<any
     const originalEvent = state.pendingApprovals?.[id];
     if (originalEvent) {
       delete state.pendingApprovals[id];
-      yield ui.event(widgets.status("Action denied", "error"));
+      yield uiEvent(widgets.status("Action denied", "error"));
 
       // If it was a tool call (action:*), return a result error so the LLM knows it failed
       if (originalEvent.data?.toolCallId) {

@@ -1,5 +1,7 @@
 import { generateId, MelonyBuilder, Runtime } from "melony";
 import { ChatEvent, ChatState } from "../types.js";
+import { uiEvent } from "../ui/block.js";
+import { widgets } from "../ui/widgets/index.js";
 
 /**
  * Simple helper to set a value in an object by a dot-separated path.
@@ -17,6 +19,37 @@ function setByPath(obj: any, path: string, value: any) {
   current[parts[parts.length - 1]] = value;
 }
 
+/**
+ * Helper to emit a UI snapshot for a widget if applicable.
+ */
+function* maybeEmitWidget(key: string, value: any) {
+  if (!value || typeof value !== "object") return;
+
+  let widgetName = value.widget;
+  let data = value;
+
+  // 1. Check for nested .todos array (common pattern for planner/task agents)
+  if (!widgetName && Array.isArray(value.todos)) {
+    widgetName = "todoList";
+    data = value.todos;
+  }
+
+  // 2. Fallback for direct arrays if key matches known patterns
+  if (!widgetName && Array.isArray(value) && ["todos", "todoList", "project_plan"].includes(key)) {
+    widgetName = "todoList";
+    data = value;
+  }
+
+  // If we found a valid widget and data is an array, emit the UI event
+  if (widgetName && (widgets as any)[widgetName] && Array.isArray(data)) {
+    yield uiEvent((widgets as any)[widgetName](data, {
+      placement: "sidebar",
+      id: `sidebar-${widgetName}`,
+      meta: { title: key === "project_plan" ? "Project Plan" : (key.charAt(0).toUpperCase() + key.slice(1)) }
+    })) as any;
+  }
+}
+
 export function setupDelegation(
   builder: MelonyBuilder<ChatState, ChatEvent>,
   agentRuntimes: Map<string, Runtime<ChatState, ChatEvent>>
@@ -28,13 +61,8 @@ export function setupDelegation(
     try {
       setByPath(state, path, value);
       
-      // Emit a state update event for the client
-      // We can send the whole top-level key that was modified
       const topLevelKey = path.split(".")[0];
-      yield {
-        type: "state:update",
-        data: { key: topLevelKey, value: state[topLevelKey] },
-      } as ChatEvent;
+      yield* maybeEmitWidget(topLevelKey, state[topLevelKey]);
 
       yield {
         type: "action:result",
@@ -163,11 +191,7 @@ export function setupDelegation(
           if (typeof value === "object" && value !== null && !Array.isArray(value)) {
             if (stateKey) {
               context.state[stateKey] = value;
-              // Emit a state update event for the client
-              yield {
-                type: "state:update",
-                data: { key: stateKey, value },
-              } as ChatEvent;
+              yield* maybeEmitWidget(stateKey, value);
             }
 
             if (lastAgentOutput) lastAgentOutput += "\n\n";

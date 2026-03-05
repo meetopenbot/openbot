@@ -1,5 +1,5 @@
 import { MelonyPlugin, Event } from "melony";
-import { ui } from "@melony/ui-kit/server";
+import { uiEvent, block } from "../../ui/block.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import matter from "gray-matter";
@@ -363,16 +363,16 @@ export const skillsPlugin = (
   builder.on(
     "skills:status" as any,
     async function* (event: SkillsStatusEvent) {
-      yield ui.event(statusWidget(event.data.message, event.data.severity));
+      yield uiEvent(statusWidget(event.data.message, event.data.severity));
     }
   );
 
   builder.on(
     "skills:loaded" as any,
     async function* (event: SkillsLoadedEvent) {
-      yield ui.event(
+      yield uiEvent(
         resourceCardWidget(event.data.title, "", [
-          ui.text(event.data.instructions),
+          block('text', { value: event.data.instructions }),
         ])
       );
     }

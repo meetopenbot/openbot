@@ -1,7 +1,4 @@
-import { ui } from '@melony/ui-kit';
+import { block } from '../block.js';
 
 export const statusWidget = (message: string, severity: 'info' | 'success' | 'error' = 'info') =>
-  ui.text(message, {
-    color: severity === 'error' ? 'danger' : severity === 'success' ? 'success' : 'muted',
-    size: 'xs',
-  });
+  block('status', { message, severity });

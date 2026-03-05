@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useTheme } from "@melony/ui-shadcn";
+import { useTheme } from "../ThemeProvider";
 import { useConfig, useUpdateConfig } from "../../hooks/use-config";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type MarketplaceItem } from "../../lib/api";

@@ -1,5 +1,5 @@
 import { MelonyPlugin, RuntimeContext, Event } from "melony";
-import { ui } from "@melony/ui-kit/server";
+import { uiEvent } from "../../ui/block.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { MemoryPluginOptions } from "./types.js";
@@ -258,7 +258,7 @@ export const memoryPlugin = (
   });
 
   builder.on("memory:status" as any, async function* (event: MemoryStatusEvent) {
-    yield ui.event(statusWidget(event.data.message, event.data.severity));
+    yield uiEvent(statusWidget(event.data.message, event.data.severity));
   });
 };
 
