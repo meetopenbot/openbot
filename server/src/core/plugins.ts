@@ -3,7 +3,6 @@ import { fileSystemPlugin, fileSystemToolDefinitions } from "../plugins/file-sys
 import { approvalPlugin } from "../plugins/approval/index.js";
 import { osAgent } from "../agents/os-agent.js";
 import { agentCreatorAgent } from "../agents/agent-creator.js";
-import { plannerAgent } from "../agents/planner-agent.js";
 import { PluginRegistry, discoverPlugins } from "../registry/index.js";
 import path from "node:path";
 
@@ -77,14 +76,6 @@ export async function setupPluginRegistry(
       ),
     },
     plugin: agentCreatorAgent({ model }),
-    isBuiltIn: true,
-  });
-
-  registry.register({
-    name: "planner-agent",
-    description: "Creates concise execution plans from user intent for OpenBot to run.",
-    type: "agent",
-    plugin: plannerAgent({ model }),
     isBuiltIn: true,
   });
 
