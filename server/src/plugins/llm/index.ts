@@ -3,8 +3,19 @@ import { streamText, LanguageModel, ModelMessage, Output } from "ai";
 import { z } from "zod";
 import { SimpleMessage } from "../../types.js";
 
+async function toInlineDataUrl(url: string, mimeType: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  return `data:${mimeType};base64,${base64}`;
+}
+
 async function toModelMessages(messages: SimpleMessage[]): Promise<ModelMessage[]> {
-  return messages.map((message) => {
+  return Promise.all(messages.map(async (message) => {
     if (message.role === "tool") {
       return {
         role: "tool",
@@ -57,23 +68,38 @@ async function toModelMessages(messages: SimpleMessage[]): Promise<ModelMessage[
 
     if (message.role === "user") {
       if (message.attachments && message.attachments.length > 0) {
-        return {
-          role: "user",
-          content: [
-            { type: "text", text: message.content as string },
-            ...message.attachments.map((a) => {
-              if (a.mimeType.startsWith("image/")) {
+        const attachmentParts = await Promise.all(
+          message.attachments.map(async (a) => {
+            if (a.mimeType.startsWith("image/")) {
+              try {
+                return {
+                  type: "image",
+                  image: await toInlineDataUrl(a.url, a.mimeType),
+                };
+              } catch (error) {
+                console.warn(
+                  `Failed to inline image attachment (${a.name}). Falling back to URL: ${a.url}`,
+                  error
+                );
                 return {
                   type: "image",
                   image: a.url,
                 };
               }
-              return {
-                type: "file",
-                data: a.url,
-                mimeType: a.mimeType,
-              };
-            }),
+            }
+            return {
+              type: "file",
+              data: a.url,
+              mimeType: a.mimeType,
+            };
+          })
+        );
+
+        return {
+          role: "user",
+          content: [
+            { type: "text", text: message.content as string },
+            ...attachmentParts,
           ],
         } as ModelMessage;
       }
@@ -87,7 +113,7 @@ async function toModelMessages(messages: SimpleMessage[]): Promise<ModelMessage[
       role: message.role as any,
       content: message.content as any,
     } as ModelMessage;
-  });
+  }));
 }
 
 // Helper to find pending tool calls in history
