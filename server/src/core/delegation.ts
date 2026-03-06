@@ -44,8 +44,8 @@ function* maybeEmitWidget(key: string, value: any) {
   if (widgetName && (widgets as any)[widgetName] && Array.isArray(data)) {
     yield uiEvent((widgets as any)[widgetName](data, {
       placement: "sidebar",
-      id: `sidebar-${widgetName}`,
-      meta: { title: key === "project_plan" ? "Project Plan" : (key.charAt(0).toUpperCase() + key.slice(1)) }
+      id: `sidebar-${key}`,
+      meta: { title: key === "project_plan" ? "Project Plan" : (key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')) }
     })) as any;
   }
 }

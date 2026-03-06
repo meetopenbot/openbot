@@ -271,9 +271,10 @@ function TodoListWidget({ todos }: { todos: any[] }) {
   return (
     <div className="flex flex-col gap-1 w-full my-2 animate-fade-in">
       {todos.map((todo, idx) => {
-        const isDone = todo.status === 'completed' || todo.status === 'done';
-        const isInProgress = todo.status === 'in_progress' || todo.status === 'processing';
-        const isCancelled = todo.status === 'cancelled';
+        const status = (todo.status || '').toLowerCase();
+        const isDone = ['completed', 'done', 'finished', 'complete', 'success'].includes(status);
+        const isInProgress = ['in_progress', 'in-progress', 'processing', 'running', 'active'].includes(status);
+        const isCancelled = ['cancelled', 'canceled', 'failed', 'error'].includes(status);
         const label = todo.content || todo.task || todo.title;
 
         return (
