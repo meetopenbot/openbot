@@ -1,11 +1,11 @@
 import { Runtime } from "melony";
-import { ChatEvent, ChatState } from "../types.js";
+import { ManagerEvent, ManagerState } from "../types.js";
 
 export async function* runOpenBot(
-  event: ChatEvent,
-  context: { runId: string; state: ChatState },
-  managerRuntime: Runtime<ChatState, ChatEvent>,
-  agentRuntimes: Map<string, Runtime<ChatState, ChatEvent>>
+  event: ManagerEvent,
+  context: { runId: string; state: ManagerState },
+  managerRuntime: Runtime<ManagerState, ManagerEvent>,
+  agentRuntimes: Map<string, Runtime<ManagerState, ManagerEvent>>
 ) {
   const { state } = context;
 
@@ -44,7 +44,7 @@ export async function* runOpenBot(
   }
 
   // 2. Default routing: translate user event to manager input
-  yield* managerRuntime.run({ ...event, type: "agent:input" } as ChatEvent, {
+  yield* managerRuntime.run({ ...event, type: "agent:input" } as ManagerEvent, {
     runId: context.runId,
     state: state as any,
   });

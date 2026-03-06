@@ -1,5 +1,5 @@
 import { generateId, MelonyBuilder, Runtime } from "melony";
-import { ChatEvent, ChatState } from "../types.js";
+import { ManagerEvent, ManagerState } from "../types.js";
 import { uiEvent } from "../ui/block.js";
 import { widgets } from "../ui/widgets/index.js";
 
@@ -51,10 +51,10 @@ function* maybeEmitWidget(key: string, value: any) {
 }
 
 export function setupDelegation(
-  builder: MelonyBuilder<ChatState, ChatEvent>,
-  agentRuntimes: Map<string, Runtime<ChatState, ChatEvent>>
+  builder: MelonyBuilder<ManagerState, ManagerEvent>,
+  agentRuntimes: Map<string, Runtime<ManagerState, ManagerEvent>>
 ) {
-  builder.on("action:updateState", async function* (event: ChatEvent, context: { runId: string; state: ChatState }) {
+  builder.on("action:updateState", async function* (event: ManagerEvent, context: { runId: string; state: ManagerState }) {
     const { path, value, toolCallId } = event.data;
     const state = context.state as any;
 
@@ -71,7 +71,7 @@ export function setupDelegation(
           result: `Successfully updated state at path "${path}".`,
           toolCallId,
         },
-      } as ChatEvent;
+      } as ManagerEvent;
     } catch (error: any) {
       yield {
         type: "action:result",
@@ -80,11 +80,11 @@ export function setupDelegation(
           result: `Error updating state: ${error.message}`,
           toolCallId,
         },
-      } as ChatEvent;
+      } as ManagerEvent;
     }
   });
 
-  builder.on("action:delegateTask", async function* (event: ChatEvent, context: { runId: string; state: ChatState }) {
+  builder.on("action:delegateTask", async function* (event: ManagerEvent, context: { runId: string; state: ManagerState }) {
     const { agent: agentName, toolCallId, task, stateKey, attachments } = event.data;
     const agentRuntime = agentRuntimes.get(agentName);
 
@@ -108,10 +108,10 @@ export function setupDelegation(
       type: "delegation:start",
       meta: { delegationId, agentName },
       data: { agent: agentName, task },
-    } as ChatEvent;
+    } as ManagerEvent;
 
     // Initialize agent isolated state if not present
-    const state = context.state as ChatState;
+    const state = context.state as ManagerState;
     if (!state.agentStates) state.agentStates = {};
     if (!state.agentStates[agentName]) state.agentStates[agentName] = {};
 
@@ -140,7 +140,7 @@ export function setupDelegation(
             ...agentEvent,
             type: "agent:sub-input",
             meta: { ...agentEvent.meta, delegationId, agentName },
-          } as ChatEvent;
+          } as ManagerEvent;
           continue;
         }
 
@@ -151,7 +151,7 @@ export function setupDelegation(
             type: "agent:sub-action",
             meta: { ...agentEvent.meta, delegationId, agentName },
             data: { ...agentEvent.data, originalType: agentEvent.type },
-          } as ChatEvent;
+          } as ManagerEvent;
           continue;
         }
 
@@ -161,7 +161,7 @@ export function setupDelegation(
             ...agentEvent,
             type: "agent:sub-action-result",
             meta: { ...agentEvent.meta, delegationId, agentName },
-          } as ChatEvent;
+          } as ManagerEvent;
           continue;
         }
 
@@ -171,7 +171,7 @@ export function setupDelegation(
             ...agentEvent,
             type: "agent:sub-usage",
             meta: { ...agentEvent.meta, delegationId, agentName },
-          } as ChatEvent;
+          } as ManagerEvent;
           continue;
         }
 
@@ -179,7 +179,7 @@ export function setupDelegation(
         yield {
           ...agentEvent,
           meta: { ...agentEvent.meta, delegationId, agentName },
-        } as ChatEvent;
+        } as ManagerEvent;
 
         // accumulate agent output
         if (agentEvent.type === "agent:output") {
@@ -212,7 +212,7 @@ export function setupDelegation(
       type: "delegation:end",
       meta: { delegationId, agentName },
       data: { agent: agentName, result: lastAgentOutput || "Task completed." },
-    } as ChatEvent;
+    } as ManagerEvent;
 
     // Feedback the result back to the manager
     yield {
@@ -222,6 +222,6 @@ export function setupDelegation(
         result: lastAgentOutput || "Task completed with no output.",
         toolCallId,
       },
-    } as ChatEvent;
+    } as ManagerEvent;
   });
 }

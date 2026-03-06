@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { ChatState, ChatEvent } from "./types.js";
+import { ManagerState, ManagerEvent } from "./types.js";
 
 const SESSIONS_DIR = path.join(os.homedir(), ".openbot", "sessions");
 
@@ -49,7 +49,7 @@ function getSessionDir(sessionId: string): string {
  */
 const MAX_MESSAGES = 1000; // aiSdkPlugin defaults to latest 20 messages
 
-export async function loadSession(sessionId: string): Promise<ChatState | null> {
+export async function loadSession(sessionId: string): Promise<ManagerState | null> {
   const sessionDir = getSessionDir(sessionId);
   const statePath = path.join(sessionDir, "state.json");
 
@@ -59,7 +59,7 @@ export async function loadSession(sessionId: string): Promise<ChatState | null> 
 
   try {
     const data = fs.readFileSync(statePath, "utf-8");
-    const state: ChatState = JSON.parse(data);
+    const state: ManagerState = JSON.parse(data);
 
     if (state.messages && state.messages.length > MAX_MESSAGES) {
       // Preserve system messages at the beginning, then keep the tail
@@ -82,7 +82,7 @@ export async function loadSession(sessionId: string): Promise<ChatState | null> 
   }
 }
 
-export async function saveSession(sessionId: string, state: ChatState) {
+export async function saveSession(sessionId: string, state: ManagerState) {
   const sessionDir = getSessionDir(sessionId);
 
   if (!fs.existsSync(sessionDir)) {
@@ -93,7 +93,7 @@ export async function saveSession(sessionId: string, state: ChatState) {
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2), "utf-8");
 }
 
-export async function logEvent(sessionId: string, runId: string, event: ChatEvent) {
+export async function logEvent(sessionId: string, runId: string, event: ManagerEvent) {
   const sessionDir = getSessionDir(sessionId);
 
   if (!fs.existsSync(sessionDir)) {
@@ -111,7 +111,7 @@ export async function logEvent(sessionId: string, runId: string, event: ChatEven
   fs.appendFileSync(logPath, entry + "\n", "utf-8");
 }
 
-export async function loadEvents(sessionId: string): Promise<ChatEvent[]> {
+export async function loadEvents(sessionId: string): Promise<ManagerEvent[]> {
   const sessionDir = getSessionDir(sessionId);
   const logPath = path.join(sessionDir, `events.jsonl`);
 
@@ -124,7 +124,7 @@ export async function loadEvents(sessionId: string): Promise<ChatEvent[]> {
     return data
       .split("\n")
       .filter((line) => line.trim() !== "")
-      .map((line) => JSON.parse(line) as ChatEvent);
+      .map((line) => JSON.parse(line) as ManagerEvent);
   } catch (error) {
     console.error(`Failed to load events for session ${sessionId}:`, error);
     return [];
@@ -151,7 +151,7 @@ export async function listSessions(): Promise<{ id: string; title?: string; mtim
             const sessionPath = path.join(itemPath, subItem);
             const statePath = path.join(sessionPath, "state.json");
             if (fs.existsSync(statePath)) {
-              const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ChatState;
+              const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ManagerState;
 
               // Only include sessions with messages or a title
               if ((state.messages && state.messages.length > 0) || state.title) {
@@ -167,7 +167,7 @@ export async function listSessions(): Promise<{ id: string; title?: string; mtim
           // It's a legacy session folder in root
           const statePath = path.join(itemPath, "state.json");
           if (fs.existsSync(statePath)) {
-            const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ChatState;
+            const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ManagerState;
 
             // Only include sessions with messages or a title
             if ((state.messages && state.messages.length > 0) || state.title) {

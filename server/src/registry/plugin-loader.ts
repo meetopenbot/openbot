@@ -10,7 +10,7 @@ import { PluginRegistry, ToolPluginRegistryEntry } from "./plugin-registry.js";
 import { llmPlugin } from "../plugins/llm/index.js";
 import { createModel } from "../models.js";
 import { resolvePath, DEFAULT_AGENT_MD } from "../config.js";
-import type { ChatState, ChatEvent } from "../types.js";
+import type { ManagerState, ManagerEvent } from "../types.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -200,7 +200,7 @@ interface TSAgentDefinition {
   name?: string;
   description?: string;
   image?: string;
-  factory: (options: { model: LanguageModel; [key: string]: any }) => MelonyPlugin<ChatState, ChatEvent>;
+  factory: (options: { model: LanguageModel; [key: string]: any }) => MelonyPlugin<ManagerState, ManagerEvent>;
   capabilities?: Record<string, string>;
   subscribe?: string[];
 }

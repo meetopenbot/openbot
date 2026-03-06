@@ -3,14 +3,14 @@ import path from "node:path";
 import { llmPlugin } from "../plugins/llm/index.js";
 import { fileSystemToolDefinitions, fileSystemPlugin } from "../plugins/file-system/index.js";
 import { DEFAULT_BASE_DIR, resolvePath } from "../config.js";
-import { ChatState, ChatEvent } from "../types.js";
+import { ManagerState, ManagerEvent } from "../types.js";
 import { LanguageModel } from "ai";
 
 export interface AgentCreatorOptions {
   model: LanguageModel;
 }
 
-export const agentCreatorAgent = (options: AgentCreatorOptions): MelonyPlugin<ChatState, ChatEvent> => (builder) => {
+export const agentCreatorAgent = (options: AgentCreatorOptions): MelonyPlugin<ManagerState, ManagerEvent> => (builder) => {
   const { model } = options;
   const baseDir = resolvePath(DEFAULT_BASE_DIR);
   const agentsDir = path.join(baseDir, "agents");

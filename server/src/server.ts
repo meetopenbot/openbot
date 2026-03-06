@@ -13,7 +13,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import matter from "gray-matter";
-import type { ChatEvent, ChatRequest, ChatState } from "./types.js";
+import type { ManagerEvent, ManagerState, ManagerRequest } from "./types.js";
 import { fetchProviderModels, getModelCatalog } from "./model-catalog.js";
 import type { ModelProvider } from "./model-catalog.js";
 import { DEFAULT_MODEL_BY_PROVIDER, DEFAULT_MODEL_ID } from "./model-defaults.js";
@@ -92,7 +92,7 @@ export async function startServer(options: ServerOptions = {}) {
   const runAutomation = async (automation: AutomationRecord, scheduledAt: Date) => {
     const sessionId = `automation_${automation.id}`;
     const runId = `run_auto_${generateId()}`;
-    const state: ChatState = (await loadSession(sessionId)) ?? {};
+    const state: ManagerState = (await loadSession(sessionId)) ?? {};
 
     state.sessionId = sessionId;
     if (!state.cwd) state.cwd = process.cwd();
@@ -960,7 +960,7 @@ export async function startServer(options: ServerOptions = {}) {
   // ─── Chat SSE endpoint ──────────────────────────────────────────
 
   app.post("/api/chat", async (req, res) => {
-    const body = req.body as Partial<ChatRequest>;
+    const body = req.body as Partial<ManagerRequest>;
 
     if (!body.event || typeof body.event.type !== "string") {
       return res.status(400).json({
@@ -977,12 +977,12 @@ export async function startServer(options: ServerOptions = {}) {
 
     const sessionId = body.sessionId ?? "default";
     const runId = body.runId ?? `run_${generateId()}`;
-    const state: ChatState = (await loadSession(sessionId)) ?? {};
+    const state: ManagerState = (await loadSession(sessionId)) ?? {};
     state.sessionId = sessionId;
     if (!state.cwd) state.cwd = process.cwd();
     if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
 
-    const iterator = runtime.run(body.event as ChatEvent, {
+    const iterator = runtime.run(body.event as ManagerEvent, {
       runId,
       state,
     });

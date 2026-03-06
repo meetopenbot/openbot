@@ -1,6 +1,6 @@
 import { MelonyPlugin } from "melony";
 import { z } from "zod";
-import type { ChatState, ChatEvent } from "../types.js";
+import type { ManagerState, ManagerEvent } from "../types.js";
 
 /**
  * Unified plugin registry entry.
@@ -26,7 +26,7 @@ export interface ToolPluginRegistryEntry extends PluginRegistryEntry {
 
 export interface AgentPluginRegistryEntry extends PluginRegistryEntry {
   type: "agent";
-  plugin: MelonyPlugin<ChatState, ChatEvent>;
+  plugin: MelonyPlugin<ManagerState, ManagerEvent>;
   capabilities?: Record<string, string>;
   subscribe?: string[];
 }

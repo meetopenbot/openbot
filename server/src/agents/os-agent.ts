@@ -3,7 +3,7 @@ import { llmPlugin } from "../plugins/llm/index.js";
 import { shellPlugin, shellToolDefinitions } from "../plugins/shell/index.js";
 import { fileSystemPlugin, fileSystemToolDefinitions } from "../plugins/file-system/index.js";
 import { LanguageModel } from "ai";
-import { ChatState, ChatEvent } from "../types.js";
+import { ManagerState, ManagerEvent } from "../types.js";
 import approvalPlugin from "../plugins/approval/index.js";
 
 export interface OSAgentOptions {
@@ -18,7 +18,7 @@ You can read, write, list, and delete files, as well as execute shell commands.
 Always be careful with destructive operations.
 When you are done with the task, summarize what you did.`;
 
-export const osAgent = (options: OSAgentOptions): MelonyPlugin<ChatState, ChatEvent> => (builder) => {
+export const osAgent = (options: OSAgentOptions): MelonyPlugin<ManagerState, ManagerEvent> => (builder) => {
   const { model, cwd = process.cwd(), systemPrompt = DEFAULT_SYSTEM_PROMPT } = options;
 
   builder

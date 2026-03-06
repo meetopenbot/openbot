@@ -2,7 +2,7 @@ import { melony, Runtime } from "melony";
 import { loadConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
 import { createModel, parseModelString } from "./models.js";
 import { DEFAULT_MODEL_ID } from "./model-defaults.js";
-import { ChatEvent, ChatState } from "./types.js";
+import { ManagerEvent, ManagerState } from "./types.js";
 import { setupPluginRegistry } from "./core/plugins.js";
 import { createManagerPlugin } from "./core/manager.js";
 import { setupDelegation } from "./core/delegation.js";
@@ -27,16 +27,16 @@ export async function createOpenBot(options?: {
   const registry = await setupPluginRegistry(resolvedBaseDir, model as any, options);
 
   // 2. Initialize agent runtimes
-  const agentRuntimes = new Map<string, Runtime<ChatState, ChatEvent>>();
+  const agentRuntimes = new Map<string, Runtime<ManagerState, ManagerEvent>>();
 
   for (const agent of registry.getAgents()) {
-    const builder = melony<ChatState, ChatEvent>();
+    const builder = melony<ManagerState, ManagerEvent>();
     builder.use(agent.plugin!);
     agentRuntimes.set(agent.name, builder.build());
   }
 
   // 3. Initialize manager runtime
-  const managerBuilder = melony<ChatState, ChatEvent>();
+  const managerBuilder = melony<ManagerState, ManagerEvent>();
   managerBuilder.use(createManagerPlugin(model, resolvedModelId, resolvedBaseDir, registry));
 
   // 4. Setup delegation
@@ -46,7 +46,7 @@ export async function createOpenBot(options?: {
 
   // 5. Trigger initialization for all runtimes
   const initPromises: Promise<void>[] = [];
-  const exhaust = async (runtime: Runtime<ChatState, ChatEvent>) => {
+  const exhaust = async (runtime: Runtime<ManagerState, ManagerEvent>) => {
     const iterator = runtime.run({ type: "init" } as any, { runId: "init", state: {} as any });
     for await (const _ of iterator) { /* side-effects only */ }
   };
@@ -61,7 +61,7 @@ export async function createOpenBot(options?: {
   // 6. Return the runtime
   return {
     registry,
-    run: (event: ChatEvent, context: { runId: string; state: ChatState }) =>
+    run: (event: ManagerEvent, context: { runId: string; state: ManagerState }) =>
       runOpenBot(event, context, managerRuntime, agentRuntimes),
   };
 }
