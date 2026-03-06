@@ -65,7 +65,7 @@ Your goal is to solve user requests by delegating tasks to expert sub-agents.
 3. **Context**: Provide a clear, detailed task for the sub-agent. Pass any relevant user attachments.
 4. **Report**: Summarize the sub-agent's work concisely for the user.
 5. **Memory**: Use your memory tools (\`remember\`, \`recall\`) to maintain context across sessions.
-6. **State**: Use \`updateState\` to modify any value in the <session_state>.
+6. **State**: Use \`updateSessionState\` to modify any value in the <session_state>.
 </orchestrator>
 
 ${statePrompt}
@@ -100,7 +100,7 @@ ${agentDescriptions}
               ).optional().describe("Attachments to pass through to the agent"),
             }),
           },
-          updateState: {
+          updateSessionState: {
             description: "Update a value in the session state using a JSON path.",
             inputSchema: z.object({
               path: z.string().describe("The JSON path to the value (e.g. 'project_plan.todos.0.status')"),

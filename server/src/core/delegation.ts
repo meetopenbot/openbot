@@ -54,7 +54,7 @@ export function setupDelegation(
   builder: MelonyBuilder<ManagerState, ManagerEvent>,
   agentRuntimes: Map<string, Runtime<ManagerState, ManagerEvent>>
 ) {
-  builder.on("action:updateState", async function* (event: ManagerEvent, context: { runId: string; state: ManagerState }) {
+  builder.on("action:updateSessionState", async function* (event: ManagerEvent, context: { runId: string; state: ManagerState }) {
     const { path, value, toolCallId } = event.data;
     const state = context.state as any;
 
@@ -67,7 +67,7 @@ export function setupDelegation(
       yield {
         type: "action:result",
         data: {
-          action: "updateState",
+          action: "updateSessionState",
           result: `Successfully updated state at path "${path}".`,
           toolCallId,
         },
@@ -76,7 +76,7 @@ export function setupDelegation(
       yield {
         type: "action:result",
         data: {
-          action: "updateState",
+          action: "updateSessionState",
           result: `Error updating state: ${error.message}`,
           toolCallId,
         },
