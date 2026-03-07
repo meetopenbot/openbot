@@ -9,15 +9,25 @@ export interface UIBlock {
   id?: string;
 }
 
-export function WidgetRenderer({ block }: { block: UIBlock }) {
+export function WidgetRenderer({ block, eventMeta }: { block: UIBlock; eventMeta?: Record<string, any> }) {
   const { send } = useMelony();
   const { widget, props } = block;
+  const sendAction = (action: any) => {
+    if (!action || typeof action !== "object") return;
+    send({
+      ...action,
+      meta: {
+        ...(eventMeta ?? {}),
+        ...(action.meta ?? {}),
+      },
+    });
+  };
 
   switch (widget) {
     case 'status':
       return <StatusWidget message={props.message} severity={props.severity} />;
     case 'approval-card':
-      return <ApprovalCardWidget {...props} onAction={(action: any) => send(action)} />;
+      return <ApprovalCardWidget {...props} onAction={sendAction} />;
     case 'text':
       return <TextWidget value={props.value} />;
     case 'resource-card':
@@ -31,7 +41,7 @@ export function WidgetRenderer({ block }: { block: UIBlock }) {
     case 'progress-step':
       return <ProgressStepWidget {...props} />;
     case 'action-list':
-      return <ActionListWidget {...props} onAction={(action: any) => send(action)} />;
+      return <ActionListWidget {...props} onAction={sendAction} />;
     case 'empty-state':
       return <EmptyStateWidget {...props} />;
     case 'code-snippet':

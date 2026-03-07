@@ -436,23 +436,35 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
 
   // Feed action results back as system-role feedback to the model.
   builder.on(actionResultInputType, async function* (event, context) {
-    const { action, result, toolCallId } = event.data as any;
+    const { action, result, toolCallId, halt } = event.data as any;
     const normalizedAction = typeof action === "string" ? action : "unknown";
     const summary = typeof result === "string" ? result : JSON.stringify(result);
+    const toolResultMessage: SimpleMessage = {
+      role: "tool",
+      content: [{
+        type: "tool-result",
+        toolCallId,
+        toolName: normalizedAction,
+        output: {
+          type: "text",
+          value: summary,
+        },
+      }],
+    };
+
+    // Hard-stop mode: record tool result to unblock pending calls, but do not
+    // continue the autonomous tool loop in this turn.
+    if (halt === true) {
+      const state = context.state as any;
+      if (!state.messages) {
+        state.messages = [] as SimpleMessage[];
+      }
+      insertToolResult(state.messages, toolResultMessage);
+      return;
+    }
 
     yield* routeToLLM(
-      {
-        role: "tool",
-        content: [{
-          type: 'tool-result',
-          toolCallId,
-          toolName: normalizedAction,
-          output: {
-            type: 'text',
-            value: summary,
-          },
-        }],
-      },
+      toolResultMessage,
       context
     );
   });

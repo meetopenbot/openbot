@@ -30,7 +30,14 @@ export type AgentInputEvent = ChatEventBase<"agent:input", {
 export type AgentOutputEvent = ChatEventBase<"agent:output", { content: string }>;
 export type AgentOutputDeltaEvent = ChatEventBase<"agent:output-delta", { delta: string; content: string }>;
 
-export type ActionResultEvent = ChatEventBase<"action:result", { action: string; result: any; toolCallId?: string; error?: string }>;
+export type ActionResultEvent = ChatEventBase<"action:result", {
+  action: string;
+  result: any;
+  toolCallId?: string;
+  error?: string;
+  success?: boolean;
+  halt?: boolean;
+}>;
 export type ActionEvent = ChatEventBase<`action:${string}`, any>;
 
 export type BrowserStatusEvent = ChatEventBase<"browser:status", { message: string; severity?: "info" | "success" | "error" }>;
@@ -72,6 +79,11 @@ export type DelegationEndEvent = ChatEventBase<"delegation:end", {
   agent: string;
   result: any;
 }>;
+export type SuspendEvent = ChatEventBase<"suspend", {
+  reason?: string;
+  id?: string;
+  event?: ManagerEvent;
+}>;
 
 export type ManagerEvent = (
   | AgentInputEvent
@@ -90,6 +102,7 @@ export type ManagerEvent = (
   | AgentSubUsageEvent
   | DelegationStartEvent
   | DelegationEndEvent
+  | SuspendEvent
 ) & {
   meta?: {
     delegationId?: string;
@@ -124,7 +137,12 @@ export interface ManagerState {
     outputTokens: number;
     totalTokens: number;
   };
-  pendingAgentTasks?: Record<string, { toolCallId: string }>;
+  pendingAgentTasks?: Record<string, {
+    toolCallId: string;
+    agentName: string;
+    delegationId: string;
+    stateKey?: string;
+  }>;
   /** Isolated state per agent, keyed by agent name */
   agentStates?: Record<string, AgentState>;
 

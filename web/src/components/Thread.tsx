@@ -2,7 +2,7 @@ import { useMelony } from "@melony/react";
 import { useEffect, useRef, type ReactNode, useMemo, useState } from "react";
 import { AgentAvatar } from "./AgentAvatar";
 import { useConfig } from "../hooks/use-config";
-import { WidgetRenderer, type UIBlock } from "./WidgetRenderer";
+import { WidgetRenderer } from "./WidgetRenderer";
 
 const TEXT_EVENT_TYPES = new Set([
   "agent:output",
@@ -93,7 +93,7 @@ function EventItem({ event }: { event: any }) {
       if (data?.placement === "sidebar") return null;
       return (
         <div className="px-2 py-1 mx-2">
-          <WidgetRenderer block={data} />
+          <WidgetRenderer block={data} eventMeta={event.meta} />
         </div>
       );
     case "agent:sub-action":
@@ -421,7 +421,7 @@ export function Thread({
             <div key={item.key} className="flex flex-col w-full items-start animate-fade-in">
               {shouldShowHeader && agentHeader}
               <div className="max-w-[85%]">
-                <WidgetRenderer block={event.data} />
+                <WidgetRenderer block={event.data} eventMeta={event.meta} />
               </div>
             </div>
           );

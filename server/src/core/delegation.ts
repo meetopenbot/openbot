@@ -129,9 +129,30 @@ export function setupDelegation(
     );
 
     let lastAgentOutput = "";
+    let pendingApprovalId: string | undefined;
 
     try {
       for await (const agentEvent of agentIterator) {
+        // Dedicated suspend event from approval plugin.
+        // Emit included UI event (if any), then park this delegation until approve/deny.
+        if (agentEvent.type === "suspend") {
+          const suspendData = (agentEvent as any).data ?? {};
+          const suspendId = typeof suspendData.id === "string" ? suspendData.id : undefined;
+          const suspendUiEvent = suspendData.event;
+
+          if (suspendUiEvent && typeof suspendUiEvent === "object" && typeof suspendUiEvent.type === "string") {
+            yield {
+              ...suspendUiEvent,
+              meta: { ...suspendUiEvent.meta, delegationId, agentName },
+            } as ManagerEvent;
+          }
+
+          if (suspendId) {
+            pendingApprovalId = suspendId;
+          }
+          continue;
+        }
+
         // Forward agent events to the main runtime so the user sees progress.
         // We SKIP forwarding 'agent:input' because it triggers the manager's LLM again.
         // Instead, we yield it as 'agent:sub-input' for logging/monitoring.
@@ -205,6 +226,19 @@ export function setupDelegation(
     } catch (error: any) {
       console.error(`[delegation] Error running agent "${agentName}":`, error);
       lastAgentOutput = `Error executing task: ${error.message}`;
+    }
+
+    // Option A behavior: if sub-agent suspended on approval,
+    // keep the manager tool call pending until approve/deny follow-up resolves it.
+    if (pendingApprovalId) {
+      state.pendingAgentTasks ??= {};
+      state.pendingAgentTasks[pendingApprovalId] = {
+        toolCallId,
+        agentName,
+        delegationId,
+        stateKey: typeof stateKey === "string" ? stateKey : undefined,
+      };
+      return;
     }
 
     // Signal delegation end for UI

@@ -74,13 +74,10 @@ ${statePrompt}
 ${agentDescriptions}
 </agents>${memoryPrompt}`
 
-          console.log("finalSystemPrompt:::::", finalSystemPrompt);
+          // console.log("finalSystemPrompt:::::", finalSystemPrompt);
 
           return finalSystemPrompt;
         },
-        promptInputType: "agent:input",
-        actionResultInputType: "action:result",
-        completionEventType: "agent:output",
         toolDefinitions: {
           ...memoryToolDefinitions,
           delegateTask: {
