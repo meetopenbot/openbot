@@ -1,5 +1,5 @@
 export interface UIBlockOptions {
-  placement?: "thread" | "sidebar";
+  placement?: "thread" | "sidebar" | "attention";
   id?: string;
   meta?: Record<string, any>;
 }
@@ -8,7 +8,7 @@ export interface UIBlock {
   type: "ui-block";
   widget: string;
   props: Record<string, any>;
-  placement: "thread" | "sidebar";
+  placement: "thread" | "sidebar" | "attention";
   id?: string;
   meta?: Record<string, any>;
 }

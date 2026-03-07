@@ -42,9 +42,10 @@ function* maybeEmitWidget(key: string, value: any) {
 
   // If we found a valid widget and data is an array, emit the UI event
   if (widgetName && (widgets as any)[widgetName] && Array.isArray(data)) {
+    const isTodo = widgetName === "todoList";
     yield uiEvent((widgets as any)[widgetName](data, {
-      placement: "sidebar",
-      id: `sidebar-${key}`,
+      placement: isTodo ? "attention" : "sidebar",
+      id: isTodo ? `attention-${key}` : `sidebar-${key}`,
       meta: { title: key === "project_plan" ? "Project Plan" : (key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')) }
     })) as any;
   }

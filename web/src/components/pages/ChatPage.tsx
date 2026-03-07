@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Thread } from "../Thread";
 import { Composer } from "../Composer";
+import { AttentionRail } from "../AttentionRail";
 import { SessionStateSidebar } from "../SessionStateSidebar";
 import { api } from "../../lib/api";
 
@@ -37,6 +38,7 @@ export function ChatPage({ sessionId, showSidebar = true }: ChatPageProps) {
         <div className="mx-auto w-full max-w-[820px] flex flex-col flex-1 px-5">
           <Thread placeholder={<ChatPlaceholder />} />
           <div className="sticky bottom-0 bg-linear-to-t from-background via-background to-transparent pt-4 pb-4">
+            <AttentionRail />
             <Composer />
           </div>
         </div>

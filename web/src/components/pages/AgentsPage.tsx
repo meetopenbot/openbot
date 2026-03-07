@@ -353,10 +353,11 @@ function AgentEditForm({
 
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</label>
-              <input
+              <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="rounded-xl border border-border/60 bg-background/50 px-4 py-2.5 text-sm transition-all focus:border-foreground/30 focus:outline-none"
+                rows={8}
+                className="rounded-xl border border-border/60 bg-background/50 px-4 py-2.5 text-sm transition-all focus:border-foreground/30 focus:outline-none resize-y"
                 placeholder="short summary"
               />
             </div>

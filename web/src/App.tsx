@@ -7,7 +7,6 @@ import { useConfig } from "./hooks/use-config";
 import { cn } from "./lib/utils";
 import { AppLayout, AppLayoutProvider } from "./components/layout/AppLayout";
 import { ChatPage } from "./components/pages/ChatPage";
-import { SessionStateSidebar } from "./components/SessionStateSidebar";
 import { AgentsPage } from "./components/pages/AgentsPage";
 import { AutomationsPage } from "./components/pages/AutomationsPage";
 import { SettingsPage } from "./components/pages/SettingsPage";
@@ -23,7 +22,7 @@ export function App() {
   const queryClient = useQueryClient();
   const { sessionId, path, navigate, ensureSessionInUrl } = useSession();
   const { data: config, isLoading: configLoading } = useConfig();
-  const [sessionStateSidebarOpen, setSessionStateSidebarOpen] = useState(true);
+  const [sessionStateSidebarOpen, setSessionStateSidebarOpen] = useState(false);
 
   const tab = useMemo(() => {
     return new URLSearchParams(path).get("tab") || "chat";

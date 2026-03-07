@@ -21,7 +21,7 @@ function hasRenderableContent(message: { content: any }): boolean {
   }
   if (!Array.isArray(message.content)) return false;
   return message.content.some((event: any) => (
-    (event.type === "ui" && event.data?.placement !== "sidebar") ||
+    (event.type === "ui" && event.data?.placement !== "sidebar" && event.data?.placement !== "attention") ||
     TEXT_EVENT_TYPES.has(event.type) ||
     DELEGATION_EVENT_TYPES.has(event.type)
   ));
@@ -314,8 +314,8 @@ export function Thread({
         }
 
         if (event.type === "ui" || TEXT_EVENT_TYPES.has(event.type)) {
-          // Filter out sidebar widgets from the thread
-          if (event.type === "ui" && event.data?.placement === "sidebar") return;
+          // Filter out sidebar and attention widgets from the thread
+          if (event.type === "ui" && (event.data?.placement === "sidebar" || event.data?.placement === "attention")) return;
           topLevelEvents.push(event);
         }
       });

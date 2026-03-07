@@ -36,7 +36,16 @@ export async function* runOpenBot(
           runId: context.runId,
           state: state.agentStates[targetAgent] as any,
         })) {
-          yield agentChunk;
+          // Preserve sub-agent attribution when resuming after approval/deny
+          // so UI does not fall back to manager identity.
+          yield {
+            ...agentChunk,
+            meta: {
+              ...(agentChunk as any)?.meta,
+              ...(event.meta?.delegationId ? { delegationId: event.meta.delegationId } : {}),
+              agentName: targetAgent,
+            },
+          } as ManagerEvent;
 
           if (agentChunk.type === "agent:output" || agentChunk.type === "action:result") {
             const summary = summarizeAgentEventValue(agentChunk);

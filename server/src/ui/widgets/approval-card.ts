@@ -1,4 +1,4 @@
-import { block } from '../block.js';
+import { block, UIBlockOptions } from '../block.js';
 
 export interface ApprovalCardDetail {
   label: string;
@@ -11,7 +11,7 @@ export interface ApprovalCardData {
   rawPayload?: string;
 }
 
-export const approvalCard = (title: string, data: ApprovalCardData, approveAction: any, denyAction: any) =>
+export const approvalCard = (title: string, data: ApprovalCardData, approveAction: any, denyAction: any, options: UIBlockOptions = {}) =>
   block('approval-card', {
     title,
     summary: data.summary,
@@ -19,4 +19,4 @@ export const approvalCard = (title: string, data: ApprovalCardData, approveActio
     rawPayload: data.rawPayload,
     approveAction,
     denyAction
-  });
+  }, options);

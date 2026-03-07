@@ -7,6 +7,7 @@ import { approvalCard } from './approval-card.js';
 import { actionList } from './action-list.js';
 import { emptyState } from './empty-state.js';
 import { todoList } from './todo-list.js';
+import { inquiryCard } from './inquiry.js';
 
 export const widgets = {
   keyValue,
@@ -18,6 +19,7 @@ export const widgets = {
   actionList,
   emptyState,
   todoList,
+  inquiryCard,
 };
 
 export default widgets;

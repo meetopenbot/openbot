@@ -1,0 +1,24 @@
+BATUMI WEATHER REPORT
+Generated: March 7, 2026, 10:42 PM (Asia/Tbilisi)
+
+CURRENT CONDITIONS:
+- Temperature: 5°C (41°F)
+- Condition: Light rain
+- Humidity: 83%
+- Wind Speed: 13 km/h
+- Precipitation Chance: 35%
+
+8-DAY FORECAST:
+Saturday (Today): Light Rain | High: 6°C | Low: 4°C
+Sunday: Light Rain | High: 6°C | Low: 4°C
+Monday: Light Rain | High: 6°C | Low: 4°C
+Tuesday: Sunny | High: 8°C | Low: 4°C
+Wednesday: Sunny | High: 9°C | Low: 4°C
+Thursday: Sunny | High: 10°C | Low: 5°C
+Friday: Partly Sunny | High: 9°C | Low: 4°C
+Saturday: Partly Sunny | High: 10°C | Low: 5°C
+
+WEATHER OUTLOOK:
+- Next 3 days: Rainy conditions with light rain throughout
+- Mid-week: Improvement with sunny weather expected
+- Following weekend: Partly sunny conditions with slight temperature increase

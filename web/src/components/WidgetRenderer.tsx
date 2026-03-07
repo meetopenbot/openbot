@@ -5,11 +5,19 @@ export interface UIBlock {
   type: "ui-block";
   widget: string;
   props: Record<string, any>;
-  placement: "thread" | "sidebar";
+  placement: "thread" | "sidebar" | "attention";
   id?: string;
 }
 
-export function WidgetRenderer({ block, eventMeta }: { block: UIBlock; eventMeta?: Record<string, any> }) {
+export function WidgetRenderer({ 
+  block, 
+  eventMeta, 
+  mode = "full" 
+}: { 
+  block: UIBlock; 
+  eventMeta?: Record<string, any>;
+  mode?: "full" | "compact";
+}) {
   const { send } = useMelony();
   const { widget, props } = block;
   const sendAction = (action: any) => {
@@ -23,11 +31,13 @@ export function WidgetRenderer({ block, eventMeta }: { block: UIBlock; eventMeta
     });
   };
 
+  const isCompact = mode === "compact";
+
   switch (widget) {
     case 'status':
       return <StatusWidget message={props.message} severity={props.severity} />;
     case 'approval-card':
-      return <ApprovalCardWidget {...props} onAction={sendAction} />;
+      return <ApprovalCardWidget {...props} onAction={sendAction} isCompact={isCompact} />;
     case 'text':
       return <TextWidget value={props.value} />;
     case 'resource-card':
@@ -49,7 +59,9 @@ export function WidgetRenderer({ block, eventMeta }: { block: UIBlock; eventMeta
     case 'markdown':
       return <MarkdownWidget value={props.value} />;
     case 'todo-list':
-      return <TodoListWidget todos={props.todos} />;
+      return <TodoListWidget todos={props.todos} isCompact={isCompact} />;
+    case 'inquiry-card':
+      return <InquiryCardWidget {...props} onAction={sendAction} isCompact={isCompact} />;
     default:
       return (
         <div className="p-3 border border-dashed rounded-lg text-xs text-muted-foreground bg-muted/5">
@@ -86,7 +98,32 @@ function TextWidget({ value }: { value: string }) {
   );
 }
 
-function ApprovalCardWidget({ title, summary, details, rawPayload, approveAction, denyAction, onAction }: any) {
+function ApprovalCardWidget({ title, summary, details, rawPayload, approveAction, denyAction, onAction, isCompact }: any) {
+  if (isCompact) {
+    return (
+      <div className="flex items-center justify-between gap-4 px-3 py-2 animate-fade-in group/compact">
+        <div className="flex items-center gap-2 overflow-hidden flex-1">
+          <div className="size-1.5 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+          <p className="text-[12px] font-medium text-foreground/80 truncate">{summary}</p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button 
+            onClick={() => onAction(denyAction)}
+            className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50 hover:text-rose-500 transition-colors"
+          >
+            Deny
+          </button>
+          <button 
+            onClick={() => onAction(approveAction)}
+            className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-foreground/5 hover:bg-foreground hover:text-background rounded transition-all"
+          >
+            Approve
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-background border border-border/60 rounded-xl overflow-hidden shadow-sm animate-fade-in my-2">
       <div className="p-4 border-b border-border/40 bg-muted/5">
@@ -275,8 +312,33 @@ function MarkdownWidget({ value }: { value: string }) {
   );
 }
 
-function TodoListWidget({ todos }: { todos: any[] }) {
+function TodoListWidget({ todos, isCompact }: { todos: any[], isCompact?: boolean }) {
   if (!todos || !Array.isArray(todos)) return null;
+
+  if (isCompact) {
+    const total = todos.length;
+    const completed = todos.filter(t => ['completed', 'done', 'finished', 'complete', 'success'].includes((t.status || '').toLowerCase())).length;
+    const current = todos.find(t => ['in_progress', 'in-progress', 'processing', 'running', 'active'].includes((t.status || '').toLowerCase())) || todos.find(t => !['completed', 'done', 'finished', 'complete', 'success', 'cancelled', 'canceled', 'failed', 'error'].includes((t.status || '').toLowerCase()));
+    
+    return (
+      <div className="flex items-center justify-between gap-4 px-3 py-2 animate-fade-in">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center justify-center size-4 bg-primary/10 rounded-full text-[9px] font-bold text-primary shrink-0">
+            {completed}/{total}
+          </div>
+          <div className="text-[12px] font-medium text-foreground/70 truncate">
+            {current ? (current.content || current.task || current.title) : "All tasks complete"}
+          </div>
+        </div>
+        <div className="h-1.5 w-16 bg-muted rounded-full overflow-hidden shrink-0">
+          <div 
+            className="h-full bg-primary/50 transition-all duration-500" 
+            style={{ width: `${(completed / total) * 100}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1 w-full my-2 animate-fade-in">
@@ -334,6 +396,68 @@ function TodoListWidget({ todos }: { todos: any[] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function InquiryCardWidget({ title, question, description, options, onAction, isCompact }: any) {
+  if (isCompact) {
+    return (
+      <div className="flex items-center justify-between gap-4 px-3 py-2 animate-fade-in group/compact">
+        <div className="flex items-center gap-2 overflow-hidden flex-1">
+          <div className="size-1.5 rounded-full bg-primary/60 shrink-0" />
+          <p className="text-[12px] font-medium text-foreground/80 truncate">{question}</p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {options?.slice(0, 2).map((opt: any, idx: number) => (
+            <button
+              key={opt.id || idx}
+              onClick={() => onAction(opt.action)}
+              className={cn(
+                "px-2 py-1 text-[9px] font-bold uppercase tracking-wider rounded transition-all",
+                opt.variant === 'primary' 
+                  ? "bg-foreground/5 hover:bg-foreground hover:text-background" 
+                  : "bg-muted/30 hover:bg-muted-foreground/10 text-muted-foreground"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+          {options?.length > 2 && (
+            <div className="text-[10px] text-muted-foreground/30 font-bold px-1">+ {options.length - 2}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-background border border-border/60 rounded-xl overflow-hidden shadow-sm animate-fade-in my-2">
+      <div className="p-4 border-b border-border/40 bg-muted/5 flex items-center justify-center">
+        <h4 className="text-[13px] font-bold text-foreground/80">{title}</h4>
+      </div>
+      <div className="p-5 space-y-4">
+        <p className="text-[14px] font-medium text-foreground leading-relaxed text-center">{question}</p>
+        {description && <p className="text-[12px] text-muted-foreground leading-relaxed text-center px-4">{description}</p>}
+      </div>
+      {options && options.length > 0 && (
+        <div className="px-4 py-3 bg-muted/5 border-t border-border/40 flex flex-wrap gap-2 justify-center">
+          {options.map((opt: any, idx: number) => (
+            <button
+              key={opt.id || idx}
+              onClick={() => onAction(opt.action)}
+              className={cn(
+                "px-4 py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all",
+                opt.variant === 'primary' 
+                  ? "bg-foreground text-background hover:opacity-90 shadow-sm" 
+                  : "bg-background border border-border/60 text-muted-foreground hover:border-border hover:text-foreground"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
