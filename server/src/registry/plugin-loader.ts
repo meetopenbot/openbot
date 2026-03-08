@@ -122,6 +122,7 @@ export interface AgentConfig {
   description: string;
   model?: string;
   image?: string;
+  base?: string | { name: string; config?: any };
   plugins: (string | { name: string; config?: any })[];
   instructions: string;
   subscribe?: string[];
@@ -146,6 +147,7 @@ export async function readAgentConfig(agentDir: string): Promise<AgentConfig> {
     description: typeof config.description === "string" ? config.description : "",
     model: config.model,
     image: config.image,
+    base: config.base,
     plugins: config.plugins || [],
     instructions: parsed.content.trim() || "",
     subscribe: config.subscribe,
@@ -180,15 +182,48 @@ function composeAgentFromConfig(
   }
 
   const plugin: MelonyPlugin<any, any> = (builder) => {
+    // 1. Initialize all regular tool plugins
     for (const { plugin: toolPlugin, config: resolvedConfig } of pluginFactories) {
       builder.use(toolPlugin({ ...resolvedConfig, model }));
     }
-    builder.use(llmPlugin({
-      model,
-      system: config.instructions,
-      toolDefinitions: allToolDefinitions,
-      outputSchema: config.outputSchema ? jsonToZod(config.outputSchema) : undefined,
-    }));
+
+    // 2. Resolve the "Brain" (Base Plugin)
+    const baseInput = config.base || "llm";
+    const isBaseString = typeof baseInput === "string";
+    const baseName = isBaseString ? baseInput : baseInput.name;
+    const baseConfig = isBaseString ? {} : (baseInput.config || {});
+    const resolvedBaseConfig = resolveConfigPaths(baseConfig);
+
+    if (baseName === "llm") {
+      // Default built-in brain
+      builder.use(llmPlugin({
+        model,
+        system: config.instructions,
+        toolDefinitions: allToolDefinitions,
+        outputSchema: config.outputSchema ? jsonToZod(config.outputSchema) : undefined,
+      }));
+    } else {
+      // Custom autonomous brain (e.g. codex)
+      const baseEntry = toolRegistry.get(baseName);
+      if (!baseEntry || baseEntry.type !== "tool") {
+        console.error(`[plugins] "${config.name}": base plugin "${baseName}" not found or invalid. Falling back to default LLM brain.`);
+        builder.use(llmPlugin({
+          model,
+          system: config.instructions,
+          toolDefinitions: allToolDefinitions,
+        }));
+      } else {
+        // Use the custom plugin as the autonomous engine.
+        // It must follow the Base Plugin contract (receive model, system, tools).
+        builder.use(baseEntry.plugin({
+          ...resolvedBaseConfig,
+          model,
+          system: config.instructions,
+          toolDefinitions: allToolDefinitions,
+          outputSchema: config.outputSchema ? jsonToZod(config.outputSchema) : undefined,
+        }));
+      }
+    }
   };
 
   return { plugin, toolDefinitions: allToolDefinitions };
