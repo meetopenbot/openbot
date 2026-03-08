@@ -21,7 +21,7 @@ export function AttentionRail() {
       const content = Array.isArray(msg.content) ? msg.content : [];
 
       content.forEach((event: any) => {
-        if (event.type === "action:approve") {
+        if (event.type === "action:approve" || event.type === "action:deny") {
           const approvedId = event?.data?.id;
           if (typeof approvedId === "string") {
             approvedAttentionIds.add(approvedId);
