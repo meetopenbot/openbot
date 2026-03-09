@@ -59,7 +59,7 @@ export const ExtensionItem = ({
           <span className="px-1.5 py-0.5 rounded-full bg-orange-500/10 text-orange-500 text-[8px] font-bold uppercase tracking-wider shrink-0 border border-orange-500/20">Code</span>
         )}
       </div>
-      <p className="text-sm text-muted-foreground/60 line-clamp-2 leading-snug font-medium whitespace-pre-line">
+      <p className="text-sm text-muted-foreground/60 line-clamp-1 leading-snug font-medium whitespace-pre-line">
         {description || "No description provided"}
       </p>
     </div>
