@@ -48,6 +48,7 @@ function getSessionDir(sessionId: string): string {
  * System messages at the start are always preserved and don't count toward the limit.
  */
 const MAX_MESSAGES = 1000; // aiSdkPlugin defaults to latest 20 messages
+const MAX_LISTED_SESSIONS = 1000;
 
 function hasPersistedContent(state: ManagerState): boolean {
   if (state.title) return true;
@@ -199,5 +200,7 @@ export async function listSessions(): Promise<{ id: string; title?: string; mtim
     console.error("Failed to list sessions:", error);
   }
 
-  return sessions.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+  return sessions
+    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
+    .slice(0, MAX_LISTED_SESSIONS);
 }
