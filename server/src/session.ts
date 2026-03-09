@@ -49,6 +49,22 @@ function getSessionDir(sessionId: string): string {
  */
 const MAX_MESSAGES = 1000; // aiSdkPlugin defaults to latest 20 messages
 
+function hasPersistedContent(state: ManagerState): boolean {
+  if (state.title) return true;
+  if (state.messages && state.messages.length > 0) return true;
+
+  // Direct sub-agent conversations are stored under agentStates.
+  // Treat any non-empty agent state as a persisted session.
+  if (state.agentStates && typeof state.agentStates === "object") {
+    for (const agentState of Object.values(state.agentStates)) {
+      if (!agentState || typeof agentState !== "object") continue;
+      if (Object.keys(agentState).length > 0) return true;
+    }
+  }
+
+  return false;
+}
+
 export async function loadSession(sessionId: string): Promise<ManagerState | null> {
   const sessionDir = getSessionDir(sessionId);
   const statePath = path.join(sessionDir, "state.json");
@@ -153,8 +169,7 @@ export async function listSessions(): Promise<{ id: string; title?: string; mtim
             if (fs.existsSync(statePath)) {
               const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ManagerState;
 
-              // Only include sessions with messages or a title
-              if ((state.messages && state.messages.length > 0) || state.title) {
+              if (hasPersistedContent(state)) {
                 sessions.push({
                   id: subItem,
                   mtime: fs.statSync(statePath).birthtime, // sort by creation time
@@ -169,8 +184,7 @@ export async function listSessions(): Promise<{ id: string; title?: string; mtim
           if (fs.existsSync(statePath)) {
             const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ManagerState;
 
-            // Only include sessions with messages or a title
-            if ((state.messages && state.messages.length > 0) || state.title) {
+            if (hasPersistedContent(state)) {
               sessions.push({
                 id: item,
                 title: state.title ?? undefined,

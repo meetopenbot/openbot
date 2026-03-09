@@ -159,10 +159,16 @@ export async function* runOpenBot(
             },
           } as any;
 
+          let lastAgentOutput = "";
           for await (const agentChunk of runtime.run(agentEvent, {
             runId: context.runId,
             state: state.agentStates[targetAgent] as any,
           })) {
+            if (agentChunk.type === "agent:output" || agentChunk.type === "agent:output-delta") {
+              const summary = summarizeAgentEventValue(agentChunk);
+              if (summary) lastAgentOutput = summary;
+            }
+
             yield {
               ...agentChunk,
               meta: {
@@ -170,6 +176,25 @@ export async function* runOpenBot(
                 agentName: targetAgent,
               },
             } as ManagerEvent;
+          }
+
+          // Direct "@agent" routing bypasses manager handlers entirely.
+          // Trigger manager-side post-processing (e.g. topic/title generation)
+          // without producing a manager reply.
+          if (!state.title) {
+            for await (const _ of managerRuntime.run(
+              {
+                type: "agent:output",
+                meta: { agentName: targetAgent },
+                data: { content: lastAgentOutput || "" },
+              } as ManagerEvent,
+              {
+                runId: context.runId,
+                state: state as any,
+              }
+            )) {
+              // side-effects only
+            }
           }
           return;
         }

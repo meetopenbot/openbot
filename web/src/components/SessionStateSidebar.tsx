@@ -1,6 +1,5 @@
 import { useMelony } from "@melony/react";
 import { useMemo } from "react";
-import { cn } from "../lib/utils";
 import { WidgetRenderer, type UIBlock } from "./WidgetRenderer";
 
 export function SessionStateSidebar() {
@@ -30,7 +29,7 @@ export function SessionStateSidebar() {
 
   if (sidebarWidgets.length === 0) {
     return (
-      <aside className="hidden xl:flex h-full w-[580px] shrink-0 flex-col border-l border-border/50 bg-muted/20">
+      <aside className="hidden xl:flex h-full w-[480px] shrink-0 flex-col border-l border-border/50 bg-muted/20">
         <div className="px-4 py-6 text-center">
           <div className="size-10 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/50">
@@ -48,7 +47,7 @@ export function SessionStateSidebar() {
   }
 
   return (
-    <aside className="hidden xl:flex h-full w-[580px] shrink-0 flex-col border-l border-border/50 bg-muted/5 backdrop-blur-sm">
+    <aside className="hidden xl:flex h-full w-[480px] shrink-0 flex-col border-l border-border/50 bg-muted/5 backdrop-blur-sm">
       <div className="border-b border-border/50 px-5 py-4 bg-background/50 backdrop-blur-md sticky top-0 z-10">
         <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/40 flex items-center gap-2.5">
           <span className="size-1.5 rounded-full bg-primary/40 animate-pulse" />

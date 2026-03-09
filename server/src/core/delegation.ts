@@ -86,7 +86,7 @@ export function setupDelegation(
   });
 
   builder.on("action:delegateTask", async function* (event: ManagerEvent, context: { runId: string; state: ManagerState }) {
-    const { agent: agentId, toolCallId, task, stateKey, attachments } = event.data;
+    const { agentId, toolCallId, task, stateKey, attachments } = event.data;
     const agentRuntime = agentRuntimes.get(agentId);
 
     // If the agent is not found, return an error

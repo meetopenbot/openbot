@@ -21,12 +21,15 @@ export function createManagerPlugin(
           .map(([name, desc]) => `    - ${name}: ${desc}`)
           .join("\n")
         : "";
-      return `<agent name="${a.name}">
+      return `<agent id="${a.id}" name="${a.name}">
   <description>${a.description}</description>
 ${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ""}
 </agent>`;
     })
     .join("\n\n");
+
+  console.log("agentIds", agentIds);
+  console.log("agentDescriptions", agentDescriptions);
 
   return (builder: any) => {
     builder
@@ -83,7 +86,7 @@ ${agentDescriptions}
           delegateTask: {
             description: `Delegate a task to a specialized expert agent.`,
             inputSchema: z.object({
-              agent: z.enum(agentIds as [string, ...string[]]).describe("The ID of the agent to use"),
+              agentId: z.enum(agentIds as [string, ...string[]]).describe("The ID of the agent to use"),
               task: z.string().describe("The task for the agent to perform"),
               stateKey: z.string().optional().describe("Optional key to store structured JSON result in the session state"),
               attachments: z.array(

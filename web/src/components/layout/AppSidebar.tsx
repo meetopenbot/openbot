@@ -21,7 +21,7 @@ export function AppSidebar({ sessionId, currentTab, onNavigate }: AppSidebarProp
   return (
     <div className="flex flex-col h-full w-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3.5">
+      <div className="flex items-center justify-between px-4 py-4">
         <button
           onClick={() => onNavigate("/")}
           className="flex items-center gap-2 hover:opacity-70 transition-opacity duration-150"
