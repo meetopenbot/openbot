@@ -24,7 +24,7 @@ export const topicAgent = (options: { model: LanguageModel }): MelonyPlugin<Mana
       const newTitle = text.replace(/["']/g, "").trim();
       if (newTitle) {
         state.title = newTitle;
-        
+
         // Notify the client to refresh the sessions list in the sidebar
         yield {
           type: "client:invalidate",

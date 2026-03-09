@@ -10,7 +10,7 @@ export function createManagerPlugin(
   resolvedBaseDir: string,
   registry: PluginRegistry
 ) {
-  const agentNames = registry.getAgentNames();
+  const agentIds = registry.getAgentIds();
   const allAgents = registry.getAgents();
   const buildMemoryPrompt = createMemoryPromptBuilder(resolvedBaseDir);
 
@@ -83,7 +83,7 @@ ${agentDescriptions}
           delegateTask: {
             description: `Delegate a task to a specialized expert agent.`,
             inputSchema: z.object({
-              agent: z.enum(agentNames as [string, ...string[]]).describe("The name of the agent to use"),
+              agent: z.enum(agentIds as [string, ...string[]]).describe("The ID of the agent to use"),
               task: z.string().describe("The task for the agent to perform"),
               stateKey: z.string().optional().describe("Optional key to store structured JSON result in the session state"),
               attachments: z.array(

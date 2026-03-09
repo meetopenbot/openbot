@@ -13,9 +13,12 @@ export async function* runOpenBot(
   event: ManagerEvent,
   context: { runId: string; state: ManagerState },
   managerRuntime: Runtime<ManagerState, ManagerEvent>,
-  agentRuntimes: Map<string, Runtime<ManagerState, ManagerEvent>>
+  agentRuntimes: Map<string, Runtime<ManagerState, ManagerEvent>>,
+  registry: import("../registry/index.js").PluginRegistry
 ) {
   const { state } = context;
+
+  const allAgents = registry.getAgents();
 
   // Initialize state
   if (!state.messages) state.messages = [];
@@ -110,17 +113,43 @@ export async function* runOpenBot(
     return;
   }
 
-  // 2. Direct agent routing for user input (e.g. "@os list files")
+  // 2. Direct agent routing for user input (e.g. "@os list files" or "@Codex Agent list files")
   if (event.type === "agent:input") {
     const content = (event.data as any).content as string;
-    if (content?.startsWith("@")) {
-      const match = content.match(/^@([a-zA-Z0-9_-]+)\s*(.*)$/);
-      if (match) {
-        const [, agentName, remaining] = match;
-        const runtime = agentRuntimes.get(agentName);
+    if (content?.trim().startsWith("@")) {
+      const trimmedContent = content.trim();
+      const afterAt = trimmedContent.slice(1);
 
+      // Find the longest matching agent (by ID or Name) at the start of the message
+      // This handles agent names with spaces like "Codex Agent"
+      let bestMatch: { id: string; name: string; prefixLength: number } | undefined;
+
+      for (const agent of allAgents) {
+        const idMatches = afterAt.toLowerCase().startsWith(agent.id.toLowerCase());
+        const nameMatches = afterAt.toLowerCase().startsWith(agent.name.toLowerCase());
+
+        if (idMatches || nameMatches) {
+          const matchPrefix = idMatches ? agent.id : agent.name;
+          const prefixLength = matchPrefix.length;
+          
+          // Next char must be space, end of string, or the match length must be at least 
+          // the current best match length (prefer longer names like "Codex Agent" over "Codex")
+          const nextChar = afterAt[prefixLength];
+          if (!nextChar || nextChar === " ") {
+            if (!bestMatch || prefixLength > bestMatch.prefixLength) {
+              bestMatch = { id: agent.id, name: agent.name, prefixLength };
+            }
+          }
+        }
+      }
+
+      if (bestMatch) {
+        const targetAgent = bestMatch.id;
+        const remaining = afterAt.slice(bestMatch.prefixLength).trim();
+
+        const runtime = agentRuntimes.get(targetAgent);
         if (runtime) {
-          if (!state.agentStates[agentName]) state.agentStates[agentName] = {};
+          if (!state.agentStates[targetAgent]) state.agentStates[targetAgent] = {};
 
           const agentEvent = {
             ...event,
@@ -132,18 +161,29 @@ export async function* runOpenBot(
 
           for await (const agentChunk of runtime.run(agentEvent, {
             runId: context.runId,
-            state: state.agentStates[agentName] as any,
+            state: state.agentStates[targetAgent] as any,
           })) {
             yield {
               ...agentChunk,
               meta: {
                 ...(agentChunk as any)?.meta,
-                agentName,
+                agentName: targetAgent,
               },
             } as ManagerEvent;
           }
           return;
         }
+      } else {
+        // If the user used @ but the agent wasn't found, stop here to avoid
+        // falling back to the manager and burning tokens for a failed routing attempt.
+        const agentPrefixMatch = afterAt.split(" ")[0];
+        yield {
+          type: "agent:output",
+          data: { 
+            content: `Agent "@${agentPrefixMatch}" not found. Available agents:\n${allAgents.map(a => `- ${a.name} (@${a.id})`).join("\n")}` 
+          },
+        } as ManagerEvent;
+        return;
       }
     }
   }

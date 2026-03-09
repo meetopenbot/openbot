@@ -9,6 +9,7 @@ import type { ManagerState, ManagerEvent } from "../types.js";
  * whether it contributes tools ("tool") or acts as a delegatable agent ("agent").
  */
 export interface PluginRegistryEntry {
+  id: string;
   name: string;
   description: string;
   folder?: string;
@@ -74,12 +75,12 @@ export class PluginRegistry {
     return this.getAll().filter(p => p.type === "tool");
   }
 
-  /** Returns agent names as a tuple suitable for z.enum(). */
-  getAgentNames(): [string, ...string[]] {
-    const names = this.getAgents().map(a => a.name);
-    if (names.length === 0) {
+  /** Returns agent IDs as a tuple suitable for z.enum(). */
+  getAgentIds(): [string, ...string[]] {
+    const ids = this.getAgents().map(a => a.id);
+    if (ids.length === 0) {
       throw new Error("No agents registered — at least one agent is required");
     }
-    return names as [string, ...string[]];
+    return ids as [string, ...string[]];
   }
 }

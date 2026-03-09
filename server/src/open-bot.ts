@@ -32,7 +32,7 @@ export async function createOpenBot(options?: {
   for (const agent of registry.getAgents()) {
     const builder = melony<ManagerState, ManagerEvent>();
     builder.use(agent.plugin!);
-    agentRuntimes.set(agent.name, builder.build());
+    agentRuntimes.set(agent.id, builder.build());
   }
 
   // 3. Initialize manager runtime
@@ -62,6 +62,6 @@ export async function createOpenBot(options?: {
   return {
     registry,
     run: (event: ManagerEvent, context: { runId: string; state: ManagerState }) =>
-      runOpenBot(event, context, managerRuntime, agentRuntimes),
+      runOpenBot(event, context, managerRuntime, agentRuntimes, registry),
   };
 }

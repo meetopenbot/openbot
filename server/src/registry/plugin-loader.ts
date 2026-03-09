@@ -264,6 +264,7 @@ async function loadToolPluginsFromDir(dir: string): Promise<ToolPluginRegistryEn
 
         if (entryData && typeof entryData.factory === "function") {
           plugins.push({
+            id: entry.name,
             name: entryData.name || entry.name,
             description: entryData.description || `Tool plugin ${entry.name}`,
             type: "tool" as const,
@@ -344,12 +345,14 @@ export async function discoverPlugins(
       if (codeAgentDef && typeof codeAgentDef.factory === "function") {
         const meta = await getPluginMetadata(pluginDir);
         const folderName = path.basename(pluginDir);
+        const id = folderName; // Folder name as slug
         let name = codeAgentDef.name || meta.name;
         if (!name || /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(name)) {
           name = toTitleCaseFromSlug(folderName);
         }
         const description = codeAgentDef.description || meta.description || "Code Agent";
         registry.register({
+          id,
           name,
           description,
           type: "agent",
@@ -358,15 +361,17 @@ export async function discoverPlugins(
           subscribe: codeAgentDef.subscribe,
           folder: pluginDir,
         });
-        console.log(`[plugins] Loaded code-only agent: ${name} — ${description}`);
+        console.log(`[plugins] Loaded code-only agent: ${id} (${name}) — ${description}`);
       } else if (entryData && typeof entryData.factory === "function") {
         const meta = await getPluginMetadata(pluginDir);
         const folderName = path.basename(pluginDir);
+        const id = folderName;
         let name = entryData.name || meta.name;
         if (!name || /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(name)) {
           name = toTitleCaseFromSlug(folderName);
         }
         const pluginEntry: ToolPluginRegistryEntry = {
+          id,
           name,
           description: entryData.description || meta.description || "Tool plugin",
           type: "tool",
@@ -375,7 +380,7 @@ export async function discoverPlugins(
           folder: pluginDir,
         };
         registry.register(pluginEntry);
-        console.log(`[plugins] Loaded tool: ${pluginEntry.name}`);
+        console.log(`[plugins] Loaded tool: ${id} (${pluginEntry.name})`);
       } else {
         console.warn(`[plugins] "${path.basename(pluginDir)}" does not export a valid plugin (missing factory)`);
       }
@@ -401,6 +406,7 @@ export async function discoverPlugins(
         if (definition && typeof definition.factory === "function") {
           const config = await readAgentConfig(agentDir);
           const meta = await getPluginMetadata(agentDir);
+          const id = folderName;
           let name = config.name || definition.name || meta.name;
           if (!name || /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(name)) {
             name = toTitleCaseFromSlug(folderName);
@@ -408,6 +414,7 @@ export async function discoverPlugins(
           const description = definition.description || config.description || "TS Agent";
 
           registry.register({
+            id,
             name,
             description,
             type: "agent",
@@ -416,12 +423,13 @@ export async function discoverPlugins(
             subscribe: definition.subscribe || config.subscribe,
             folder: agentDir,
           });
-          console.log(`[plugins] Loaded TS agent: ${name} — ${description}`);
+          console.log(`[plugins] Loaded TS agent: ${id} (${name}) — ${description}`);
         }
       } else {
         // Declarative Agent — AGENT.md only, auto-wrapped with llmPlugin.
         const config = await readAgentConfig(agentDir);
         const meta = await getPluginMetadata(agentDir);
+        const id = folderName;
         let resolvedName = config.name || meta.name;
         if (!resolvedName || /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(resolvedName)) {
           resolvedName = toTitleCaseFromSlug(folderName);
@@ -455,6 +463,7 @@ export async function discoverPlugins(
         const { plugin, toolDefinitions } = composeAgentFromConfig(config, scopedRegistry, agentModel as LanguageModel);
 
         registry.register({
+          id,
           name: resolvedName,
           description: resolvedDescription,
           type: "agent",
@@ -465,7 +474,7 @@ export async function discoverPlugins(
           subscribe: config.subscribe,
           folder: agentDir,
         });
-        console.log(`[plugins] Loaded agent: ${resolvedName} — ${resolvedDescription}${config.model ? ` (model: ${config.model})` : ""}`);
+        console.log(`[plugins] Loaded agent: ${id} (${resolvedName}) — ${resolvedDescription}${config.model ? ` (model: ${config.model})` : ""}`);
       }
     } catch (err: any) {
       if (err.code !== "ENOENT") {

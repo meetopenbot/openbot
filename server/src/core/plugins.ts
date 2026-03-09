@@ -22,6 +22,7 @@ export async function setupPluginRegistry(
   // ── Built-in tools ───────────────────────────────────────────────
 
   registry.register({
+    id: "shell",
     name: "shell",
     description: "Execute shell commands",
     type: "tool",
@@ -31,6 +32,7 @@ export async function setupPluginRegistry(
   });
 
   registry.register({
+    id: "file-system",
     name: "file-system",
     description: "Read, write, list, and delete files",
     type: "tool",
@@ -40,6 +42,7 @@ export async function setupPluginRegistry(
   });
 
   registry.register({
+    id: "approval",
     name: "approval",
     description: "Require user approval for specific actions",
     type: "tool",
@@ -51,6 +54,7 @@ export async function setupPluginRegistry(
   // ── Built-in agents ──────────────────────────────────────────────
 
   registry.register({
+    id: "os",
     name: "os",
     description: "Handles shell commands and file system operations",
     type: "agent",
@@ -67,6 +71,7 @@ export async function setupPluginRegistry(
   });
 
   registry.register({
+    id: "agent-creator",
     name: "agent-creator",
     description: "Helps the user create and update custom OpenBot agents via natural language.",
     type: "agent",
