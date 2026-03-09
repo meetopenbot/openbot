@@ -66,7 +66,10 @@ async function installAgent(source: string, id?: string) {
 }
 
 function shellEscape(arg: string) {
-  return `'${arg.replace(/'/g, `'\\''`)}'`;
+  // Keep simple tokens readable; quote only when needed so command
+  // tokenization remains stable when passed through concurrently.
+  if (/^[A-Za-z0-9_/:=+.-]+$/.test(arg)) return arg;
+  return `"${arg.replace(/(["\\$`])/g, "\\$1")}"`;
 }
 
 program
