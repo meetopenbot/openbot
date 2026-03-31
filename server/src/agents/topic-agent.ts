@@ -43,10 +43,10 @@ export const topicAgent = (options: { model: LanguageModel }): MelonyPlugin<Mana
       if (newTitle) {
         state.title = newTitle;
 
-        // Notify the client to refresh the sessions list in the sidebar
+        // Notify the client to refresh the conversations list in the sidebar
         yield {
           type: "client:invalidate",
-          data: { tags: ["sessions"] }
+          data: { tags: ["conversations"] }
         } as any;
       }
     } catch (error) {

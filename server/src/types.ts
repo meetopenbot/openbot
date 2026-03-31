@@ -128,7 +128,7 @@ export interface AgentState {
 
 export interface ManagerState {
   title?: string;
-  sessionId?: string;
+  conversationId?: string;
   messages?: SimpleMessage[];
   cwd?: string;
   workspaceRoot?: string;
@@ -153,5 +153,5 @@ export interface ManagerState {
 export interface ManagerRequest {
   event: ManagerEvent;
   runId?: string;
-  sessionId?: string;
+  conversationId?: string;
 }

@@ -1,8 +1,11 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTheme } from "../ThemeProvider";
 import { useConfig, useUpdateConfig } from "../../hooks/use-config";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type MarketplaceItem } from "../../lib/api";
+import { useSession } from "../../hooks/use-session";
+import { cn } from "../../lib/utils";
+import { AgentsPage } from "./AgentsPage";
 import { ExtensionItem } from "../ExtensionItem";
 
 type Theme = "light" | "dark" | "system";
@@ -14,7 +17,28 @@ const THEME_OPTIONS: { value: Theme; label: string; icon: string }[] = [
   { value: "system", label: "System", icon: "monitor" },
 ];
 
-export function SettingsPage() {
+export function SettingsPage({ defaultSection }: { defaultSection?: SettingsSection }) {
+  return <SettingsPageWithSections defaultSection={defaultSection} />;
+}
+
+type SettingsSection = "general" | "agents" | "plugins" | "system";
+
+const SETTINGS_SECTIONS: Array<{ id: SettingsSection; label: string }> = [
+  { id: "general", label: "General" },
+  { id: "agents", label: "Agents" },
+  { id: "plugins", label: "Plugins" },
+  { id: "system", label: "System" },
+];
+
+function resolveSettingsSection(raw: string | null): SettingsSection {
+  if (raw === "general" || raw === "agents" || raw === "plugins" || raw === "system") {
+    return raw;
+  }
+  return "general";
+}
+
+function SettingsPageWithSections({ defaultSection }: { defaultSection?: SettingsSection }) {
+  const { path, navigate } = useSession();
   const { data: config } = useConfig();
   const updateConfig = useUpdateConfig();
   const { theme, setTheme } = useTheme();
@@ -28,6 +52,23 @@ export function SettingsPage() {
 
   const [installingPluginId, setInstallingPluginId] = useState<string | null>(null);
   const [installError, setInstallError] = useState<string | null>(null);
+
+  const settingsSection = useMemo(() => {
+    const params = new URLSearchParams(path);
+    const fromQuery = resolveSettingsSection(params.get("settingsSection"));
+    if (params.has("settingsSection")) return fromQuery;
+    return defaultSection ?? "general";
+  }, [path, defaultSection]);
+
+  const setSettingsSection = (section: SettingsSection) => {
+    const params = new URLSearchParams(path);
+    params.set("tab", "settings");
+    params.set("settingsSection", section);
+    if (section !== "agents") {
+      params.delete("agentId");
+    }
+    navigate(`/?${params.toString()}`);
+  };
 
   const { data: plugins = [], isLoading: loadingPlugins } = useQuery({
     queryKey: ["plugins"],
@@ -94,233 +135,257 @@ export function SettingsPage() {
   if (!config) return null;
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="mx-auto flex max-w-xl flex-col gap-10 px-6 py-10 animate-in fade-in">
-          {/* Header */}
-          <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
-            <p className="text-[13px] text-muted-foreground/70">
-              Manage your OpenBot configuration
-            </p>
-          </div>
-
-          {/* Theme */}
-          <section className="flex flex-col gap-4">
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-[13px] font-medium">Appearance</h3>
-              <p className="text-xs text-muted-foreground/60">
-                Choose your preferred color theme
-              </p>
+    <div className="h-full overflow-hidden">
+      <div className="flex h-full">
+        <aside className="hidden sm:flex w-52 shrink-0 border-r border-border/50 bg-muted/10 p-3">
+          <div className="w-full flex flex-col gap-1">
+            <div className="px-2 py-1.5">
+              <h2 className="text-sm font-semibold tracking-tight">Settings</h2>
+              <p className="text-[11px] text-muted-foreground/70">Manage OpenBot</p>
             </div>
-            <div className="flex gap-2">
-              {THEME_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setTheme(opt.value)}
-                  className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px] font-medium transition-all duration-150 ${
-                    theme === opt.value
-                      ? "border-foreground/15 bg-foreground/4 text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                      : "border-border/50 text-muted-foreground hover:border-border hover:text-foreground"
-                  }`}
-                >
-                  <ThemeIcon type={opt.icon} />
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* API Keys */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-8">
-            <section className="flex flex-col gap-4">
-              <div className="flex flex-col gap-0.5">
-                <h3 className="text-[13px] font-medium">API Keys</h3>
-                <p className="text-xs text-muted-foreground/60">
-                  Your keys are stored locally and never shared
-                </p>
-              </div>
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground/70">OpenAI</label>
-                  <input
-                    type="password"
-                    value={openaiEditing ? openaiKey : openaiKey || (config.hasOpenAIKey ? MASKED_KEY_VALUE : "")}
-                    onChange={(e) => setOpenaiKey(e.target.value)}
-                    onFocus={() => {
-                      if (!openaiEditing && !openaiKey && config.hasOpenAIKey) {
-                        setOpenaiKey("");
-                      }
-                      setOpenaiEditing(true);
-                    }}
-                    onBlur={() => {
-                      if (!openaiKey) setOpenaiEditing(false);
-                    }}
-                    placeholder="sk-..."
-                    className="w-full rounded-xl border border-border/60 bg-transparent px-4 py-2.5 text-[13px] placeholder:text-muted-foreground/40 transition-colors focus:border-foreground/20 focus:outline-none"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground/70">Anthropic</label>
-                  <input
-                    type="password"
-                    value={anthropicEditing ? anthropicKey : anthropicKey || (config.hasAnthropicKey ? MASKED_KEY_VALUE : "")}
-                    onChange={(e) => setAnthropicKey(e.target.value)}
-                    onFocus={() => {
-                      if (!anthropicEditing && !anthropicKey && config.hasAnthropicKey) {
-                        setAnthropicKey("");
-                      }
-                      setAnthropicEditing(true);
-                    }}
-                    onBlur={() => {
-                      if (!anthropicKey) setAnthropicEditing(false);
-                    }}
-                    placeholder="sk-ant-..."
-                    className="w-full rounded-xl border border-border/60 bg-transparent px-4 py-2.5 text-[13px] placeholder:text-muted-foreground/40 transition-colors focus:border-foreground/20 focus:outline-none"
-                  />
-                </div>
-              </div>
-            </section>
-
-            <div className="flex justify-end">
+            {SETTINGS_SECTIONS.map((section) => (
               <button
-                type="submit"
-                disabled={updateConfig.isPending}
-                className="rounded-xl bg-foreground px-5 py-2 text-[13px] font-medium text-background transition-all duration-150 hover:opacity-80 disabled:opacity-40"
+                key={section.id}
+                type="button"
+                onClick={() => setSettingsSection(section.id)}
+                className={cn(
+                  "w-full rounded-md px-2.5 py-2 text-left text-[13px] transition-colors",
+                  settingsSection === section.id
+                    ? "bg-muted/70 text-foreground font-medium"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                )}
               >
-                {saved ? "Saved" : updateConfig.isPending ? "Saving..." : "Save changes"}
+                {section.label}
               </button>
-            </div>
-          </form>
-
-          <section className="flex flex-col gap-6 border-t border-border/40 pt-10">
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-[13px] font-medium">Plugins</h3>
-              <p className="text-xs text-muted-foreground/60">
-                Install and manage system extensions
-              </p>
-            </div>
-
-            {installError && (
-              <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
-                {installError}
-              </p>
-            )}
-
-            <div className="flex flex-col gap-8">
-              {/* Installed Plugins */}
-              <div>
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Installed</h4>
-                {loadingPlugins ? (
-                  <div className="flex flex-col gap-2">
-                    {[1, 2].map((i) => (
-                      <div key={i} className="h-16 rounded-xl bg-muted/10 border border-border/20 animate-pulse" />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1 -mx-3">
-                    {plugins.map((plugin) => (
-                      <ExtensionItem
-                        key={plugin.id}
-                        id={plugin.id}
-                        name={plugin.name}
-                        description={plugin.description}
-                        type="plugin"
-                        isInstalled
-                        image={plugin.image}
-                      />
-                    ))}
-                    {plugins.length === 0 && (
-                      <div className="py-6 text-center text-xs text-muted-foreground bg-muted/5 rounded-xl border border-dashed border-border/50 mx-3">
-                        No plugins installed.
+            ))}
+          </div>
+        </aside>
+        <div className="flex-1 min-w-0 h-full">
+          {settingsSection === "agents" && <AgentsPage />}
+          {settingsSection !== "agents" && (
+            <div className="h-full overflow-auto">
+              <div className="mx-auto flex max-w-xl flex-col gap-10 px-6 py-10 animate-in fade-in">
+                {settingsSection === "general" && (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-lg font-semibold tracking-tight">General</h2>
+                      <p className="text-[13px] text-muted-foreground/70">
+                        Appearance and local API key configuration.
+                      </p>
+                    </div>
+                    <section className="flex flex-col gap-4">
+                      <div className="flex flex-col gap-0.5">
+                        <h3 className="text-[13px] font-medium">Appearance</h3>
+                        <p className="text-xs text-muted-foreground/60">
+                          Choose your preferred color theme
+                        </p>
                       </div>
+                      <div className="flex gap-2">
+                        {THEME_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setTheme(opt.value)}
+                            className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px] font-medium transition-all duration-150 ${
+                              theme === opt.value
+                                ? "border-foreground/15 bg-foreground/4 text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                                : "border-border/50 text-muted-foreground hover:border-border hover:text-foreground"
+                            }`}
+                          >
+                            <ThemeIcon type={opt.icon} />
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-8">
+                      <section className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-0.5">
+                          <h3 className="text-[13px] font-medium">API Keys</h3>
+                          <p className="text-xs text-muted-foreground/60">
+                            Your keys are stored locally and never shared
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-medium text-muted-foreground/70">OpenAI</label>
+                            <input
+                              type="password"
+                              value={openaiEditing ? openaiKey : openaiKey || (config.hasOpenAIKey ? MASKED_KEY_VALUE : "")}
+                              onChange={(e) => setOpenaiKey(e.target.value)}
+                              onFocus={() => {
+                                if (!openaiEditing && !openaiKey && config.hasOpenAIKey) {
+                                  setOpenaiKey("");
+                                }
+                                setOpenaiEditing(true);
+                              }}
+                              onBlur={() => {
+                                if (!openaiKey) setOpenaiEditing(false);
+                              }}
+                              placeholder="sk-..."
+                              className="w-full rounded-xl border border-border/60 bg-transparent px-4 py-2.5 text-[13px] placeholder:text-muted-foreground/40 transition-colors focus:border-foreground/20 focus:outline-none"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-medium text-muted-foreground/70">Anthropic</label>
+                            <input
+                              type="password"
+                              value={anthropicEditing ? anthropicKey : anthropicKey || (config.hasAnthropicKey ? MASKED_KEY_VALUE : "")}
+                              onChange={(e) => setAnthropicKey(e.target.value)}
+                              onFocus={() => {
+                                if (!anthropicEditing && !anthropicKey && config.hasAnthropicKey) {
+                                  setAnthropicKey("");
+                                }
+                                setAnthropicEditing(true);
+                              }}
+                              onBlur={() => {
+                                if (!anthropicKey) setAnthropicEditing(false);
+                              }}
+                              placeholder="sk-ant-..."
+                              className="w-full rounded-xl border border-border/60 bg-transparent px-4 py-2.5 text-[13px] placeholder:text-muted-foreground/40 transition-colors focus:border-foreground/20 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      </section>
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={updateConfig.isPending}
+                          className="rounded-xl bg-foreground px-5 py-2 text-[13px] font-medium text-background transition-all duration-150 hover:opacity-80 disabled:opacity-40"
+                        >
+                          {saved ? "Saved" : updateConfig.isPending ? "Saving..." : "Save changes"}
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                )}
+                {settingsSection === "plugins" && (
+                  <section className="flex flex-col gap-6 pb-20">
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-lg font-semibold tracking-tight">Plugins</h2>
+                      <p className="text-[13px] text-muted-foreground/70">
+                        Install and manage system extensions.
+                      </p>
+                    </div>
+                    {installError && (
+                      <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+                        {installError}
+                      </p>
                     )}
-                  </div>
+                    <div className="flex flex-col gap-8">
+                      <div>
+                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Installed</h4>
+                        {loadingPlugins ? (
+                          <div className="flex flex-col gap-2">
+                            {[1, 2].map((i) => (
+                              <div key={i} className="h-16 rounded-xl bg-muted/10 border border-border/20 animate-pulse" />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-1 -mx-3">
+                            {plugins.map((plugin) => (
+                              <ExtensionItem
+                                key={plugin.id}
+                                id={plugin.id}
+                                name={plugin.name}
+                                description={plugin.description}
+                                type="plugin"
+                                isInstalled
+                                image={plugin.image}
+                              />
+                            ))}
+                            {plugins.length === 0 && (
+                              <div className="py-6 text-center text-xs text-muted-foreground bg-muted/5 rounded-xl border border-dashed border-border/50 mx-3">
+                                No plugins installed.
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {recommendedPlugins.length > 0 && (
+                        <div>
+                          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Recommended</h4>
+                          <div className="flex flex-col gap-1 -mx-3">
+                            {recommendedPlugins.map((item) => (
+                              <ExtensionItem
+                                key={item.id}
+                                id={item.id}
+                                name={item.name}
+                                description={item.description}
+                                type="plugin"
+                                image={item.image}
+                                onInstall={() => handleInstallPlugin(item)}
+                                isInstalling={installingPluginId === item.id}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {otherMarketplacePlugins.length > 0 && (
+                        <div>
+                          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Marketplace</h4>
+                          {loadingMarketplacePlugins ? (
+                            <div className="flex flex-col gap-2">
+                              {[1, 2].map((i) => (
+                                <div key={i} className="h-16 rounded-xl bg-muted/10 border border-border/20 animate-pulse" />
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-1 -mx-3">
+                              {otherMarketplacePlugins.map((item) => (
+                                <ExtensionItem
+                                  key={item.id}
+                                  id={item.id}
+                                  name={item.name}
+                                  description={item.description}
+                                  type="plugin"
+                                  image={item.image}
+                                  onInstall={() => handleInstallPlugin(item)}
+                                  isInstalling={installingPluginId === item.id}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
+                {settingsSection === "system" && (
+                  <section className="flex flex-col gap-4 pb-20">
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-lg font-semibold tracking-tight">System</h2>
+                      <p className="text-[13px] text-muted-foreground/70">
+                        Advanced maintenance operations.
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-start gap-4">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await api.reload();
+                            setSaved(true);
+                            setTimeout(() => setSaved(false), 2000);
+                          } catch (err) {
+                            console.error("Reload failed", err);
+                          }
+                        }}
+                        className="rounded-xl border border-border/60 px-4 py-2.5 text-[13px] font-medium text-foreground transition-all duration-150 hover:border-border hover:bg-foreground/5"
+                      >
+                        Reload Runtime
+                      </button>
+                      <p className="text-[11px] text-muted-foreground/50">
+                        Reloads agents and plugins from disk. Use this if you've manually modified configuration files.
+                      </p>
+                    </div>
+                  </section>
                 )}
               </div>
-
-              {/* Recommended Plugins */}
-              {recommendedPlugins.length > 0 && (
-                <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Recommended</h4>
-                  <div className="flex flex-col gap-1 -mx-3">
-                    {recommendedPlugins.map((item) => (
-                      <ExtensionItem
-                        key={item.id}
-                        id={item.id}
-                        name={item.name}
-                        description={item.description}
-                        type="plugin"
-                        image={item.image}
-                        onInstall={() => handleInstallPlugin(item)}
-                        isInstalling={installingPluginId === item.id}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Marketplace Plugins */}
-              {otherMarketplacePlugins.length > 0 && (
-                <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Marketplace</h4>
-                  {loadingMarketplacePlugins ? (
-                    <div className="flex flex-col gap-2">
-                      {[1, 2].map((i) => (
-                        <div key={i} className="h-16 rounded-xl bg-muted/10 border border-border/20 animate-pulse" />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-1 -mx-3">
-                      {otherMarketplacePlugins.map((item) => (
-                        <ExtensionItem
-                          key={item.id}
-                          id={item.id}
-                          name={item.name}
-                          description={item.description}
-                          type="plugin"
-                          image={item.image}
-                          onInstall={() => handleInstallPlugin(item)}
-                          isInstalling={installingPluginId === item.id}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
-          </section>
-
-          <section className="flex flex-col gap-4 border-t border-border/40 pt-10 pb-20">
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-[13px] font-medium">System</h3>
-              <p className="text-xs text-muted-foreground/60">
-                Advanced maintenance operations
-              </p>
-            </div>
-            <div className="flex flex-col items-start gap-4">
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await api.reload();
-                    setSaved(true);
-                    setTimeout(() => setSaved(false), 2000);
-                  } catch (err) {
-                    console.error("Reload failed", err);
-                  }
-                }}
-                className="rounded-xl border border-border/60 px-4 py-2.5 text-[13px] font-medium text-foreground transition-all duration-150 hover:border-border hover:bg-foreground/5"
-              >
-                Reload Runtime
-              </button>
-              <p className="text-[11px] text-muted-foreground/50">
-                Reloads agents and plugins from disk. Use this if you've manually modified configuration files.
-              </p>
-            </div>
-          </section>
-
+          )}
         </div>
+      </div>
     </div>
   );
 }

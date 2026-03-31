@@ -46,7 +46,7 @@ ${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ""}
           const state = context.state as any;
 
           // Deterministically inject any custom state keys into the prompt
-          const standardKeys = ["messages", "agentStates", "usage", "cwd", "workspaceRoot", "title", "sessionId", "pendingAgentTasks"];
+          const standardKeys = ["messages", "agentStates", "usage", "cwd", "workspaceRoot", "title", "conversationId", "pendingAgentTasks"];
           const customState: Record<string, any> = {};
           for (const key of Object.keys(state)) {
             if (!standardKeys.includes(key)) {

@@ -1,14 +1,9 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "../../hooks/use-session";
-import { api, type AgentConfig, type MarketplaceItem } from "../../lib/api";
-import { AgentAvatar } from "../AgentAvatar";
+import { api, type MarketplaceItem } from "../../lib/api";
 import { ExtensionItem } from "../ExtensionItem";
 import { AgentEditForm } from "../AgentEditForm";
-
-const ChevronLeft = ({ className }: { className?: string }) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6" /></svg>
-);
 
 const Plus = ({ className }: { className?: string }) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14" /><path d="M12 5v14" /></svg>

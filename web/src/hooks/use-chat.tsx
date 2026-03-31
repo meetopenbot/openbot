@@ -15,12 +15,12 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ 
   children, 
-  sessionId, 
+  conversationId, 
   eventHandlers,
   initialAdditionalBody 
 }: { 
   children: React.ReactNode; 
-  sessionId: string; 
+  conversationId: string; 
   eventHandlers?: Record<string, (chunk: any, context: { client: ChatClient }) => Promise<void>>;
   initialAdditionalBody?: Record<string, any>;
 }) {
@@ -81,7 +81,7 @@ export function ChatProvider({
 
     try {
       const generator = client.send(eventWithId, { 
-        sessionId,
+        conversationId,
         ...initialAdditionalBody
       });
 
@@ -110,7 +110,7 @@ export function ChatProvider({
         await eventHandlers["stream:done"]({}, { client });
       }
     }
-  }, [client, sessionId, eventHandlers, initialAdditionalBody, streaming]);
+  }, [client, conversationId, eventHandlers, initialAdditionalBody, streaming]);
 
   const stop = useCallback(() => {
     client.stop();

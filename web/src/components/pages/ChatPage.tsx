@@ -5,33 +5,36 @@ import { Thread } from "../Thread";
 import { Composer } from "../Composer";
 import { AttentionRail } from "../AttentionRail";
 import { SessionStateSidebar } from "../SessionStateSidebar";
+import { AgentAvatar } from "../AgentAvatar";
+import { useConversations } from "../../hooks/use-sessions";
+import { useSession } from "../../hooks/use-session";
 import { api } from "../../lib/api";
 
 interface ChatPageProps {
-  sessionId: string;
+  conversationId: string;
   showSidebar?: boolean;
 }
 
-export function ChatPage({ sessionId, showSidebar = true }: ChatPageProps) {
+export function ChatPage({ conversationId, showSidebar = true }: ChatPageProps) {
   const { reset } = useChat();
-  const [loadedSessions, setLoadedSessions] = useState<Set<string>>(new Set());
-  const prevSessionRef = useRef<string | null>(null);
+  const [loadedConversations, setLoadedConversations] = useState<Set<string>>(new Set());
+  const prevConversationRef = useRef<string | null>(null);
 
   const { data: events } = useQuery({
-    queryKey: ["session-events", sessionId],
-    queryFn: () => api.getSessionEvents(sessionId),
+    queryKey: ["conversation-events", conversationId],
+    queryFn: () => api.getConversationEvents(conversationId),
     staleTime: Infinity,
   });
 
   useEffect(() => {
     if (events === undefined) return;
-    if (prevSessionRef.current === sessionId && loadedSessions.has(sessionId))
+    if (prevConversationRef.current === conversationId && loadedConversations.has(conversationId))
       return;
 
-    prevSessionRef.current = sessionId;
+    prevConversationRef.current = conversationId;
     reset(events);
-    setLoadedSessions((prev) => new Set(prev).add(sessionId));
-  }, [events, sessionId, reset, loadedSessions]);
+    setLoadedConversations((prev) => new Set(prev).add(conversationId));
+  }, [events, conversationId, reset, loadedConversations]);
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
@@ -55,39 +58,72 @@ export function ChatPage({ sessionId, showSidebar = true }: ChatPageProps) {
 
 function ChatPlaceholder() {
   const { send } = useChat();
+  const { conversationId } = useSession();
+  const { data: conversations = [] } = useConversations();
+  const { data: agents = [] } = useQuery({
+    queryKey: ["agents"],
+    queryFn: api.getAgents,
+  });
 
   const { data: suggestions = [] } = useQuery({
     queryKey: ["prompts"],
     queryFn: () => api.getPrompts(),
   });
 
+  const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
+  const dmAgentIdFromRoute = conversationId.startsWith("dm_") ? conversationId.slice(3) : undefined;
+  const resolvedAgentId = activeConversation?.agentId || dmAgentIdFromRoute;
+  const activeAgent =
+    resolvedAgentId
+      ? agents.find(
+          (agent) =>
+            agent.id === resolvedAgentId || agent.name === resolvedAgentId,
+        )
+      : null;
+
+  const isChannelConversation = conversationId.startsWith("channel_");
+  const channelTitle = activeConversation?.title?.trim();
+  const title = activeAgent?.name
+    ?? (isChannelConversation ? (channelTitle || "New channel") : "What can I help with?");
+  const subtitle = activeAgent?.description
+    ?? (isChannelConversation
+      ? "This channel is empty. Send a message to start the conversation."
+      : "Your AI sidekick for files, terminal, and more.");
+
   return (
     <div className="flex flex-col items-start gap-4 max-w-lg w-full animate-fade-in">
       <div className="flex items-start gap-3 text-left">
-        <div className="size-9 shrink-0 rounded-lg bg-foreground/4 border border-border/50 flex items-center justify-center mt-0.5">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-foreground/45"
-          >
-            <path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9-9 9-9-1.8-9-9 1.8-9 9-9" />
-            <path d="M8 12h.01" />
-            <path d="M12 12h.01" />
-            <path d="M16 12h.01" />
-          </svg>
-        </div>
+        {activeAgent ? (
+          <AgentAvatar
+            name={activeAgent.isDefault ? "default" : activeAgent.name}
+            className="size-9 shrink-0 rounded-lg border border-border/50 mt-0.5"
+          />
+        ) : (
+          <div className="size-9 shrink-0 rounded-lg bg-foreground/4 border border-border/50 flex items-center justify-center mt-0.5">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-foreground/45"
+            >
+              <path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9-9 9-9-1.8-9-9 1.8-9 9-9" />
+              <path d="M8 12h.01" />
+              <path d="M12 12h.01" />
+              <path d="M16 12h.01" />
+            </svg>
+          </div>
+        )}
         <div className="flex flex-col gap-1 min-w-0">
           <h1 className="text-[15px] font-semibold tracking-tight text-foreground">
-            What can I help with?
+            {title}
           </h1>
           <p className="text-[12px] text-muted-foreground/75 leading-snug">
-            Your AI sidekick for files, terminal, and more.
+            {subtitle}
           </p>
         </div>
       </div>

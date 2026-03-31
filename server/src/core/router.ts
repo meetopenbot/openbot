@@ -116,6 +116,51 @@ export async function* runOpenBot(
   // 2. Direct agent routing for user input (e.g. "@os list files" or "@Codex Agent list files")
   if (event.type === "agent:input") {
     const content = (event.data as any).content as string;
+    const explicitTargetAgent = event.meta?.agentName;
+
+    if (explicitTargetAgent) {
+      const runtime = agentRuntimes.get(explicitTargetAgent);
+      if (runtime) {
+        if (!state.agentStates[explicitTargetAgent]) state.agentStates[explicitTargetAgent] = {};
+
+        let lastAgentOutput = "";
+        for await (const agentChunk of runtime.run(event, {
+          runId: context.runId,
+          state: state.agentStates[explicitTargetAgent] as any,
+        })) {
+          if (agentChunk.type === "agent:output" || agentChunk.type === "agent:output-delta") {
+            const summary = summarizeAgentEventValue(agentChunk);
+            if (summary) lastAgentOutput = summary;
+          }
+
+          yield {
+            ...agentChunk,
+            meta: {
+              ...(agentChunk as any)?.meta,
+              agentName: explicitTargetAgent,
+            },
+          } as ManagerEvent;
+        }
+
+        if (!state.title) {
+          for await (const _ of managerRuntime.run(
+            {
+              type: "agent:output",
+              meta: { agentName: explicitTargetAgent },
+              data: { content: lastAgentOutput || "" },
+            } as ManagerEvent,
+            {
+              runId: context.runId,
+              state: state as any,
+            }
+          )) {
+            // side-effects only
+          }
+        }
+        return;
+      }
+    }
+
     if (content?.trim().startsWith("@")) {
       const trimmedContent = content.trim();
       const afterAt = trimmedContent.slice(1);

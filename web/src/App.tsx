@@ -1,12 +1,12 @@
 import { ChatProvider } from "./hooks/use-chat";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "./hooks/use-session";
 import { useConfig } from "./hooks/use-config";
+import { useConversations } from "./hooks/use-sessions";
 import { cn } from "./lib/utils";
 import { AppLayout, AppLayoutProvider } from "./components/layout/AppLayout";
 import { ChatPage } from "./components/pages/ChatPage";
-import { AgentsPage } from "./components/pages/AgentsPage";
 import { AutomationsPage } from "./components/pages/AutomationsPage";
 import { SettingsPage } from "./components/pages/SettingsPage";
 import { Onboarding } from "./components/Onboarding";
@@ -15,9 +15,11 @@ import { ThemeProvider } from "./components/ThemeProvider";
 
 export function App() {
   const queryClient = useQueryClient();
-  const { sessionId, path, navigate, ensureSessionInUrl } = useSession();
+  const { conversationId, path, navigate, ensureConversationInUrl } = useSession();
+  const { data: conversations = [] } = useConversations();
   const { data: config, isLoading: configLoading } = useConfig();
   const [sessionStateSidebarOpen, setSessionStateSidebarOpen] = useState(false);
+  const activeConversationId = conversationId || conversations[0]?.id || "";
 
   const tab = useMemo(() => {
     return new URLSearchParams(path).get("tab") || "chat";
@@ -26,7 +28,7 @@ export function App() {
   const eventHandlers = useMemo(
     () => ({
       "agent:input": async () => {
-        ensureSessionInUrl();
+        ensureConversationInUrl(activeConversationId);
       },
       "client:invalidate": async (chunk: any) => {
         if (Array.isArray(chunk.data?.tags)) {
@@ -39,13 +41,19 @@ export function App() {
         }
       },
       "stream:done": async () => {
-        queryClient.invalidateQueries({ queryKey: ["sessions"] });
+        queryClient.invalidateQueries({ queryKey: ["conversations"] });
       },
     }),
-    [queryClient, ensureSessionInUrl]
+    [queryClient, ensureConversationInUrl, activeConversationId]
   );
 
-  const providerBody = useMemo(() => ({ sessionId }), [sessionId]);
+  const providerBody = useMemo(() => ({ conversationId: activeConversationId }), [activeConversationId]);
+
+  useEffect(() => {
+    if (!conversationId && activeConversationId) {
+      ensureConversationInUrl(activeConversationId);
+    }
+  }, [conversationId, activeConversationId, ensureConversationInUrl]);
 
   if (configLoading) return <LoadingScreen />;
   if (config && !config.configured) {
@@ -61,15 +69,15 @@ export function App() {
 
   return (
     <ChatProvider
-      sessionId={sessionId}
+      conversationId={activeConversationId}
       initialAdditionalBody={providerBody}
       eventHandlers={eventHandlers}
     >
       <ThemeProvider>
         <AppLayoutProvider>
           <AppLayout
-            sessionId={sessionId}
-            currentTab={tab}
+            conversationId={activeConversationId}
+            currentTab={tab === "agents" ? "settings" : tab}
             onNavigate={navigate}
             rightActions={tab === "chat" ? (
               <button
@@ -89,8 +97,11 @@ export function App() {
               </button>
             ) : null}
           >
-            {tab === "chat" && <ChatPage sessionId={sessionId} showSidebar={sessionStateSidebarOpen} />}
-            {tab === "agents" && <AgentsPage />}
+            {tab === "chat" && activeConversationId && (
+              <ChatPage conversationId={activeConversationId} showSidebar={sessionStateSidebarOpen} />
+            )}
+            {tab === "chat" && !activeConversationId && <NoConversationsPlaceholder />}
+            {tab === "agents" && <SettingsPage defaultSection="agents" />}
             {tab === "automations" && <AutomationsPage />}
             {tab === "settings" && <SettingsPage />}
           </AppLayout>
@@ -104,6 +115,17 @@ const LoadingScreen = () => (
   <div className="flex h-screen w-screen items-center justify-center">
     <div className="flex flex-col items-center gap-4 animate-fade-in">
       <div className="size-8 rounded-full border-2 border-foreground/10 border-t-foreground/60 animate-[spin-slow_0.8s_linear_infinite]" />
+    </div>
+  </div>
+);
+
+const NoConversationsPlaceholder = () => (
+  <div className="flex h-full w-full items-center justify-center bg-background">
+    <div className="text-center">
+      <h2 className="text-base font-semibold text-foreground">No conversations yet</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Create a channel or open a bot DM from the sidebar.
+      </p>
     </div>
   </div>
 );

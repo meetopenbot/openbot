@@ -4,7 +4,16 @@ import cors from "cors";
 import { generateId } from "melony";
 import { createOpenBot } from "./open-bot.js";
 import { loadConfig, saveConfig, isConfigured, resolvePath, DEFAULT_BASE_DIR, DEFAULT_AGENT_MD } from "./config.js";
-import { loadSession, saveSession, logEvent, loadEvents, listSessions } from "./session.js";
+import {
+  loadConversationState,
+  saveConversationState,
+  logConversationEvent,
+  loadConversationEvents,
+  listConversations,
+  createChannelConversation,
+  deleteChannelConversation,
+  normalizeConversationId,
+} from "./conversation.js";
 import { listPlugins } from "./registry/index.js";
 import { readAgentConfig } from "./registry/plugin-loader.js";
 import { exec } from "node:child_process";
@@ -90,11 +99,11 @@ export async function startServer(options: ServerOptions = {}) {
   };
 
   const runAutomation = async (automation: AutomationRecord, scheduledAt: Date) => {
-    const sessionId = `automation_${automation.id}`;
+    const conversationId = `channel_automation_${automation.id}`;
     const runId = `run_auto_${generateId()}`;
-    const state: ManagerState = (await loadSession(sessionId)) ?? {};
+    const state: ManagerState = (await loadConversationState(conversationId)) ?? {};
 
-    state.sessionId = sessionId;
+    state.conversationId = conversationId;
     if (!state.cwd) state.cwd = process.cwd();
     if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
     if (!state.title) state.title = `Automation: ${automation.name}`;
@@ -117,14 +126,14 @@ export async function startServer(options: ServerOptions = {}) {
         `[automations] Running "${automation.name}" (${automation.id}) at ${scheduledAt.toISOString()}`
       );
       for await (const chunk of iterator) {
-        await logEvent(sessionId, runId, chunk);
+        await logConversationEvent(conversationId, runId, chunk);
       }
       console.log(`[automations] Completed "${automation.name}" (${automation.id})`);
     } catch (error) {
       console.error(`[automations] Run failed for "${automation.name}" (${automation.id})`, error);
       throw error;
     } finally {
-      await saveSession(sessionId, state);
+      await saveConversationState(conversationId, state);
     }
   };
 
@@ -255,8 +264,8 @@ export async function startServer(options: ServerOptions = {}) {
       endpoints: {
         chat: "POST /api/chat",
         config: "GET|POST /api/config",
-        sessions: "GET /api/sessions",
-        agents: "GET /api/agents",
+        conversations: "GET /api/conversations",
+        agents: "GET|POST /api/agents",
         prompts: "GET /api/prompts",
         version: "GET /api/version",
       },
@@ -488,13 +497,46 @@ export async function startServer(options: ServerOptions = {}) {
     res.json({ success: true });
   });
 
-  app.get("/api/sessions", async (_req, res) => {
-    const sessions = await listSessions();
-    res.json(sessions);
+  app.get("/api/conversations", async (_req, res) => {
+    const conversations = await listConversations();
+    res.json(conversations);
   });
 
-  app.get("/api/sessions/:id/events", async (req, res) => {
-    const events = await loadEvents(req.params.id);
+  app.post("/api/channels", async (req, res) => {
+    const { name } = req.body as { name?: string };
+    if (typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Channel name is required" });
+    }
+
+    try {
+      const channel = await createChannelConversation(name);
+      return res.status(201).json({ success: true, channel });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create channel";
+      if (message === "Channel already exists") {
+        return res.status(409).json({ error: message });
+      }
+      if (message === "Invalid channel name" || message === "Channel name is required") {
+        return res.status(400).json({ error: message });
+      }
+      console.error(error);
+      return res.status(500).json({ error: "Failed to create channel" });
+    }
+  });
+
+  app.delete("/api/channels/:id", async (req, res) => {
+    const id = normalizeConversationId(req.params.id);
+
+    const deleted = await deleteChannelConversation(id);
+    if (!deleted) {
+      return res.status(404).json({ error: "Channel not found" });
+    }
+    return res.json({ success: true });
+  });
+
+  app.get("/api/conversations/:id/events", async (req, res) => {
+    const conversationId = normalizeConversationId(req.params.id);
+    const events = await loadConversationEvents(conversationId);
     res.json(events);
   });
 
@@ -537,6 +579,81 @@ export async function startServer(options: ServerOptions = {}) {
       // ignore
     }
     res.json(agents);
+  });
+
+  app.post("/api/agents", async (req, res) => {
+    const body = req.body as {
+      id?: string;
+      name?: string;
+      description?: string;
+      model?: string;
+      image?: string;
+      plugins?: Array<string | { name: string; config?: unknown }>;
+      subscribe?: string[];
+      md?: string;
+    };
+
+    const normalizedId = (body.id || "").trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9-_]*$/.test(normalizedId)) {
+      return res.status(400).json({ error: "Invalid agent id. Use lowercase letters, numbers, dashes, and underscores." });
+    }
+
+    const normalizedName = (body.name || "").trim();
+    const normalizedDescription = (body.description || "").trim();
+    if (!normalizedName || !normalizedDescription) {
+      return res.status(400).json({ error: "name and description are required" });
+    }
+
+    const normalizedPlugins: Array<string | { name: string; config?: unknown }> = [];
+    for (const plugin of body.plugins || []) {
+      if (typeof plugin === "string") {
+        const normalized = plugin.trim();
+        if (normalized) normalizedPlugins.push(normalized);
+        continue;
+      }
+      if (!plugin || typeof plugin !== "object" || typeof plugin.name !== "string") continue;
+      const normalizedName = plugin.name.trim();
+      if (!normalizedName) continue;
+      if (typeof plugin.config === "undefined") normalizedPlugins.push({ name: normalizedName });
+      else normalizedPlugins.push({ name: normalizedName, config: plugin.config });
+    }
+
+    const normalizedSubscribe = Array.isArray(body.subscribe)
+      ? body.subscribe.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
+      : [];
+
+    const cfg = loadConfig();
+    const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
+    const resolvedBaseDir = resolvePath(baseDir);
+    const agentDir = path.join(resolvedBaseDir, "agents", normalizedId);
+    const mdPath = path.join(agentDir, "AGENT.md");
+
+    try {
+      await fs.access(agentDir);
+      return res.status(409).json({ error: `Agent "${normalizedId}" already exists` });
+    } catch {
+      // expected for new agent
+    }
+
+    const frontmatter: Record<string, unknown> = {
+      name: normalizedName,
+      description: normalizedDescription,
+      plugins: normalizedPlugins,
+    };
+    if (typeof body.model === "string" && body.model.trim()) frontmatter.model = body.model.trim();
+    if (typeof body.image === "string" && body.image.trim()) frontmatter.image = body.image.trim();
+    if (normalizedSubscribe.length > 0) frontmatter.subscribe = normalizedSubscribe;
+
+    try {
+      await fs.mkdir(agentDir, { recursive: true });
+      const content = matter.stringify((body.md || "").trim(), frontmatter);
+      await fs.writeFile(mdPath, content, "utf-8");
+      scheduleReload();
+      res.status(201).json({ success: true, id: normalizedId });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to create agent" });
+    }
   });
 
   app.get("/api/plugins", async (_req, res) => {
@@ -732,6 +849,7 @@ export async function startServer(options: ServerOptions = {}) {
         name: typeof parsed.name === "string" ? parsed.name : (agentId === defaultName || agentId === "default" ? defaultName : ""),
         description: typeof parsed.description === "string" ? parsed.description : (agentId === defaultName || agentId === "default" ? cfg.description || "" : ""),
         model: typeof parsed.model === "string" ? parsed.model : (agentId === defaultName || agentId === "default" ? cfg.model : undefined),
+        image: typeof parsed.image === "string" ? parsed.image : (agentId === defaultName || agentId === "default" ? cfg.image : undefined),
         plugins: Array.isArray(parsed.plugins) ? parsed.plugins : [],
         subscribe: Array.isArray(parsed.subscribe)
           ? parsed.subscribe.filter((item: unknown) => typeof item === "string")
@@ -744,6 +862,7 @@ export async function startServer(options: ServerOptions = {}) {
           name: defaultName,
           description: cfg.description || "",
           model: cfg.model,
+          image: cfg.image,
           plugins: [],
           systemPrompt: "",
           subscribe: [],
@@ -759,6 +878,7 @@ export async function startServer(options: ServerOptions = {}) {
       name?: string;
       description?: string;
       model?: string;
+      image?: string;
       plugins?: Array<string | { name: string; config?: unknown }>;
       subscribe?: string[];
     };
@@ -838,6 +958,10 @@ export async function startServer(options: ServerOptions = {}) {
 
     if (typeof body.model === "string" && body.model.trim()) {
       frontmatter.model = body.model.trim();
+    }
+
+    if (typeof body.image === "string" && body.image.trim()) {
+      frontmatter.image = body.image.trim();
     }
 
     if (Array.isArray(body.subscribe) && body.subscribe.length > 0) {
@@ -975,10 +1099,14 @@ export async function startServer(options: ServerOptions = {}) {
     });
     res.flushHeaders?.();
 
-    const sessionId = body.sessionId ?? "default";
+    const conversationIdRaw = typeof body.conversationId === "string" ? body.conversationId.trim() : "";
+    const conversationId = normalizeConversationId(conversationIdRaw);
+    if (!conversationId) {
+      return res.status(400).json({ error: "conversationId is required" });
+    }
     const runId = body.runId ?? `run_${generateId()}`;
-    const state: ManagerState = (await loadSession(sessionId)) ?? {};
-    state.sessionId = sessionId;
+    const state: ManagerState = (await loadConversationState(conversationId)) ?? {};
+    state.conversationId = conversationId;
     if (!state.cwd) state.cwd = process.cwd();
     if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
 
@@ -996,10 +1124,10 @@ export async function startServer(options: ServerOptions = {}) {
     try {
       for await (const chunk of iterator) {
         if (res.writableEnded) break;
-        await logEvent(sessionId, runId, chunk);
+        await logConversationEvent(conversationId, runId, chunk);
         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
-      await saveSession(sessionId, state);
+      await saveConversationState(conversationId, state);
     } catch (error) {
       console.error("Melony stream error:", error);
       if (!res.writableEnded) {
@@ -1021,7 +1149,7 @@ export async function startServer(options: ServerOptions = {}) {
   app.listen(PORT, () => {
     console.log(`OpenBot server listening at http://localhost:${PORT}`);
     console.log(`  - Chat endpoint: POST /api/chat`);
-    console.log(`  - REST endpoints: /api/config, /api/sessions, /api/agents`);
+    console.log(`  - REST endpoints: /api/config, /api/conversations, /api/agents`);
     if (options.openaiApiKey) console.log("  - Using OpenAI API Key from CLI");
     if (options.anthropicApiKey)
       console.log("  - Using Anthropic API Key from CLI");

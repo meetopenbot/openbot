@@ -291,7 +291,9 @@ export function Thread({
 
       topLevelEvents.forEach((item, idx) => {
         const eventTimestamp = item.meta?.timestamp || (msg as any).timestamp || Date.now();
-        const agentName = item.meta?.agentName || (msg.role === "user" ? "You" : (config?.name || "Assistant"));
+        const agentName = msg.role === "user"
+          ? "You"
+          : (item.meta?.agentName || (config?.name || "Assistant"));
         
         if (item.type === 'delegation-group') {
           const group = delegationMap.get(item.delegationId);
@@ -326,7 +328,13 @@ export function Thread({
     return events.map((item, index) => {
       const prev = events[index - 1];
       let isGrouped = false;
-      if (prev && prev.meta.agentName === item.meta.agentName && item.type === 'standard' && prev.type === 'standard') {
+      if (
+        prev
+        && prev.meta.role === item.meta.role
+        && prev.meta.agentName === item.meta.agentName
+        && item.type === 'standard'
+        && prev.type === 'standard'
+      ) {
         const timeDiff = item.meta.timestamp - prev.meta.timestamp;
         if (timeDiff < 5 * 60 * 1000) { // 5 minutes
           isGrouped = true;

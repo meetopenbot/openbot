@@ -1,8 +1,19 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 
-const generateId = () => {
-  return Math.random().toString(36).substring(2, 11);
-};
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function normalizeConversationId(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("channel_")) return trimmed;
+  const slug = slugify(trimmed.slice("channel_".length));
+  return slug ? `channel_${slug}` : trimmed;
+}
 
 export function useSession() {
   const [path, setPath] = useState(window.location.search);
@@ -13,9 +24,9 @@ export function useSession() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const sessionId = useMemo(() => {
+  const conversationId = useMemo(() => {
     const params = new URLSearchParams(path);
-    return params.get("sessionId") || `ses_${generateId()}`;
+    return normalizeConversationId(params.get("conversationId") || "");
   }, [path]);
 
   const navigate = useCallback((newPath: string) => {
@@ -23,15 +34,28 @@ export function useSession() {
     window.dispatchEvent(new Event("popstate"));
   }, []);
 
-  const ensureSessionInUrl = useCallback(() => {
+  const ensureConversationInUrl = useCallback((nextConversationId?: string) => {
     const params = new URLSearchParams(window.location.search);
-    if (!params.has("sessionId")) {
-      params.set("sessionId", sessionId);
+    const conversationIdToSet = normalizeConversationId(nextConversationId ?? conversationId);
+    if (!params.has("conversationId") && conversationIdToSet) {
+      params.set("conversationId", conversationIdToSet);
       const newUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
       window.history.replaceState({}, "", newUrl);
       setPath(window.location.search);
     }
-  }, [sessionId]);
+  }, [conversationId]);
 
-  return { sessionId, path, navigate, ensureSessionInUrl };
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const rawConversationId = params.get("conversationId");
+    if (!rawConversationId) return;
+    const normalizedConversationId = normalizeConversationId(rawConversationId);
+    if (normalizedConversationId === rawConversationId) return;
+    params.set("conversationId", normalizedConversationId);
+    const newUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+    window.history.replaceState({}, "", newUrl);
+    setPath(window.location.search);
+  }, [path]);
+
+  return { conversationId, path, navigate, ensureConversationInUrl };
 }

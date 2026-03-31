@@ -37,6 +37,8 @@ export function AgentEditForm({
   onUpdate,
   onBack,
   hideHeader = false,
+  mode = "edit",
+  onCreate,
 }: {
   agentId: string;
   agentName: string;
@@ -46,15 +48,20 @@ export function AgentEditForm({
   onUpdate?: () => void;
   onBack?: () => void;
   hideHeader?: boolean;
+  mode?: "edit" | "create";
+  onCreate?: (agentId: string) => void;
 }) {
   const queryClient = useQueryClient();
   const { data: models = [] } = useModels();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isCreateMode = mode === "create";
 
   // Agent Config (YAML fields)
   const [name, setName] = useState(agentName);
+  const [id, setId] = useState(agentId);
+  const [idDirty, setIdDirty] = useState(false);
   const [description, setDescription] = useState("");
   const [model, setModel] = useState("");
   const [image, setImage] = useState("");
@@ -66,6 +73,21 @@ export function AgentEditForm({
   const isCodeOnlyAgent = !isDefault && hasAgentMd === false;
 
   useEffect(() => {
+    if (isCreateMode || idDirty) return;
+    const next = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    setId(next || "agent");
+  }, [name, idDirty, isCreateMode]);
+
+  useEffect(() => {
+    if (isCreateMode) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     if (isCodeOnlyAgent) {
       setLoading(false);
       setName(agentName);
@@ -115,14 +137,70 @@ export function AgentEditForm({
         setError("Failed to load agent details");
       })
       .finally(() => setLoading(false));
-  }, [agentId, agentName, isDefault, isCodeOnlyAgent]);
+  }, [agentId, agentName, isDefault, isCodeOnlyAgent, isCreateMode]);
 
   const handleSave = async () => {
     setError(null);
     setSaving(true);
     const effectiveName = isDefault ? "default" : agentId;
     try {
-      if (isDefault) {
+      if (isCreateMode) {
+        const normalizedId = id.trim().toLowerCase().replace(/[^a-z0-9-_]+/g, "-").replace(/^-+|-+$/g, "");
+        if (!normalizedId) {
+          setError("Agent ID is required");
+          setSaving(false);
+          return;
+        }
+
+        if (!name.trim() || !description.trim()) {
+          setError("Name and description are required");
+          setSaving(false);
+          return;
+        }
+
+        const plugins: Array<string | { name: string; config?: unknown }> = [];
+        const seenPluginNames = new Set<string>();
+        for (const row of pluginRows) {
+          const pluginName = row.name.trim();
+          if (!pluginName) continue;
+          if (seenPluginNames.has(pluginName)) {
+            setError(`Plugin "${pluginName}" is selected more than once`);
+            setSaving(false);
+            return;
+          }
+          seenPluginNames.add(pluginName);
+          if (!row.configText.trim()) {
+            plugins.push(pluginName);
+            continue;
+          }
+          try {
+            plugins.push({ name: pluginName, config: JSON.parse(row.configText) });
+          } catch {
+            setError(`Plugin "${pluginName}" has invalid JSON config`);
+            setSaving(false);
+            return;
+          }
+        }
+
+        const subscribe = subscribeText
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+
+        await api.createAgent({
+          id: normalizedId,
+          name: name.trim(),
+          description: description.trim(),
+          model: model.trim() || undefined,
+          image: image.trim() || undefined,
+          plugins,
+          subscribe,
+          md: mdContent,
+        });
+        await queryClient.invalidateQueries({ queryKey: ["agents"] });
+        onCreate?.(normalizedId);
+        onUpdate?.();
+      } else if (isDefault) {
         await api.updateConfig({
           model: model.trim() || undefined,
           name: name.trim() || undefined,
@@ -288,9 +366,9 @@ export function AgentEditForm({
         </div>
       )}
 
-      <div className="flex-1 flex flex-row overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden">
         {/* Main Content - Markdown Instructions */}
-        <div className="flex-1 flex flex-col min-w-0 h-full">
+        <div className="flex flex-col min-w-0 h-full flex-1">
           <div className="flex-1 overflow-auto p-6 flex flex-col gap-6">
             {error && (
               <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300 shrink-0">
@@ -298,15 +376,15 @@ export function AgentEditForm({
               </p>
             )}
 
-            <div className="flex flex-col gap-3 h-full max-w-7xl mx-auto w-full">
-              <div className="flex items-center justify-between px-1">
+            <div className="flex flex-col gap-3 h-full w-full">
+              <div className="flex flex-col gap-1 px-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Instructions (AGENT.md)</label>
                 <span className="text-[11px] text-muted-foreground/60">Instructions for the agent</span>
               </div>
               <textarea
                 value={mdContent}
                 onChange={(e) => setMdContent(e.target.value)}
-                className="flex-1 w-full rounded-2xl border border-border/60 bg-background/50 px-8 py-8 font-mono text-sm focus:outline-none focus:border-foreground/30 transition-all leading-relaxed resize-none shadow-sm"
+                className="flex-1 min-h-[260px] w-full rounded-2xl border border-border/60 bg-background/50 px-6 py-6 font-mono text-sm focus:outline-none focus:border-foreground/30 transition-all leading-relaxed resize-none shadow-sm"
                 placeholder="# Agent Instructions&#10;&#10;Explain what this agent does and how it should be used..."
               />
             </div>
@@ -325,7 +403,7 @@ export function AgentEditForm({
         </div>
 
         {/* Right Sidebar - Configuration */}
-        <div className="w-[300px] border-l border-border/50 bg-muted/5 flex flex-col h-full shrink-0">
+        <div className="border-l border-border/50 bg-muted/5 flex flex-col h-full min-w-0 w-96">
           <div className="p-4 border-b border-border/50 bg-background/50 flex flex-col gap-1 shrink-0">
             <h3 className="text-sm font-semibold tracking-tight">Configuration</h3>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Agent Details & Plugins</p>
@@ -341,6 +419,21 @@ export function AgentEditForm({
                 placeholder="agent name"
               />
             </div>
+
+            {isCreateMode && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">ID</label>
+                <input
+                  value={id}
+                  onChange={(e) => {
+                    setIdDirty(true);
+                    setId(e.target.value);
+                  }}
+                  className="rounded-xl border border-border/60 bg-background/50 px-4 py-2.5 text-sm transition-all focus:border-foreground/30 focus:outline-none"
+                  placeholder="my-bot"
+                />
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Model (optional)</label>

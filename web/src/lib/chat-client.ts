@@ -6,7 +6,7 @@ export class ChatClient {
     this.url = url;
   }
 
-  async *send(payload: any, options: { sessionId: string }) {
+  async *send(payload: any, options: { conversationId: string }) {
     this.abortController = new AbortController();
     
     const response = await fetch(this.url, {

@@ -11,10 +11,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export interface SessionInfo {
+export interface ConversationInfo {
   id: string;
+  kind: "dm" | "channel";
   title?: string;
+  agentId?: string;
   mtime: string;
+}
+
+export interface ChannelInfo {
+  id: string;
+  title: string;
 }
 
 export interface AppConfig {
@@ -54,6 +61,11 @@ export interface AgentConfig {
   image?: string;
   plugins: Array<string | AgentPluginConfig>;
   subscribe?: string[];
+}
+
+export interface CreateAgentPayload extends AgentConfig {
+  id: string;
+  md?: string;
 }
 
 export type ModelProvider = "openai" | "anthropic";
@@ -104,12 +116,29 @@ export const api = {
     anthropic_api_key?: string;
   }) => request<{ success: boolean }>("/api/config", { method: "POST", body: JSON.stringify(data) }),
 
-  getSessions: () => request<SessionInfo[]>("/api/sessions"),
+  getConversations: () => request<ConversationInfo[]>("/api/conversations"),
 
-  getSessionEvents: (id: string) => request<any[]>(`/api/sessions/${encodeURIComponent(id)}/events`),
+  createChannel: (name: string) =>
+    request<{ success: boolean; channel: ChannelInfo }>("/api/channels", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+
+  deleteChannel: (id: string) =>
+    request<{ success: boolean }>(`/api/channels/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+
+  getConversationEvents: (id: string) => request<any[]>(`/api/conversations/${encodeURIComponent(id)}/events`),
 
   getAgents: () =>
     request<{ id: string; name: string; description: string; folder: string; isDefault?: boolean; hasAgentMd?: boolean; image?: string }[]>("/api/agents"),
+
+  createAgent: (data: CreateAgentPayload) =>
+    request<{ success: boolean; id: string }>("/api/agents", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
   getInstalledPlugins: () =>
     request<InstalledPluginInfo[]>("/api/plugins"),

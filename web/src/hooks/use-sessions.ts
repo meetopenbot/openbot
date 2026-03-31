@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 
-export function useSessions() {
+export function useConversations() {
   return useQuery({
-    queryKey: ["sessions"],
-    queryFn: api.getSessions,
-    meta: { tags: ["sessions"] },
+    queryKey: ["conversations"],
+    queryFn: api.getConversations,
+    meta: { tags: ["conversations"] },
     refetchInterval: 30_000,
   });
 }

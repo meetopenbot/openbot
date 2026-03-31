@@ -1,6 +1,6 @@
 import { useState, useCallback, type ReactNode } from "react";
 import { SidebarContext, useSidebar } from "../../hooks/use-sidebar";
-import { useSessions } from "../../hooks/use-sessions";
+import { useConversations } from "../../hooks/use-sessions";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { AppSidebar } from "./AppSidebar";
@@ -12,7 +12,7 @@ const SIDEBAR_WIDTH = 272;
 
 interface AppLayoutProps {
   children: ReactNode;
-  sessionId: string;
+  conversationId: string;
   currentTab: string;
   onNavigate: (path: string) => void;
   rightActions?: ReactNode;
@@ -33,9 +33,9 @@ export function AppLayoutProvider({
   );
 }
 
-export function AppLayout({ children, sessionId, currentTab, onNavigate, rightActions }: AppLayoutProps) {
+export function AppLayout({ children, conversationId, currentTab, onNavigate, rightActions }: AppLayoutProps) {
   const { open, toggle } = useSidebar();
-  const { data: sessions = [] } = useSessions();
+  const { data: conversations = [] } = useConversations();
   const { data: agents = [] } = useQuery({
     queryKey: ["agents"],
     queryFn: api.getAgents,
@@ -43,14 +43,13 @@ export function AppLayout({ children, sessionId, currentTab, onNavigate, rightAc
 
   const [showAgentProfile, setShowAgentProfile] = useState(false);
 
-  const activeSession = sessions.find((session) => session.id === sessionId);
-  
-  // Find agent if this is an agent session
-  const agentIdFromSessionId = sessionId.startsWith('agent_') ? sessionId.slice(6) : null;
-  const activeAgent = agents.find(a => a.id === agentIdFromSessionId || a.name === agentIdFromSessionId);
+  const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
+  const activeAgent = activeConversation?.kind === "dm" && activeConversation.agentId
+    ? agents.find(a => a.id === activeConversation.agentId || a.name === activeConversation.agentId)
+    : null;
 
-  let headerTitle = activeSession?.title || (sessionId.startsWith('agent_') ? `@${sessionId.slice(6)}` : sessionId.slice(0, 12));
-  if (activeAgent && !activeSession?.title) {
+  let headerTitle = activeConversation?.title || conversationId;
+  if (activeAgent && !activeConversation?.title) {
     headerTitle = activeAgent.name;
   }
 
@@ -62,7 +61,7 @@ export function AppLayout({ children, sessionId, currentTab, onNavigate, rightAc
       >
         <div className="h-full bg-background" style={{ width: SIDEBAR_WIDTH }}>
           <AppSidebar
-            sessionId={sessionId}
+            conversationId={conversationId}
             currentTab={currentTab}
             onNavigate={onNavigate}
           />
@@ -82,17 +81,7 @@ export function AppLayout({ children, sessionId, currentTab, onNavigate, rightAc
                 <path d="M9 3v18" />
               </svg>
             </button>
-            <button
-              onClick={() => onNavigate("/")}
-              className="p-2 rounded-lg hover:bg-muted/80 text-muted-foreground/70 hover:text-foreground transition-all duration-150"
-              aria-label="New chat"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14" />
-                <path d="M12 5v14" />
-              </svg>
-            </button>
-            <div className="ml-2 flex items-center shrink-0">
+            <div className="flex items-center shrink-0">
               <UpdateBadge />
             </div>
             {currentTab === "chat" && (
@@ -104,7 +93,7 @@ export function AppLayout({ children, sessionId, currentTab, onNavigate, rightAc
                   >
                     <AgentAvatar 
                       name={activeAgent.isDefault ? "default" : activeAgent.name} 
-                      className="size-6 shrink-0 rounded-lg shadow-sm group-hover:scale-105 transition-transform" 
+                      className="size-5 shrink-0 rounded shadow-sm group-hover:scale-105 transition-transform" 
                     />
                     <h1 className="text-sm font-semibold text-foreground/85 truncate max-w-[55vw]">
                       {headerTitle}
