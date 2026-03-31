@@ -1,9 +1,9 @@
 ---
-alwaysApply: false
+alwaysApply: true
 ---
 # Melony UI and SDUI Guidelines
 
-The `@melony/ui-kit` and `@melony/ui-shadcn` packages provide the contract and components for Server-Driven UI (SDUI) in Melony.
+The `@melony/ui-kit` package provides the base contract for Server-Driven UI (SDUI) in Melony, while your app supplies the concrete component implementations.
 
 ## Base Contract (@melony/ui-kit)
 
@@ -24,9 +24,9 @@ The `@melony/ui-kit` and `@melony/ui-shadcn` packages provide the contract and c
 }
 ```
 
-## UI Kit (@melony/ui-shadcn)
+## Component Registry (Custom)
 
-`@melony/ui-shadcn` provides pre-built UI components using Shadcn/Base UI that satisfy the `@melony/ui-kit` contract.
+Build and register your own components that satisfy the `@melony/ui-kit` contract.
 
 ### Setup
 
@@ -34,11 +34,11 @@ Register the components in your `MelonyUIProvider`.
 
 ```tsx
 import { MelonyUIProvider } from "@melony/ui-kit";
-import { shadcnElements } from "@melony/ui-shadcn";
+import { customElements } from "./ui/custom-elements";
 
 export default function App({ children }) {
   return (
-    <MelonyUIProvider components={shadcnElements}>
+    <MelonyUIProvider components={customElements}>
       {children}
     </MelonyUIProvider>
   );

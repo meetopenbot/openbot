@@ -1,5 +1,4 @@
-import { MelonyProvider } from "@melony/react";
-import { MelonyClient } from "melony/client";
+import { ChatProvider } from "./hooks/use-chat";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "./hooks/use-session";
@@ -12,11 +11,7 @@ import { AutomationsPage } from "./components/pages/AutomationsPage";
 import { SettingsPage } from "./components/pages/SettingsPage";
 import { Onboarding } from "./components/Onboarding";
 import { ThemeProvider } from "./components/ThemeProvider";
-import { BASE_URL } from "./lib/api";
-
-const melonyClient = new MelonyClient({
-  url: `${BASE_URL}/api/chat`,
-});
+// import { BASE_URL } from "./lib/api";
 
 export function App() {
   const queryClient = useQueryClient();
@@ -30,27 +25,24 @@ export function App() {
 
   const eventHandlers = useMemo(
     () => ({
-      "agent:input": async (event: any, { client }: any) => {
+      "agent:input": async () => {
         ensureSessionInUrl();
-        const generator = client.send(event, { sessionId });
-        const invalidateTags = new Set<string>();
-
-        for await (const chunk of generator) {
-          if (chunk?.type === "client:invalidate" && Array.isArray(chunk.data?.tags)) {
-            chunk.data.tags.forEach((tag: string) => invalidateTags.add(tag));
-          }
+      },
+      "client:invalidate": async (chunk: any) => {
+        if (Array.isArray(chunk.data?.tags)) {
+          queryClient.invalidateQueries({
+            predicate: (query) => {
+              const queryTags = (query.meta as any)?.tags as string[] | undefined;
+              return queryTags?.some((tag) => chunk.data.tags.includes(tag)) ?? false;
+            },
+          });
         }
-
-        invalidateTags.add("sessions");
-        queryClient.invalidateQueries({
-          predicate: (query) => {
-            const queryTags = (query.meta as any)?.tags as string[] | undefined;
-            return queryTags?.some((tag) => invalidateTags.has(tag)) ?? false;
-          },
-        });
+      },
+      "stream:done": async () => {
+        queryClient.invalidateQueries({ queryKey: ["sessions"] });
       },
     }),
-    [sessionId, queryClient, ensureSessionInUrl]
+    [queryClient, ensureSessionInUrl]
   );
 
   const providerBody = useMemo(() => ({ sessionId }), [sessionId]);
@@ -68,8 +60,8 @@ export function App() {
   }
 
   return (
-    <MelonyProvider
-      client={melonyClient}
+    <ChatProvider
+      sessionId={sessionId}
       initialAdditionalBody={providerBody}
       eventHandlers={eventHandlers}
     >
@@ -104,7 +96,7 @@ export function App() {
           </AppLayout>
         </AppLayoutProvider>
       </ThemeProvider>
-    </MelonyProvider>
+    </ChatProvider>
   );
 }
 

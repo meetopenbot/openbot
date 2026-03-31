@@ -1,0 +1,57 @@
+import { AgentAvatar } from "./AgentAvatar";
+import { AgentEditForm } from "./AgentEditForm";
+import { Dialog, DialogContent, DialogTitle, DialogClose } from "./ui/dialog";
+
+interface AgentProfileModalProps {
+  agent: {
+    id: string;
+    name: string;
+    folder?: string;
+    isDefault?: boolean;
+    hasAgentMd?: boolean;
+  };
+  onClose: () => void;
+}
+
+export function AgentProfileModal({ agent, onClose }: AgentProfileModalProps) {
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-5xl h-[85vh] rounded-3xl border border-border bg-background p-0 shadow-2xl overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-muted/5">
+          <div className="flex items-center gap-3">
+            <AgentAvatar name={agent.isDefault ? "default" : agent.name} className="size-10 rounded-xl" />
+            <div className="flex flex-col">
+              <DialogTitle className="text-lg font-bold tracking-tight text-foreground leading-none">
+                {agent.name}
+              </DialogTitle>
+              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mt-1">
+                Agent Profile
+              </p>
+            </div>
+          </div>
+          <DialogClose
+            className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-150"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </DialogClose>
+        </div>
+
+        <div className="flex-1 overflow-hidden">
+          <AgentEditForm
+            agentId={agent.id}
+            agentName={agent.name}
+            folder={agent.folder}
+            isDefault={agent.isDefault}
+            hasAgentMd={agent.hasAgentMd}
+            onUpdate={onClose}
+            onBack={onClose}
+            hideHeader={true}
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

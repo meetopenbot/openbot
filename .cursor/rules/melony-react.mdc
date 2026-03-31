@@ -1,5 +1,5 @@
 ---
-alwaysApply: false
+alwaysApply: true
 ---
 # Melony React Guidelines
 
@@ -7,20 +7,20 @@ The `@melony/react` package provides React hooks and providers for client-side i
 
 ## Setup Providers
 
-Wrap your application with `MelonyProvider`. Usually, you'll also need `MelonyUIProvider` from `@melony/ui-kit`.
+Wrap your application with `MelonyProvider`. Usually, you'll also need `MelonyUIProvider` from `@melony/ui-kit` with your own component registry.
 
 ```tsx
 import { MelonyClient } from "melony/client";
 import { MelonyProvider } from "@melony/react";
 import { MelonyUIProvider } from "@melony/ui-kit";
-import { shadcnElements } from "@melony/ui-shadcn";
+import { customElements } from "./ui/custom-elements";
 
 const client = new MelonyClient({ url: "/api/chat" });
 
 export default function RootLayout({ children }) {
   return (
     <MelonyProvider client={client}>
-      <MelonyUIProvider components={shadcnElements}>
+      <MelonyUIProvider components={customElements}>
         {children}
       </MelonyUIProvider>
     </MelonyProvider>

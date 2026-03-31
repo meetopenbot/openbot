@@ -1,9 +1,9 @@
-import { useMelony } from "@melony/react";
+import { useChat } from "../hooks/use-chat";
 import { useMemo } from "react";
 import { WidgetRenderer, type UIBlock } from "./WidgetRenderer";
 
 export function SessionStateSidebar() {
-  const { messages } = useMelony();
+  const { messages } = useChat();
 
   // Aggregate widgets from all messages
   const sidebarWidgets = useMemo(() => {

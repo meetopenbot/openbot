@@ -32,15 +32,15 @@ function getColorForName(name: string) {
   return colors[Math.abs(hash) % colors.length];
 }
 
-export function AgentAvatar({ name, className = "w-6 h-6" }: AgentAvatarProps) {
+export function AgentAvatar({ name, className = "w-6 h-6 rounded-sm" }: AgentAvatarProps) {
   const [error, setError] = useState(false);
 
   if (error) {
     const colorClass = getColorForName(name);
     return (
-      <div 
-        className={`flex items-center justify-center rounded-md uppercase font-bold shrink-0 ${colorClass} ${className}`}
-        style={{ fontSize: '0.6em' }}
+      <div
+        className={`flex items-center justify-center uppercase font-bold shrink-0 ${colorClass} ${className}`}
+        style={{ fontSize: "0.6em" }}
       >
         {name.charAt(0)}
       </div>
@@ -51,7 +51,7 @@ export function AgentAvatar({ name, className = "w-6 h-6" }: AgentAvatarProps) {
     <img
       src={`${BASE_URL}/api/agents/${encodeURIComponent(name)}/avatar`}
       alt={name}
-      className={`rounded-md object-cover shrink-0 bg-muted/30 ${className}`}
+      className={`object-cover shrink-0 bg-muted/30 ${className}`}
       onError={() => setError(true)}
     />
   );

@@ -1,4 +1,4 @@
-import { useMelony } from '@melony/react';
+import { useChat } from '../hooks/use-chat';
 import { cn } from '../lib/utils';
 
 export interface UIBlock {
@@ -18,7 +18,7 @@ export function WidgetRenderer({
   eventMeta?: Record<string, any>;
   mode?: "full" | "compact";
 }) {
-  const { send } = useMelony();
+  const { send } = useChat();
   const { widget, props } = block;
   const sendAction = (action: any) => {
     if (!action || typeof action !== "object") return;

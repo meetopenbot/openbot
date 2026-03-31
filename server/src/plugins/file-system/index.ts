@@ -1,4 +1,4 @@
-import { MelonyPlugin, Event } from "melony";
+import { MelonyPlugin } from "melony";
 import { uiEvent } from "../../ui/block.js";
 import { z } from "zod";
 import * as fs from "node:fs/promises";

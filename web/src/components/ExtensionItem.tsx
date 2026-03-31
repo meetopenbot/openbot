@@ -38,12 +38,12 @@ export const ExtensionItem = ({
         <img
           src={image}
           alt={name}
-          className="w-[48px] h-[48px] rounded-[12px] shadow-sm transition-transform group-hover:scale-[1.05] object-cover"
+          className="w-[48px] h-[48px] rounded-md shadow-sm transition-transform group-hover:scale-[1.05] object-cover"
         />
       ) : (
         <AgentAvatar
           name={isDefault ? "default" : id}
-          className="w-[48px] h-[48px] rounded-[12px] shadow-sm transition-transform group-hover:scale-[1.05]"
+          className="w-[48px] h-[48px] rounded-md shadow-sm transition-transform group-hover:scale-[1.05]"
         />
       )}
       {isDefault && (

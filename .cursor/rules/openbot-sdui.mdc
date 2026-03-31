@@ -39,7 +39,7 @@ builder.on("my:event", async function* (event) {
 
 ## 🛠️ Components & Contracts
 - **`@melony/ui-kit`**: Provides the `ui` helper and standard `UINode` types.
-- **`@melony/ui-shadcn`**: Backend-to-frontend component registry (Shadcn-based).
+- **Custom component registry**: Implement your own frontend mapping for rendered node types.
 - **Refer to `melony-ui.mdc`**: For detailed SDUI component guidelines and recursive rendering rules.
 
 ## 💡 Best Practices

@@ -1,12 +1,12 @@
-import type { Event } from "melony";
-import type { UIEvent } from "@melony/ui-kit";
+export type UIEvent = { type: "ui" }
+
 export interface SimpleMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string | any[];
   attachments?: AttachmentRef[];
 }
 
-type ChatEventBase<T extends string, D> = Event<D> & {
+type ChatEventBase<T extends string, D> = { type: T } & D & {
   type: T;
   meta?: {
     delegationId?: string;

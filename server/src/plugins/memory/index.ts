@@ -1,4 +1,4 @@
-import { MelonyPlugin, RuntimeContext, Event } from "melony";
+import { MelonyPlugin, RuntimeContext } from "melony";
 import { uiEvent } from "../../ui/block.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -15,7 +15,7 @@ export type { MemoryModules } from "./prompt.js";
 
 // --- Helpers ---
 
-export interface MemoryStatusEvent extends Event {
+export interface MemoryStatusEvent {
   type: "memory:status";
   data: { message: string; severity?: "info" | "success" | "error" };
 }

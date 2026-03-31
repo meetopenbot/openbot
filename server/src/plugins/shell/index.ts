@@ -1,4 +1,4 @@
-import { MelonyPlugin, Event } from "melony";
+import { MelonyPlugin } from "melony";
 import { uiEvent } from "../../ui/block.js";
 import { z } from "zod";
 import { exec } from "node:child_process";
@@ -17,7 +17,7 @@ export const shellToolDefinitions = {
   },
 };
 
-export interface ShellStatusEvent extends Event {
+export interface ShellStatusEvent {
   type: "shell:status";
   data: { message: string; severity?: "info" | "success" | "error" };
 }

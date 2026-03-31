@@ -1,4 +1,4 @@
-import { MelonyPlugin, Event, RuntimeContext } from "melony";
+import { MelonyPlugin, RuntimeContext } from "melony";
 import { streamText, LanguageModel, ModelMessage, Output } from "ai";
 import { z } from "zod";
 import { SimpleMessage } from "../../types.js";
@@ -320,7 +320,7 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
           yield {
             type: "agent:output-delta",
             data: { delta: "", content: JSON.stringify(delta) },
-          } as Event;
+          } as any;
         }
       }
 
@@ -331,7 +331,7 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
         yield {
           type: completionEventType,
           data: finalObject,
-        } as Event;
+        } as any;
       }
     } else {
       for await (const delta of result.textStream) {
@@ -340,7 +340,7 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
           yield {
             type: "agent:output-delta",
             data: { delta, content: assistantMessage.content },
-          } as Event;
+          } as any;
         }
       }
     }
@@ -376,7 +376,7 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
           yield {
             type: completionEventType,
             data: { content: assistantText },
-          } as Event;
+          } as any;
         }
       }
     }
@@ -412,7 +412,7 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
             totalTokens: state.usage.totalTokens,
           },
         },
-      } as Event;
+      } as any;
     }
 
     // Emit tool call events
@@ -423,7 +423,7 @@ export const llmPlugin = (options: LLMPluginOptions): MelonyPlugin<any, any> => 
           ...call.input,
           toolCallId: call.toolCallId,
         },
-      } as Event;
+      } as any;
     }
   }
 

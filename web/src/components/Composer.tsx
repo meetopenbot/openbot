@@ -1,9 +1,10 @@
-import { useMelony } from "@melony/react";
+import { useChat } from "../hooks/use-chat";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "../hooks/use-session";
 import { api, type AttachmentRef } from "../lib/api";
 import { AgentAvatar } from "./AgentAvatar";
+import { cn } from "../lib/utils";
 
 const BUILT_IN_AGENTS = [
   { name: "os", description: "Handles shell commands and file system operations" },
@@ -12,7 +13,7 @@ const BUILT_IN_AGENTS = [
 ];
 
 export function Composer() {
-  const { send, streaming, stop, events } = useMelony();
+  const { send, streaming, stop, events } = useChat();
   const { sessionId } = useSession();
   const [content, setContent] = useState("");
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
@@ -187,8 +188,15 @@ export function Composer() {
 
   useEffect(() => {
     setContent("");
-    setSelectedAgent(null);
     clearPendingImages();
+
+    // If it's an agent session, auto-select the agent
+    if (sessionId.startsWith("agent_")) {
+      const agentName = sessionId.slice(6);
+      setSelectedAgent(agentName);
+    } else {
+      setSelectedAgent(null);
+    }
 
     // Check for pre-filled message in URL
     const params = new URLSearchParams(window.location.search);
@@ -300,9 +308,9 @@ export function Composer() {
   const formatInt = (value: number) => new Intl.NumberFormat().format(Math.max(0, Math.floor(value)));
 
   return (
-    <div className="relative w-full rounded-2xl border border-border/60 bg-background shadow-[0_2px_12px_rgba(0,0,0,0.04)] transition-all duration-200 focus-within:border-border focus-within:shadow-[0_2px_20px_rgba(0,0,0,0.06)]">
+    <div className="relative w-full rounded-lg border border-border/60 bg-background shadow-[0_2px_12px_rgba(0,0,0,0.04)] transition-all duration-200 focus-within:border-border focus-within:shadow-[0_2px_20px_rgba(0,0,0,0.06)]">
       {showAgentPopover && (
-        <div className="absolute bottom-[calc(100%+8px)] left-0 w-[300px] overflow-hidden rounded-xl border border-border/60 bg-background p-1.5 shadow-xl animate-in fade-in slide-in-from-bottom-2">
+        <div className="absolute bottom-[calc(100%+8px)] left-0 w-[300px] overflow-hidden rounded-xl border border-border/60 bg-background p-1.5 shadow-xl animate-in fade-in slide-in-from-bottom-2 z-50">
           <div className="px-2 pb-1.5 pt-1 text-xs font-medium text-muted-foreground/70">
             Select an Agent
           </div>
@@ -316,7 +324,7 @@ export function Composer() {
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${i === popoverIndex ? "bg-muted/60" : "hover:bg-muted/40"
                   }`}
               >
-                <AgentAvatar name={(agent as any).isDefault ? "default" : agent.name} className="w-8 h-8 rounded-lg" />
+                <AgentAvatar name={(agent as any).isDefault ? "default" : agent.name} className="w-8 h-8 rounded-sm" />
                 <div className="flex flex-col items-start gap-0.5">
                   <div className="text-[13px] font-medium text-foreground">@{agent.name}</div>
                   <div className="line-clamp-1 text-xs text-muted-foreground/70">
@@ -330,14 +338,14 @@ export function Composer() {
       )}
       <form onSubmit={handleSubmit} className="flex flex-col">
         {pendingImages.length > 0 && (
-          <div className="px-4 pt-3">
+          <div className="px-3 pt-3">
             <div className="flex flex-wrap gap-2">
               {pendingImages.map((image) => (
                 <div key={image.id} className="relative group animate-in fade-in scale-in-95">
                   <img
                     src={image.previewUrl}
                     alt={image.file.name}
-                    className="h-16 w-16 rounded-xl border border-border/60 object-cover shadow-sm transition-all duration-200 hover:border-border"
+                    className="h-16 w-16 rounded-lg border border-border/60 object-cover shadow-sm transition-all duration-200 hover:border-border"
                   />
                   <button
                     type="button"
@@ -357,14 +365,14 @@ export function Composer() {
         )}
 
         {selectedAgent && (
-          <div className="px-4 pt-3 flex">
-            <div className="flex h-6 items-center gap-1.5 rounded-full bg-foreground/8 px-2.5 py-0.5 text-[11px] font-semibold text-foreground ring-1 ring-inset ring-foreground/5 transition-all duration-200 hover:bg-foreground/12 animate-in fade-in slide-in-from-left-2">
-              <AgentAvatar name={customAgents.find((a: any) => a.name === selectedAgent)?.isDefault ? "default" : selectedAgent} className="h-3.5 w-3.5 rounded-full" />
+          <div className="px-3 pt-3 flex">
+            <div className="flex h-6 items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-bold text-primary animate-in fade-in slide-in-from-left-2">
+              <AgentAvatar name={customAgents.find((a: any) => a.name === selectedAgent)?.isDefault ? "default" : selectedAgent} className="h-3.5 w-3.5 rounded-sm" />
               <span className="max-w-[120px] truncate leading-none">@{selectedAgent}</span>
               <button
                 type="button"
                 onClick={handleRemoveAgent}
-                className="ml-0.5 rounded-full p-0.5 text-muted-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
+                className="ml-0.5 rounded-full p-0.5 hover:bg-primary/20 transition-colors"
                 aria-label="Remove agent"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -387,7 +395,8 @@ export function Composer() {
             rows={1}
           />
         </div>
-        <div className="flex items-center justify-between px-3.5 pb-2.5">
+        
+        <div className="flex items-center justify-between px-2 py-1.5 border-t border-border/40 rounded-b-lg">
           <div ref={actionPopoverRef} className="relative flex items-center">
             <input
               ref={fileInputRef}
@@ -426,36 +435,36 @@ export function Composer() {
               </div>
             )}
           </div>
+
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              {usageData && (
-                <div className="group relative">
-                  <div
-                    className="rounded-md px-2 py-1 text-[11px] text-muted-foreground/80 transition-colors group-hover:bg-muted/60 group-hover:text-foreground"
-                    aria-label="Token usage"
-                  >
-                    {formatInt(turnInputTokens)} in / {formatInt(sessionTotalTokens)} total
-                  </div>
-                  <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 hidden w-[160px] -translate-x-1/2 rounded-lg border border-border/60 bg-background px-2.5 py-2 text-[11px] shadow-xl group-hover:block">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Last prompt</span>
-                      <span className="font-medium text-foreground">{formatInt(turnInputTokens)}</span>
-                    </div>
-                    <div className="mt-1 text-muted-foreground">
-                      Output: {formatInt(turnOutputTokens)} tokens
-                    </div>
-                    <div className="mt-1 text-muted-foreground">
-                      Session total: {formatInt(sessionTotalTokens)} tokens
-                    </div>
-                    {usageModel && (
-                      <div className="mt-1 truncate text-muted-foreground/80">
-                        {usageModel}
-                      </div>
-                    )}
-                  </div>
+            {usageData && (
+              <div className="group relative">
+                <div
+                  className="rounded-md px-2 py-1 text-[11px] text-muted-foreground/80 transition-colors group-hover:bg-muted/60 group-hover:text-foreground"
+                  aria-label="Token usage"
+                >
+                  {formatInt(turnInputTokens)} in / {formatInt(sessionTotalTokens)} total
                 </div>
-              )}
-            </div>
+                <div className="pointer-events-none absolute bottom-[calc(100%+8px)] right-0 z-20 hidden w-[160px] rounded-lg border border-border/60 bg-background px-2.5 py-2 text-[11px] shadow-xl group-hover:block">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Last prompt</span>
+                    <span className="font-medium text-foreground">{formatInt(turnInputTokens)}</span>
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    Output: {formatInt(turnOutputTokens)} tokens
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    Session total: {formatInt(sessionTotalTokens)} tokens
+                  </div>
+                  {usageModel && (
+                    <div className="mt-1 truncate text-muted-foreground/80">
+                      {usageModel}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {streaming ? (
               <button
                 type="button"
@@ -471,10 +480,12 @@ export function Composer() {
               <button
                 type="submit"
                 disabled={!canSend}
-                className={`rounded-lg p-1.5 transition-all duration-150 ${canSend
-                  ? "bg-foreground text-background hover:opacity-80"
-                  : "cursor-not-allowed text-muted-foreground/30"
-                  }`}
+                className={cn(
+                  "rounded-lg p-1.5 transition-all duration-150",
+                  canSend
+                    ? "bg-foreground text-background hover:opacity-80"
+                    : "cursor-not-allowed text-muted-foreground/30"
+                )}
                 aria-label={uploadingImages ? "Uploading images" : "Send message"}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

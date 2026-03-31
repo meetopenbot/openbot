@@ -1,4 +1,4 @@
-import { MelonyPlugin, Event } from "melony";
+import { MelonyPlugin } from "melony";
 import { uiEvent, block } from "../../ui/block.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -13,12 +13,12 @@ export type { SkillMeta } from "./types.js";
 
 // --- Options ---
 
-export interface SkillsStatusEvent extends Event {
+export interface SkillsStatusEvent {
   type: "skills:status";
   data: { message: string; severity?: "info" | "success" | "error" };
 }
 
-export interface SkillsLoadedEvent extends Event {
+export interface SkillsLoadedEvent {
   type: "skills:loaded";
   data: { skillId: string; title: string; instructions: string };
 }

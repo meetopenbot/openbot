@@ -1,0 +1,51 @@
+---
+description: High-level project context and instructions for OpenBot, a local Slack-like platform for AI agents.
+alwaysApply: true
+---
+
+# OpenBot Project Guide
+
+OpenBot is a local-first, extensible AI assistant ecosystem designed to provide a Slack-like experience for interacting with multiple AI agents.
+
+## 🌟 Project Vision
+- **Local-First**: All data and persistence layers reside on the user's local file system.
+- **Slack-like for Agents**: A multi-agent workspace where humans and AI agents interact in channels and direct messages.
+- **Event-Driven**: Built on a minimalist, asynchronous event bus.
+
+## 🏗️ Architecture Overview
+
+The project is divided into two main components:
+
+### 1. Server (`/server`)
+- **Runtime**: Uses **Melony**, a tiny, event-based runtime that acts as an asynchronous event bus.
+- **Tasks**: Handles server-side logic, agent orchestration, and long-term memory.
+- **Streaming**: Streams events to the client using Server-Sent Events (SSE).
+- **Persistence**: Managed via local files (JSON, Markdown) in the user's home directory (usually `~/.openbot/`).
+
+### 2. Web (`/web`)
+- **Framework**: React + Vite + Tailwind CSS.
+- **UI Components**: Built with **shadcn/ui**.
+- **UX**: A Slack-inspired interface for multi-agent behavior.
+- **Communication**: Consumes SSE from the server to update the UI in real-time.
+
+## 🤖 Core Concepts
+
+- **Agents**: Specialized AI personas (bots). They can be DMed or participate in channels.
+- **Channels**: Shared context and multi-agent workspaces. A channel serves as a topic-based workspace.
+- **Threads**: Used to represent a single task or deep-dive into a specific topic within a channel.
+- **Orchestration**: A "Manager Agent" typically analyzes user intent and delegates tasks to specialized workers (e.g., `os`, `browser`, `codex`).
+
+## 📂 Key Directories
+- `server/src/plugins/`: Core functionalities (memory, shell, file-system, etc.).
+- `server/src/agents/`: Built-in agent implementations.
+- `web/src/components/`: UI components (Thread, Composer, AgentAvatar, etc.).
+- `web/src/hooks/`: Custom React hooks for session and chat management.
+
+## 🛠️ Development Guidelines
+- Follow the **Melony** event patterns (`Event → Handler → Events`).
+- When adding UI, use **shadcn/ui** and maintain the Slack-like aesthetic.
+- Ensure all persistence logic remains local-first.
+- Refer to specific rules for detailed technical guidance:
+  - `.cursor/rules/melony.mdc`: Melony framework details.
+  - `.cursor/rules/openbot-sdui.mdc`: Server-Driven UI guidelines.
+  - `.cursor/rules/melony-react.mdc`: Frontend patterns.

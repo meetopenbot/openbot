@@ -1,5 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { generateId } from "melony/client";
+
+const generateId = () => {
+  return Math.random().toString(36).substring(2, 11);
+};
 
 export function useSession() {
   const [path, setPath] = useState(window.location.search);

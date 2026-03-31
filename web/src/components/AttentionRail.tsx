@@ -1,4 +1,4 @@
-import { useMelony } from "@melony/react";
+import { useChat } from "../hooks/use-chat";
 import { useMemo, useState } from "react";
 import { WidgetRenderer, type UIBlock } from "./WidgetRenderer";
 import { cn } from "../lib/utils";
@@ -10,7 +10,7 @@ type AttentionEntry = {
 };
 
 export function AttentionRail() {
-  const { messages } = useMelony();
+  const { messages } = useChat();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const attentionWidgets = useMemo(() => {

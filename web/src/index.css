@@ -1,8 +1,71 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
-@import "@melony/ui-shadcn/style.css";
 
-@source "../node_modules/@melony/ui-shadcn/dist/**/*.{js,ts,jsx,tsx}";
+:root {
+  --background: 220 20% 98%;
+  --foreground: 220 18% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 18% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 18% 12%;
+  --primary: 221 55% 53%;
+  --primary-foreground: 210 40% 99%;
+  --secondary: 220 14% 95%;
+  --secondary-foreground: 220 18% 18%;
+  --muted: 220 14% 95%;
+  --muted-foreground: 220 10% 42%;
+  --accent: 220 16% 93%;
+  --accent-foreground: 220 18% 14%;
+  --destructive: 0 72% 52%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 220 12% 86%;
+  --input: 220 12% 86%;
+  --ring: 221 55% 53%;
+}
+
+.dark {
+  --background: 220 16% 9%;
+  --foreground: 220 12% 92%;
+  --card: 220 14% 11%;
+  --card-foreground: 220 12% 92%;
+  --popover: 220 14% 11%;
+  --popover-foreground: 220 12% 92%;
+  --primary: 220 70% 64%;
+  --primary-foreground: 220 22% 10%;
+  --secondary: 220 12% 16%;
+  --secondary-foreground: 220 12% 92%;
+  --muted: 220 12% 14%;
+  --muted-foreground: 220 10% 66%;
+  --accent: 220 12% 18%;
+  --accent-foreground: 220 12% 92%;
+  --destructive: 0 63% 39%;
+  --destructive-foreground: 210 40% 96%;
+  --border: 220 10% 24%;
+  --input: 220 10% 24%;
+  --ring: 220 70% 64%;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+}
 
 @keyframes pulse-dot {
   0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
