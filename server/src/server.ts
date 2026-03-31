@@ -13,6 +13,10 @@ import {
   createChannelConversation,
   deleteChannelConversation,
   normalizeConversationId,
+  getChannelMembers,
+  addChannelMember,
+  removeChannelMember,
+  setChannelManager,
 } from "./conversation.js";
 import { listPlugins } from "./registry/index.js";
 import { readAgentConfig } from "./registry/plugin-loader.js";
@@ -532,6 +536,83 @@ export async function startServer(options: ServerOptions = {}) {
       return res.status(404).json({ error: "Channel not found" });
     }
     return res.json({ success: true });
+  });
+
+  app.get("/api/channels/:id/members", async (req, res) => {
+    const id = normalizeConversationId(req.params.id);
+    const members = await getChannelMembers(id);
+    if (!members) {
+      return res.status(404).json({ error: "Channel not found" });
+    }
+    return res.json(members);
+  });
+
+  app.post("/api/channels/:id/members", async (req, res) => {
+    const id = normalizeConversationId(req.params.id);
+    const { memberId, name } = req.body as { memberId?: string; name?: string };
+    if (typeof memberId !== "string" || typeof name !== "string" || !memberId.trim() || !name.trim()) {
+      return res.status(400).json({ error: "memberId and name are required" });
+    }
+
+    try {
+      const members = await addChannelMember(id, { id: memberId, name });
+      if (!members) {
+        return res.status(404).json({ error: "Channel not found" });
+      }
+      return res.status(201).json(members);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to add member";
+      if (message === "Invalid member") {
+        return res.status(400).json({ error: message });
+      }
+      if (message === "Member already exists") {
+        return res.status(409).json({ error: message });
+      }
+      console.error(error);
+      return res.status(500).json({ error: "Failed to add member" });
+    }
+  });
+
+  app.delete("/api/channels/:id/members/:memberId", async (req, res) => {
+    const id = normalizeConversationId(req.params.id);
+    const memberId = req.params.memberId;
+    try {
+      const members = await removeChannelMember(id, memberId);
+      if (!members) {
+        return res.status(404).json({ error: "Channel not found" });
+      }
+      return res.json(members);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to remove member";
+      if (message === "Cannot remove this member" || message === "Member not found") {
+        return res.status(400).json({ error: message });
+      }
+      console.error(error);
+      return res.status(500).json({ error: "Failed to remove member" });
+    }
+  });
+
+  app.put("/api/channels/:id/manager", async (req, res) => {
+    const id = normalizeConversationId(req.params.id);
+    const { managerId } = req.body as { managerId?: string };
+    if (typeof managerId !== "string" || !managerId.trim()) {
+      return res.status(400).json({ error: "managerId is required" });
+    }
+
+    try {
+      const members = await setChannelManager(id, managerId);
+      if (!members) {
+        return res.status(404).json({ error: "Channel not found" });
+      }
+      return res.json(members);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update manager";
+      if (message === "Manager is required" || message === "Manager must be an existing member") {
+        return res.status(400).json({ error: message });
+      }
+      console.error(error);
+      return res.status(500).json({ error: "Failed to update manager" });
+    }
   });
 
   app.get("/api/conversations/:id/events", async (req, res) => {

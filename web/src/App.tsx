@@ -11,6 +11,8 @@ import { AutomationsPage } from "./components/pages/AutomationsPage";
 import { SettingsPage } from "./components/pages/SettingsPage";
 import { Onboarding } from "./components/Onboarding";
 import { ThemeProvider } from "./components/ThemeProvider";
+import { SessionStateSidebar } from "./components/SessionStateSidebar";
+import { ThreadPanel } from "./components/ThreadPanel";
 // import { BASE_URL } from "./lib/api";
 
 export function App() {
@@ -19,6 +21,7 @@ export function App() {
   const { data: conversations = [] } = useConversations();
   const { data: config, isLoading: configLoading } = useConfig();
   const [sessionStateSidebarOpen, setSessionStateSidebarOpen] = useState(false);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const activeConversationId = conversationId || conversations[0]?.id || "";
 
   const tab = useMemo(() => {
@@ -79,16 +82,34 @@ export function App() {
             conversationId={activeConversationId}
             currentTab={tab === "agents" ? "settings" : tab}
             onNavigate={navigate}
+            rightOpen={Boolean(activeThreadId || sessionStateSidebarOpen)}
+            rightWidth={activeThreadId ? 450 : 300}
+            rightSidebar={
+              activeThreadId ? (
+                <ThreadPanel
+                  threadId={activeThreadId}
+                  onClose={() => setActiveThreadId(null)}
+                />
+              ) : sessionStateSidebarOpen ? (
+                <SessionStateSidebar />
+              ) : null
+            }
             rightActions={tab === "chat" ? (
               <button
-                onClick={() => setSessionStateSidebarOpen((v) => !v)}
+                onClick={() => {
+                  if (activeThreadId) {
+                    setActiveThreadId(null);
+                  } else {
+                    setSessionStateSidebarOpen((v) => !v);
+                  }
+                }}
                 className={cn(
                   "p-2 rounded-lg transition-all duration-150",
-                  sessionStateSidebarOpen 
+                  (activeThreadId || sessionStateSidebarOpen)
                     ? "bg-primary/10 text-primary" 
                     : "hover:bg-muted/80 text-muted-foreground/70 hover:text-foreground"
                 )}
-                aria-label={sessionStateSidebarOpen ? "Hide session data" : "Show session data"}
+                aria-label={(activeThreadId || sessionStateSidebarOpen) ? "Hide right panel" : "Show right panel"}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <rect width="18" height="18" x="3" y="3" rx="2" />
@@ -98,7 +119,11 @@ export function App() {
             ) : null}
           >
             {tab === "chat" && activeConversationId && (
-              <ChatPage conversationId={activeConversationId} showSidebar={sessionStateSidebarOpen} />
+              <ChatPage 
+                conversationId={activeConversationId} 
+                activeThreadId={activeThreadId}
+                onReply={(id) => setActiveThreadId(id)}
+              />
             )}
             {tab === "chat" && !activeConversationId && <NoConversationsPlaceholder />}
             {tab === "agents" && <SettingsPage defaultSection="agents" />}

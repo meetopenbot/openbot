@@ -17,6 +17,7 @@ export async function* runOpenBot(
   registry: import("../registry/index.js").PluginRegistry
 ) {
   const { state } = context;
+  const threadId = event.meta?.threadId;
 
   const allAgents = registry.getAgents();
 
@@ -46,6 +47,7 @@ export async function* runOpenBot(
             meta: {
               ...(agentChunk as any)?.meta,
               ...(event.meta?.delegationId ? { delegationId: event.meta.delegationId } : {}),
+              ...(threadId ? { threadId } : {}),
               agentName: targetAgent,
             },
           } as ManagerEvent;
@@ -106,10 +108,33 @@ export async function* runOpenBot(
       }
     }
 
-    yield* managerRuntime.run(event, {
+    const isChannel = state.conversationId?.startsWith("channel_");
+    const channelManagerId = state.channelManagerId;
+    const isBotManager = isChannel && channelManagerId && channelManagerId !== "you";
+
+    for await (const chunk of managerRuntime.run(event, {
       runId: context.runId,
       state: state as any,
-    });
+    })) {
+      if (isBotManager) {
+        yield {
+          ...chunk,
+          meta: {
+            ...chunk.meta,
+            ...(threadId ? { threadId } : {}),
+            agentName: channelManagerId,
+          },
+        } as ManagerEvent;
+      } else {
+        yield {
+          ...chunk,
+          meta: {
+            ...chunk.meta,
+            ...(threadId ? { threadId } : {}),
+          },
+        } as ManagerEvent;
+      }
+    }
     return;
   }
 
@@ -137,6 +162,7 @@ export async function* runOpenBot(
             ...agentChunk,
             meta: {
               ...(agentChunk as any)?.meta,
+              ...(threadId ? { threadId } : {}),
               agentName: explicitTargetAgent,
             },
           } as ManagerEvent;
@@ -218,6 +244,7 @@ export async function* runOpenBot(
               ...agentChunk,
               meta: {
                 ...(agentChunk as any)?.meta,
+                ...(threadId ? { threadId } : {}),
                 agentName: targetAgent,
               },
             } as ManagerEvent;
@@ -259,8 +286,31 @@ export async function* runOpenBot(
   }
 
   // 3. Default routing: translate user input to manager input
-  yield* managerRuntime.run({ ...event, type: "agent:input" } as ManagerEvent, {
+  const isChannel = state.conversationId?.startsWith("channel_");
+  const channelManagerId = state.channelManagerId;
+  const isBotManager = isChannel && channelManagerId && channelManagerId !== "you";
+
+  for await (const chunk of managerRuntime.run({ ...event, type: "agent:input" } as ManagerEvent, {
     runId: context.runId,
     state: state as any,
-  });
+  })) {
+    if (isBotManager) {
+      yield {
+        ...chunk,
+        meta: {
+          ...chunk.meta,
+          ...(threadId ? { threadId } : {}),
+          agentName: channelManagerId,
+        },
+      } as ManagerEvent;
+    } else {
+      yield {
+        ...chunk,
+        meta: {
+          ...chunk.meta,
+          ...(threadId ? { threadId } : {}),
+        },
+      } as ManagerEvent;
+    }
+  }
 }

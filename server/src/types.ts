@@ -4,6 +4,7 @@ export interface SimpleMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string | any[];
   attachments?: AttachmentRef[];
+  threadId?: string;
 }
 
 type ChatEventBase<T extends string, D> = { type: T } & D & {
@@ -11,6 +12,7 @@ type ChatEventBase<T extends string, D> = { type: T } & D & {
   meta?: {
     delegationId?: string;
     agentName?: string;
+    threadId?: string;
     [key: string]: any;
   };
 };

@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Thread } from "../Thread";
 import { Composer } from "../Composer";
 import { AttentionRail } from "../AttentionRail";
-import { SessionStateSidebar } from "../SessionStateSidebar";
 import { AgentAvatar } from "../AgentAvatar";
 import { useConversations } from "../../hooks/use-sessions";
 import { useSession } from "../../hooks/use-session";
@@ -12,10 +11,11 @@ import { api } from "../../lib/api";
 
 interface ChatPageProps {
   conversationId: string;
-  showSidebar?: boolean;
+  activeThreadId?: string | null;
+  onReply?: (id: string) => void;
 }
 
-export function ChatPage({ conversationId, showSidebar = true }: ChatPageProps) {
+export function ChatPage({ conversationId, onReply }: ChatPageProps) {
   const { reset } = useChat();
   const [loadedConversations, setLoadedConversations] = useState<Set<string>>(new Set());
   const prevConversationRef = useRef<string | null>(null);
@@ -37,21 +37,17 @@ export function ChatPage({ conversationId, showSidebar = true }: ChatPageProps) 
   }, [events, conversationId, reset, loadedConversations]);
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background">
-      <div className="flex-1 flex flex-col h-full min-w-0">
-        <div className="flex-1 overflow-auto">
-          <Thread placeholder={<ChatPlaceholder />} />
-        </div>
-        <div className="px-5 pb-5 pt-0 shrink-0">
-          <AttentionRail />
-          <Composer />
-        </div>
+    <div className="flex-1 flex flex-col h-full min-w-0">
+      <div className="flex-1 overflow-auto">
+        <Thread 
+          placeholder={<ChatPlaceholder />} 
+          onReply={onReply}
+        />
       </div>
-      {showSidebar && (
-        <div className="w-[300px] border-l border-border/50 hidden lg:block overflow-auto">
-           <SessionStateSidebar />
-        </div>
-      )}
+      <div className="px-5 pb-5 pt-0 shrink-0">
+        <AttentionRail />
+        <Composer />
+      </div>
     </div>
   );
 }
@@ -69,6 +65,12 @@ function ChatPlaceholder() {
     queryKey: ["prompts"],
     queryFn: () => api.getPrompts(),
   });
+  const isChannelConversation = conversationId.startsWith("channel_");
+  const { data: channelMembers } = useQuery({
+    queryKey: ["channel-members", conversationId],
+    queryFn: () => api.getChannelMembers(conversationId),
+    enabled: isChannelConversation,
+  });
 
   const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
   const dmAgentIdFromRoute = conversationId.startsWith("dm_") ? conversationId.slice(3) : undefined;
@@ -81,13 +83,14 @@ function ChatPlaceholder() {
         )
       : null;
 
-  const isChannelConversation = conversationId.startsWith("channel_");
   const channelTitle = activeConversation?.title?.trim();
   const title = activeAgent?.name
     ?? (isChannelConversation ? (channelTitle || "New channel") : "What can I help with?");
   const subtitle = activeAgent?.description
     ?? (isChannelConversation
-      ? "This channel is empty. Send a message to start the conversation."
+      ? `${channelMembers?.members.length ?? 1} ${(channelMembers?.members.length ?? 1) === 1 ? "member" : "members"}`
+        + (channelMembers ? `, manager: ${channelMembers.managerId}` : "")
+        + ". Send a message to start the conversation."
       : "Your AI sidekick for files, terminal, and more.");
 
   return (
@@ -133,7 +136,11 @@ function ChatPlaceholder() {
             <button
               key={s.label}
               onClick={() =>
-                send({ type: "agent:input", data: { content: s.label } })
+                send({
+                  type: "agent:input",
+                  meta: resolvedAgentId ? { agentName: resolvedAgentId } : undefined,
+                  data: { content: s.label },
+                })
               }
               className="text-left text-[12px] px-2.5 py-1.5 rounded-md border border-border/50 hover:border-border/80 hover:bg-muted/35 transition-colors duration-150 text-muted-foreground hover:text-foreground w-fit max-w-full"
             >

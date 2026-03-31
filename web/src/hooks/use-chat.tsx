@@ -8,6 +8,7 @@ interface ChatContextType {
   streaming: boolean;
   events: any[];
   messages: any[];
+  threads: Record<string, any[]>;
   reset: (events: any[]) => void;
 }
 
@@ -28,9 +29,10 @@ export function ChatProvider({
   const [streaming, setStreaming] = useState(false);
   const client = useMemo(() => new ChatClient({ url: `${BASE_URL}/api/chat` }), []);
 
-  // Compute messages from events
-  const messages = useMemo(() => {
+  // Compute messages and threads from events
+  const { messages, threads } = useMemo(() => {
     const msgs: any[] = [];
+    const threadMap: Record<string, any[]> = {};
     let currentMsg: any = null;
     const seenIds = new Set<string>();
 
@@ -38,9 +40,17 @@ export function ChatProvider({
       if (event.id && seenIds.has(event.id)) return;
       if (event.id) seenIds.add(event.id);
 
+      const threadId = event.meta?.threadId;
+      if (threadId) {
+        if (!threadMap[threadId]) threadMap[threadId] = [];
+        threadMap[threadId].push(event);
+        return; // Skip adding to main messages
+      }
+
       if (event.type === "agent:input" || event.type === "user:input") {
         currentMsg = {
           id: event.id || Math.random().toString(36).substring(7),
+          runId: event.runId || event.meta?.runId,
           role: "user",
           content: [event],
         };
@@ -51,6 +61,7 @@ export function ChatProvider({
         // Assistant turn (stream chunks, UI, etc.) — must not merge into the user message
         currentMsg = {
           id: event.id || `asst_${Math.random().toString(36).slice(2, 9)}`,
+          runId: event.runId || event.meta?.runId,
           role: "assistant",
           content: [event],
         };
@@ -58,7 +69,7 @@ export function ChatProvider({
       }
     });
 
-    return msgs;
+    return { messages: msgs, threads: threadMap };
   }, [events]);
 
   const reset = useCallback((newEvents: any[]) => {
@@ -123,8 +134,9 @@ export function ChatProvider({
     streaming,
     events,
     messages,
+    threads,
     reset
-  }), [send, stop, streaming, events, messages, reset]);
+  }), [send, stop, streaming, events, messages, threads, reset]);
 
   return (
     <ChatContext.Provider value={value}>

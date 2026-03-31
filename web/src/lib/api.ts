@@ -7,7 +7,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const body = await res.json() as { error?: string };
+      detail = body.error ? `: ${body.error}` : "";
+    } catch {
+      // ignore parse errors for non-json responses
+    }
+    throw new Error(`API error: ${res.status}${detail}`);
+  }
   return res.json();
 }
 
@@ -22,6 +31,17 @@ export interface ConversationInfo {
 export interface ChannelInfo {
   id: string;
   title: string;
+}
+
+export interface ChannelMember {
+  id: string;
+  name: string;
+}
+
+export interface ChannelMembersState {
+  conversationId: string;
+  managerId: string;
+  members: ChannelMember[];
 }
 
 export interface AppConfig {
@@ -127,6 +147,27 @@ export const api = {
   deleteChannel: (id: string) =>
     request<{ success: boolean }>(`/api/channels/${encodeURIComponent(id)}`, {
       method: "DELETE",
+    }),
+
+  getChannelMembers: (id: string) =>
+    request<ChannelMembersState>(`/api/channels/${encodeURIComponent(id)}/members`),
+
+  addChannelMember: (id: string, payload: { memberId: string; name: string }) =>
+    request<ChannelMembersState>(`/api/channels/${encodeURIComponent(id)}/members`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  removeChannelMember: (id: string, memberId: string) =>
+    request<ChannelMembersState>(
+      `/api/channels/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`,
+      { method: "DELETE" },
+    ),
+
+  setChannelManager: (id: string, managerId: string) =>
+    request<ChannelMembersState>(`/api/channels/${encodeURIComponent(id)}/manager`, {
+      method: "PUT",
+      body: JSON.stringify({ managerId }),
     }),
 
   getConversationEvents: (id: string) => request<any[]>(`/api/conversations/${encodeURIComponent(id)}/events`),

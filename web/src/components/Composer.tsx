@@ -4,7 +4,7 @@ import { useSession } from "../hooks/use-session";
 import { api, type AttachmentRef } from "../lib/api";
 import { cn } from "../lib/utils";
 
-export function Composer() {
+export function Composer({ threadId }: { threadId?: string }) {
   const { send, streaming, stop, events } = useChat();
   const { conversationId } = useSession();
   const [content, setContent] = useState("");
@@ -78,7 +78,10 @@ export function Composer() {
 
     send({
       type: "agent:input",
-      meta: targetAgent ? { agentName: targetAgent } : undefined,
+      meta: {
+        ...(targetAgent ? { agentName: targetAgent } : {}),
+        ...(threadId ? { threadId } : {}),
+      },
       data: { content: trimmed, attachments: attachments.length > 0 ? attachments : undefined },
     });
     setContent("");
@@ -250,7 +253,7 @@ export function Composer() {
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={isDm && targetAgent ? `Message ${targetAgent}...` : "Message channel..."}
+            placeholder={threadId ? "Reply to thread..." : (isDm && targetAgent ? `Message ${targetAgent}...` : "Message channel...")}
             className="flex-1 min-h-[22px] max-h-[200px] w-full resize-none bg-transparent p-0 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none"
             rows={1}
           />

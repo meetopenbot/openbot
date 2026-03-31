@@ -7,6 +7,7 @@ import { cn } from "../../lib/utils";
 import type { ConversationInfo } from "../../lib/api";
 import { AgentAvatar } from "../AgentAvatar";
 import { CreateBotModal } from "../CreateBotModal";
+import { CreateChannelModal } from "../CreateChannelModal";
 
 const BUILT_IN_AGENTS = [
   { id: "os", name: "os", description: "Handles shell commands and file system operations" },
@@ -33,17 +34,10 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
   const { data: conversations = [] } = useConversations();
   const queryClient = useQueryClient();
   const [showCreateBot, setShowCreateBot] = useState(false);
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
   const { data: customAgents = [] } = useQuery({
     queryKey: ["agents"],
     queryFn: api.getAgents,
-  });
-
-  const createChannelMutation = useMutation({
-    mutationFn: (name: string) => api.createChannel(name),
-    onSuccess: ({ channel }) => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      onNavigate(`/?conversationId=${channel.id}`);
-    },
   });
 
   const deleteChannelMutation = useMutation({
@@ -54,20 +48,11 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
     },
   });
 
+
   if (!open) return null;
 
   const allAgents: SidebarAgent[] = [...BUILT_IN_AGENTS, ...customAgents];
   const channels = conversations.filter((conversation) => conversation.kind === "channel");
-
-  const handleCreateChannel = async () => {
-    const name = window.prompt("Channel name");
-    if (!name?.trim()) return;
-    try {
-      await createChannelMutation.mutateAsync(name.trim());
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Failed to create channel");
-    }
-  };
 
   const handleDeleteChannel = async (channelId: string) => {
     const confirmed = window.confirm("Remove this channel?");
@@ -78,6 +63,7 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
       window.alert(error instanceof Error ? error.message : "Failed to remove channel");
     }
   };
+
 
   return (
     <>
@@ -117,7 +103,7 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
           </span>
           <button
             type="button"
-            onClick={handleCreateChannel}
+            onClick={() => setShowCreateChannel(true)}
             className="rounded-md p-1 text-muted-foreground/70 hover:bg-muted/40 hover:text-foreground transition-colors"
             aria-label="Create channel"
             title="Create channel"
@@ -221,6 +207,12 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
       </div>
       </div>
       {showCreateBot && <CreateBotModal onClose={() => setShowCreateBot(false)} />}
+      {showCreateChannel && (
+        <CreateChannelModal
+          onClose={() => setShowCreateChannel(false)}
+          onCreated={(channelId) => onNavigate(`/?conversationId=${channelId}`)}
+        />
+      )}
     </>
   );
 }

@@ -103,9 +103,165 @@ export async function createChannelConversation(name: string): Promise<{
     throw new Error("Channel already exists");
   }
 
-  const state: ManagerState = { title: slug, conversationId };
+  const state: ManagerState = {
+    title: slug,
+    conversationId,
+    channelMembers: [{ id: "you", name: "You" }],
+    channelManagerId: "you",
+  };
   await saveConversationState(conversationId, state);
   return { id: conversationId, title: slug };
+}
+
+export interface ChannelMember {
+  id: string;
+  name: string;
+}
+
+export interface ChannelMembersState {
+  conversationId: string;
+  managerId: string;
+  members: ChannelMember[];
+}
+
+function sanitizeMember(input: ChannelMember): ChannelMember {
+  return {
+    id: input.id.trim().toLowerCase(),
+    name: input.name.trim(),
+  };
+}
+
+function normalizeChannelMembersState(conversationId: string, state: ManagerState): ChannelMembersState {
+  const rawMembers = Array.isArray(state.channelMembers) ? state.channelMembers : [];
+  const seen = new Set<string>();
+  const normalizedMembers: ChannelMember[] = [];
+
+  for (const raw of rawMembers) {
+    if (!raw || typeof raw !== "object") continue;
+    const id = typeof raw.id === "string" ? raw.id.trim().toLowerCase() : "";
+    const name = typeof raw.name === "string" ? raw.name.trim() : "";
+    if (!id || !name || seen.has(id)) continue;
+    seen.add(id);
+    normalizedMembers.push({ id, name });
+  }
+
+  if (!seen.has("you")) {
+    normalizedMembers.unshift({ id: "you", name: "You" });
+    seen.add("you");
+  }
+
+  const managerIdRaw = typeof state.channelManagerId === "string"
+    ? state.channelManagerId.trim().toLowerCase()
+    : "";
+  const managerId = managerIdRaw && seen.has(managerIdRaw) ? managerIdRaw : "you";
+
+  return {
+    conversationId,
+    managerId,
+    members: normalizedMembers,
+  };
+}
+
+export async function getChannelMembers(conversationId: string): Promise<ChannelMembersState | null> {
+  const normalizedConversationId = normalizeConversationId(conversationId);
+  if (!normalizedConversationId.startsWith("channel_")) return null;
+
+  const state = await loadConversationState(normalizedConversationId);
+  if (!state) return null;
+
+  const normalized = normalizeChannelMembersState(normalizedConversationId, state);
+  state.channelMembers = normalized.members;
+  state.channelManagerId = normalized.managerId;
+  await saveConversationState(normalizedConversationId, state);
+  return normalized;
+}
+
+export async function addChannelMember(
+  conversationId: string,
+  member: ChannelMember,
+): Promise<ChannelMembersState | null> {
+  const normalizedConversationId = normalizeConversationId(conversationId);
+  if (!normalizedConversationId.startsWith("channel_")) return null;
+
+  const state = await loadConversationState(normalizedConversationId);
+  if (!state) return null;
+
+  const nextMember = sanitizeMember(member);
+  if (!nextMember.id || !nextMember.name) {
+    throw new Error("Invalid member");
+  }
+
+  const normalized = normalizeChannelMembersState(normalizedConversationId, state);
+  if (normalized.members.some((existing) => existing.id === nextMember.id)) {
+    throw new Error("Member already exists");
+  }
+
+  const next = {
+    ...normalized,
+    members: [...normalized.members, nextMember],
+  };
+  state.channelMembers = next.members;
+  state.channelManagerId = next.managerId;
+  await saveConversationState(normalizedConversationId, state);
+  return next;
+}
+
+export async function removeChannelMember(
+  conversationId: string,
+  memberId: string,
+): Promise<ChannelMembersState | null> {
+  const normalizedConversationId = normalizeConversationId(conversationId);
+  if (!normalizedConversationId.startsWith("channel_")) return null;
+
+  const state = await loadConversationState(normalizedConversationId);
+  if (!state) return null;
+
+  const normalized = normalizeChannelMembersState(normalizedConversationId, state);
+  const normalizedMemberId = memberId.trim().toLowerCase();
+  if (!normalizedMemberId || normalizedMemberId === "you") {
+    throw new Error("Cannot remove this member");
+  }
+
+  if (!normalized.members.some((member) => member.id === normalizedMemberId)) {
+    throw new Error("Member not found");
+  }
+
+  const members = normalized.members.filter((member) => member.id !== normalizedMemberId);
+  const managerId = normalized.managerId === normalizedMemberId ? "you" : normalized.managerId;
+
+  state.channelMembers = members;
+  state.channelManagerId = managerId;
+  await saveConversationState(normalizedConversationId, state);
+  return { conversationId: normalizedConversationId, managerId, members };
+}
+
+export async function setChannelManager(
+  conversationId: string,
+  managerId: string,
+): Promise<ChannelMembersState | null> {
+  const normalizedConversationId = normalizeConversationId(conversationId);
+  if (!normalizedConversationId.startsWith("channel_")) return null;
+
+  const state = await loadConversationState(normalizedConversationId);
+  if (!state) return null;
+
+  const normalized = normalizeChannelMembersState(normalizedConversationId, state);
+  const normalizedManagerId = managerId.trim().toLowerCase();
+  if (!normalizedManagerId) {
+    throw new Error("Manager is required");
+  }
+  if (!normalized.members.some((member) => member.id === normalizedManagerId)) {
+    throw new Error("Manager must be an existing member");
+  }
+
+  state.channelMembers = normalized.members;
+  state.channelManagerId = normalizedManagerId;
+  await saveConversationState(normalizedConversationId, state);
+  return {
+    conversationId: normalizedConversationId,
+    managerId: normalizedManagerId,
+    members: normalized.members,
+  };
 }
 
 export async function deleteChannelConversation(conversationId: string): Promise<boolean> {
