@@ -142,6 +142,7 @@ export interface ConversationState {
   pendingAgentTasks?: Record<string, {
     toolCallId: string;
     agentName: string;
+    delegatorAgentId?: string;
     delegationId: string;
     stateKey?: string;
   }>;
