@@ -61,8 +61,15 @@ export function AppLayout({
 
   const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
   const isChannelConversation = activeConversation?.kind === "channel";
-  const activeAgent = activeConversation?.kind === "dm" && activeConversation.agentId
-    ? agents.find(a => a.id === activeConversation.agentId || a.name === activeConversation.agentId)
+  const dmAgentIdFromRoute = conversationId.startsWith("dm_") ? conversationId.slice(3) : undefined;
+  const resolvedDmAgentId =
+    activeConversation?.kind === "dm" && activeConversation.agentId
+      ? activeConversation.agentId
+      : dmAgentIdFromRoute;
+  const activeAgent = resolvedDmAgentId
+    ? agents.find(
+        (a) => a.id === resolvedDmAgentId || a.name === resolvedDmAgentId,
+      )
     : null;
   const { data: channelMembers } = useQuery({
     queryKey: ["channel-members", conversationId],

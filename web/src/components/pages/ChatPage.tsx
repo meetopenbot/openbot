@@ -1,7 +1,7 @@
 import { useChat } from "../../hooks/use-chat";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Thread } from "../Thread";
+import { Chat } from "../Chat";
 import { Composer } from "../Composer";
 import { AttentionRail } from "../AttentionRail";
 import { AgentAvatar } from "../AgentAvatar";
@@ -11,7 +11,6 @@ import { api } from "../../lib/api";
 
 interface ChatPageProps {
   conversationId: string;
-  activeThreadId?: string | null;
   onReply?: (id: string) => void;
 }
 
@@ -19,6 +18,22 @@ export function ChatPage({ conversationId, onReply }: ChatPageProps) {
   const { reset } = useChat();
   const [loadedConversations, setLoadedConversations] = useState<Set<string>>(new Set());
   const prevConversationRef = useRef<string | null>(null);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
+
+  const handleReply = useCallback(
+    (messageId: string) => {
+      const el = mainScrollRef.current;
+      const top = el?.scrollTop ?? 0;
+      onReply?.(messageId);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const pane = mainScrollRef.current;
+          if (pane) pane.scrollTop = top;
+        });
+      });
+    },
+    [onReply],
+  );
 
   const { data: events } = useQuery({
     queryKey: ["conversation-events", conversationId],
@@ -38,10 +53,10 @@ export function ChatPage({ conversationId, onReply }: ChatPageProps) {
 
   return (
     <div className="flex-1 flex flex-col h-full min-w-0">
-      <div className="flex-1 overflow-auto">
-        <Thread 
-          placeholder={<ChatPlaceholder />} 
-          onReply={onReply}
+      <div ref={mainScrollRef} className="flex-1 overflow-auto">
+        <Chat
+          placeholder={<ChatPlaceholder />}
+          onReply={onReply ? handleReply : undefined}
         />
       </div>
       <div className="px-5 pb-5 pt-0 shrink-0">

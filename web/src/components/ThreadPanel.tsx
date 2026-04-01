@@ -1,4 +1,4 @@
-import { useChat } from "../hooks/use-chat";
+import { foldThreadEventsToMessages, useChat } from "../hooks/use-chat";
 import { ThreadView } from "./ThreadView";
 import { Composer } from "./Composer";
 
@@ -9,7 +9,7 @@ export function ThreadPanel({
   threadId: string;
   onClose: () => void;
 }) {
-  const { messages, threads, streaming } = useChat();
+  const { messages, threads, streaming } = useChat(threadId);
 
   // Find the parent message
   const parentMessage = messages.find(m => m.id === threadId);
@@ -17,26 +17,7 @@ export function ThreadPanel({
   // Get thread messages
   const threadEvents = threads[threadId] || [];
   
-  // Convert thread events to messages format for ThreadView
-  const threadMessages = threadEvents.reduce((msgs: any[], event: any) => {
-    let currentMsg = msgs[msgs.length - 1];
-    if (event.type === "agent:input" || event.type === "user:input") {
-      msgs.push({
-        id: event.id || Math.random().toString(36).substring(7),
-        role: "user",
-        content: [event],
-      });
-    } else if (currentMsg?.role === "assistant" && !event.meta?.agentName) {
-      currentMsg.content.push(event);
-    } else {
-      msgs.push({
-        id: event.id || `asst_${Math.random().toString(36).slice(2, 9)}`,
-        role: "assistant",
-        content: [event],
-      });
-    }
-    return msgs;
-  }, []);
+  const threadMessages = foldThreadEventsToMessages(threadEvents);
 
   return (
     <div className="flex flex-col h-full bg-background border-l border-border/50 animate-in slide-in-from-right duration-300">

@@ -1,14 +1,39 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { ChatClient } from "../lib/chat-client";
 import { BASE_URL } from "../lib/api";
 
+/** Fold raw thread events into user/assistant messages (matches channel transcript rules). */
+export function foldThreadEventsToMessages(events: any[]): any[] {
+  return events.reduce((msgs: any[], event: any) => {
+    const currentMsg = msgs[msgs.length - 1];
+    if (event.type === "agent:input" || event.type === "user:input") {
+      msgs.push({
+        id: event.id || `thread-user-${msgs.length}`,
+        role: "user",
+        content: [event],
+      });
+    } else if (currentMsg?.role === "assistant") {
+      currentMsg.content.push(event);
+    } else {
+      msgs.push({
+        id: event.id || `thread-asst-${msgs.length}`,
+        role: "assistant",
+        content: [event],
+      });
+    }
+    return msgs;
+  }, []);
+}
+
 interface ChatContextType {
   send: (payload: any) => Promise<void>;
-  stop: () => void;
+  stop: (threadId?: string) => void;
   streaming: boolean;
+  streamingMap: Record<string, boolean>;
   events: any[];
   messages: any[];
   threads: Record<string, any[]>;
+  threadReplyCounts: Record<string, number>;
   reset: (events: any[]) => void;
 }
 
@@ -26,8 +51,17 @@ export function ChatProvider({
   initialAdditionalBody?: Record<string, any>;
 }) {
   const [events, setEvents] = useState<any[]>([]);
-  const [streaming, setStreaming] = useState(false);
+  const [streamingMap, setStreamingMap] = useState<Record<string, boolean>>({});
+  const streamingRef = useRef<Record<string, boolean>>({});
   const client = useMemo(() => new ChatClient({ url: `${BASE_URL}/api/chat` }), []);
+
+  // Update ref when state changes
+  useEffect(() => {
+    streamingRef.current = streamingMap;
+  }, [streamingMap]);
+
+  // Compute streaming as a shorthand for main window (no threadId)
+  const streaming = useMemo(() => streamingMap["main"] || false, [streamingMap]);
 
   // Compute messages and threads from events
   const { messages, threads } = useMemo(() => {
@@ -72,14 +106,23 @@ export function ChatProvider({
     return { messages: msgs, threads: threadMap };
   }, [events]);
 
+  const threadReplyCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const [id, evts] of Object.entries(threads)) {
+      counts[id] = foldThreadEventsToMessages(evts).length;
+    }
+    return counts;
+  }, [threads]);
+
   const reset = useCallback((newEvents: any[]) => {
     setEvents(newEvents);
   }, []);
 
   const send = useCallback(async (payload: any) => {
-    if (streaming) return;
+    const threadId = payload.meta?.threadId || "main";
+    if (streamingRef.current[threadId]) return;
     
-    setStreaming(true);
+    setStreamingMap(prev => ({ ...prev, [threadId]: true }));
     // Ensure we have a stable ID for deduplication
     const eventWithId = {
       ...payload,
@@ -93,6 +136,7 @@ export function ChatProvider({
     try {
       const generator = client.send(eventWithId, { 
         conversationId,
+        requestId: threadId,
         ...initialAdditionalBody
       });
 
@@ -116,27 +160,29 @@ export function ChatProvider({
         console.error("Chat stream error:", error);
       }
     } finally {
-      setStreaming(false);
+      setStreamingMap(prev => ({ ...prev, [threadId]: false }));
       if (eventHandlers && eventHandlers["stream:done"]) {
         await eventHandlers["stream:done"]({}, { client });
       }
     }
-  }, [client, conversationId, eventHandlers, initialAdditionalBody, streaming]);
+  }, [client, conversationId, eventHandlers, initialAdditionalBody]);
 
-  const stop = useCallback(() => {
-    client.stop();
-    setStreaming(false);
+  const stop = useCallback((threadId?: string) => {
+    client.stop(threadId || "main");
+    setStreamingMap(prev => ({ ...prev, [threadId || "main"]: false }));
   }, [client]);
 
   const value = useMemo(() => ({
     send,
     stop,
     streaming,
+    streamingMap,
     events,
     messages,
     threads,
+    threadReplyCounts,
     reset
-  }), [send, stop, streaming, events, messages, threads, reset]);
+  }), [send, stop, streaming, streamingMap, events, messages, threads, threadReplyCounts, reset]);
 
   return (
     <ChatContext.Provider value={value}>
@@ -145,10 +191,18 @@ export function ChatProvider({
   );
 }
 
-export function useChat() {
+export function useChat(threadId?: string) {
   const context = useContext(ChatContext);
   if (context === undefined) {
     throw new Error("useChat must be used within a ChatProvider");
   }
-  return context;
+
+  const tid = threadId || "main";
+  const streaming = context.streamingMap[tid] || false;
+
+  return {
+    ...context,
+    streaming,
+    stop: (id?: string) => context.stop(id || threadId)
+  };
 }

@@ -5,7 +5,7 @@ import { api, type AttachmentRef } from "../lib/api";
 import { cn } from "../lib/utils";
 
 export function Composer({ threadId }: { threadId?: string }) {
-  const { send, streaming, stop, events } = useChat();
+  const { send, streaming, stop, events } = useChat(threadId);
   const { conversationId } = useSession();
   const [content, setContent] = useState("");
   const [pendingImages, setPendingImages] = useState<Array<{ id: string; file: File; previewUrl: string }>>([]);

@@ -212,7 +212,7 @@ export function ThreadView({
   placeholder,
   placeholderNode,
   onReply,
-  threads = {},
+  threadReplyCounts = {},
   isThreadPanel = false,
 }: {
   messages: any[];
@@ -220,27 +220,12 @@ export function ThreadView({
   placeholder?: ReactNode;
   placeholderNode?: any;
   onReply?: (messageId: string) => void;
-  threads?: Record<string, any[]>;
+  /** Logical reply count per parent message id (not raw stream event count). */
+  threadReplyCounts?: Record<string, number>;
   isThreadPanel?: boolean;
 }) {
   const { data: config } = useConfig();
   const bottomRef = useRef<HTMLDivElement>(null);
-  const [isScrolledUp, setIsScrolledUp] = useState(false);
-
-  useEffect(() => {
-    const scrollContainer = bottomRef.current?.closest('.overflow-auto');
-    if (!scrollContainer) return;
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-      const distanceToBottom = scrollHeight - scrollTop - clientHeight;
-      setIsScrolledUp(distanceToBottom > 100);
-    };
-
-    scrollContainer.addEventListener('scroll', handleScroll);
-    handleScroll();
-    return () => scrollContainer.removeEventListener('scroll', handleScroll);
-  }, []);
 
   const visibleMessages = messages
     .filter((m) => m.role !== "system")
@@ -354,15 +339,8 @@ export function ThreadView({
     });
   }, [visibleMessages, config?.name]);
 
-  const isScrolledUpRef = useRef(isScrolledUp);
   useEffect(() => {
-    isScrolledUpRef.current = isScrolledUp;
-  }, [isScrolledUp]);
-
-  useEffect(() => {
-    if (!isScrolledUpRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: streaming ? "auto" : "smooth" });
-    }
+    bottomRef.current?.scrollIntoView({ behavior: streaming ? "auto" : "smooth" });
   }, [renderableEvents, streaming]);
 
   if (renderableEvents.length === 0) {
@@ -379,7 +357,7 @@ export function ThreadView({
       {renderableEvents.map((item) => {
         const { meta, isGrouped, messageId } = item;
         const isUser = meta.role === "user";
-        const replyCount = threads[messageId]?.length || 0;
+        const replyCount = threadReplyCounts[messageId] ?? 0;
         
         return (
           <div 
@@ -394,7 +372,13 @@ export function ThreadView({
             {!isThreadPanel && onReply && (
               <div className="absolute right-5 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-background border border-border/50 rounded-md shadow-sm p-1 z-10">
                 <button
-                  onClick={() => onReply(messageId)}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onReply(messageId);
+                  }}
                   className="inline-flex items-center gap-1.5 px-2 py-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors text-[12px] font-medium"
                   title={replyCount > 0 ? "View thread" : "Reply in thread"}
                 >
@@ -500,8 +484,14 @@ export function ThreadView({
 
                 {/* Thread Indicator */}
                 {!isThreadPanel && replyCount > 0 && onReply && (
-                  <button 
-                    onClick={() => onReply(messageId)}
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onReply(messageId);
+                    }}
                     className="mt-2 flex items-center gap-2 text-[13px] font-medium text-primary hover:underline group/thread"
                   >
                     <div className="flex -space-x-1.5">
@@ -525,25 +515,6 @@ export function ThreadView({
       })}
       {streaming && <StreamingIndicator />}
       <div ref={bottomRef} className="h-0" />
-      
-      {/* Scroll to bottom button */}
-      {isScrolledUp && (
-        <div className={cn("fixed left-1/2 -translate-x-1/2 z-50", isThreadPanel ? "bottom-20" : "bottom-[110px]")}>
-          <button
-            onClick={() => {
-              bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-              setIsScrolledUp(false);
-            }}
-            className="pointer-events-auto px-4 py-2 bg-background/80 backdrop-blur-md border border-border/60 text-foreground/80 rounded-full shadow-lg hover:bg-muted/80 hover:text-foreground transition-all flex items-center gap-2 text-[13px] font-medium"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14" />
-              <path d="M19 12l-7 7-7-7" />
-            </svg>
-            Scroll to bottom
-          </button>
-        </div>
-      )}
     </div>
   );
 }

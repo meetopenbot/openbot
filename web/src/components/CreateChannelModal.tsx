@@ -92,8 +92,8 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[96vw] max-w-[640px] rounded-lg border border-border bg-background p-0 shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-muted/5">
-          <div className="flex flex-col">
+        <div className="flex shrink-0 items-center justify-between gap-4 px-6 py-4 border-b border-border/50 bg-muted/5">
+          <div className="flex min-w-0 flex-col justify-center">
             <DialogTitle className="text-lg font-bold tracking-tight text-foreground leading-none">
               Create channel
             </DialogTitle>
@@ -101,7 +101,7 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
               Pick a manager bot and team members
             </p>
           </div>
-          <DialogClose className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-150">
+          <DialogClose className="inline-flex shrink-0 self-center items-center justify-center rounded-xl p-2 text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 6 6 18" />
               <path d="m6 6 12 12" />

@@ -2,7 +2,7 @@ import { useChat } from "../hooks/use-chat";
 import { type ReactNode } from "react";
 import { ThreadView } from "./ThreadView";
 
-export function Thread({
+export function Chat({
   placeholder,
   placeholderNode,
   onReply,
@@ -11,7 +11,7 @@ export function Thread({
   placeholderNode?: any;
   onReply?: (messageId: string) => void;
 }) {
-  const { messages, streaming, threads } = useChat();
+  const { messages, streaming, threadReplyCounts } = useChat();
 
   return (
     <ThreadView
@@ -20,7 +20,7 @@ export function Thread({
       placeholder={placeholder}
       placeholderNode={placeholderNode}
       onReply={onReply}
-      threads={threads}
+      threadReplyCounts={threadReplyCounts}
     />
   );
 }

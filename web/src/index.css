@@ -21,6 +21,9 @@
   --border: 220 12% 86%;
   --input: 220 12% 86%;
   --ring: 221 55% 53%;
+  --scrollbar-thumb: hsl(var(--muted-foreground) / 0.35);
+  --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.55);
+  --scrollbar-track: hsl(var(--muted) / 0.4);
 }
 
 .dark {
@@ -43,6 +46,9 @@
   --border: 220 10% 24%;
   --input: 220 10% 24%;
   --ring: 220 70% 64%;
+  --scrollbar-thumb: hsl(var(--muted-foreground) / 0.3);
+  --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.5);
+  --scrollbar-track: hsl(var(--muted) / 0.35);
 }
 
 @theme inline {
@@ -99,6 +105,36 @@
   }
   #root {
     @apply h-screen w-screen;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }
 

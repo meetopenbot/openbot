@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { generateId } from "melony";
 import { ConversationState, ConversationEvent } from "../app/types.js";
 
 const CONVERSATIONS_DIR = path.join(os.homedir(), ".openbot", "conversations");
@@ -275,6 +276,32 @@ export async function deleteChannelConversation(conversationId: string): Promise
   return true;
 }
 
+function normalizeStoredTimestamp(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return Date.now();
+}
+
+function normalizeStoredLogLine(
+  raw: Record<string, unknown>,
+  lineIndex: number,
+): ConversationEvent & { timestamp: number; id: string; runId?: string } {
+  const runId = typeof raw.runId === "string" ? raw.runId : "";
+  const id =
+    typeof raw.id === "string" && raw.id.trim() !== ""
+      ? raw.id
+      : `evt_${runId || "norun"}_${lineIndex}`;
+  return {
+    ...raw,
+    runId: runId || undefined,
+    timestamp: normalizeStoredTimestamp(raw.timestamp),
+    id,
+  } as ConversationEvent & { timestamp: number; id: string; runId?: string };
+}
+
 export async function logConversationEvent(conversationId: string, runId: string, event: ConversationEvent) {
   const normalizedConversationId = normalizeConversationId(conversationId);
   const conversationDir = getConversationDir(normalizedConversationId);
@@ -283,10 +310,17 @@ export async function logConversationEvent(conversationId: string, runId: string
   }
 
   const logPath = path.join(conversationDir, "events.jsonl");
+  const incoming = event as ConversationEvent & { timestamp?: unknown; id?: unknown; runId?: unknown };
+  const { timestamp: _ts, id: incomingId, runId: _eventRunId, ...eventBody } = incoming;
+  const id =
+    typeof incomingId === "string" && incomingId.trim() !== ""
+      ? incomingId
+      : generateId();
   const entry = JSON.stringify({
-    timestamp: new Date().toISOString(),
+    ...eventBody,
     runId,
-    ...event,
+    timestamp: Date.now(),
+    id,
   });
 
   fs.appendFileSync(logPath, entry + "\n", "utf-8");
@@ -304,7 +338,7 @@ export async function loadConversationEvents(conversationId: string): Promise<Co
     return data
       .split("\n")
       .filter((line) => line.trim() !== "")
-      .map((line) => JSON.parse(line) as ConversationEvent);
+      .map((line, index) => normalizeStoredLogLine(JSON.parse(line) as Record<string, unknown>, index));
   } catch (error) {
     console.error(`Failed to load events for conversation ${normalizedConversationId}:`, error);
     return [];

@@ -13,7 +13,6 @@ import { Onboarding } from "./components/Onboarding";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { SessionStateSidebar } from "./components/SessionStateSidebar";
 import { ThreadPanel } from "./components/ThreadPanel";
-// import { BASE_URL } from "./lib/api";
 
 export function App() {
   const queryClient = useQueryClient();
@@ -119,9 +118,8 @@ export function App() {
             ) : null}
           >
             {tab === "chat" && activeConversationId && (
-              <ChatPage 
-                conversationId={activeConversationId} 
-                activeThreadId={activeThreadId}
+              <ChatPage
+                conversationId={activeConversationId}
                 onReply={(id) => setActiveThreadId(id)}
               />
             )}
