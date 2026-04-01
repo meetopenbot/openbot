@@ -1,6 +1,6 @@
 import { MelonyPlugin } from "melony";
 import { z } from "zod";
-import type { ConversationState, ConversationEvent } from "../types.js";
+import type { ConversationState, ConversationEvent } from "../app/types.js";
 
 /**
  * Unified plugin registry entry.

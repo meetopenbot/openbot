@@ -7,11 +7,10 @@ import { LanguageModel } from "ai";
 import matter from "gray-matter";
 import { z } from "zod";
 import { PluginRegistry, ToolPluginRegistryEntry } from "./plugin-registry.js";
-import { llmPlugin } from "../plugins/llm/index.js";
-import { llmOrchestratorPlugin } from "../core/orchestrator.js";
-import { createModel } from "../models.js";
-import { resolvePath, DEFAULT_AGENT_MD } from "../config.js";
-import type { ConversationState, ConversationEvent } from "../types.js";
+import { llmOrchestratorPlugin } from "../services/orchestrator.js";
+import { createModel } from "../services/models.js";
+import { resolvePath, DEFAULT_AGENT_MD } from "../app/config.js";
+import type { ConversationState, ConversationEvent } from "../app/types.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 

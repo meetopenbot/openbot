@@ -1,9 +1,12 @@
 import { MelonyPlugin } from "melony";
 import path from "node:path";
-import { llmOrchestratorPlugin } from "../core/orchestrator.js";
-import { fileSystemToolDefinitions, fileSystemPlugin } from "../plugins/file-system/index.js";
-import { DEFAULT_BASE_DIR, resolvePath } from "../config.js";
-import { ConversationState, ConversationEvent } from "../types.js";
+import { llmOrchestratorPlugin } from "../services/orchestrator.js";
+import {
+  fileSystemToolDefinitions,
+  fileSystemPlugin,
+} from "../plugins/file-system.js";
+import { DEFAULT_BASE_DIR, resolvePath } from "../app/config.js";
+import { ConversationState, ConversationEvent } from "../app/types.js";
 import { LanguageModel } from "ai";
 import { PluginRegistry } from "../registry/plugin-registry.js";
 
@@ -14,14 +17,16 @@ export interface AgentCreatorOptions {
   registry: PluginRegistry;
 }
 
-export const agentCreatorAgent = (options: AgentCreatorOptions): MelonyPlugin<ConversationState, ConversationEvent> => (builder) => {
-  const { model, resolvedModelId, resolvedBaseDir, registry } = options;
-  const baseDir = resolvePath(DEFAULT_BASE_DIR);
-  const agentsDir = path.join(baseDir, "agents");
+export const agentCreatorAgent =
+  (
+    options: AgentCreatorOptions,
+  ): MelonyPlugin<ConversationState, ConversationEvent> =>
+  (builder) => {
+    const { model, resolvedModelId, resolvedBaseDir, registry } = options;
+    const baseDir = resolvePath(DEFAULT_BASE_DIR);
+    const agentsDir = path.join(baseDir, "agents");
 
-  builder
-    .use(fileSystemPlugin({ baseDir }))
-    .use(
+    builder.use(fileSystemPlugin({ baseDir })).use(
       llmOrchestratorPlugin({
         model,
         resolvedModelId,
@@ -87,6 +92,6 @@ Workflow:
 6. On approval, write the appropriate AGENT.md using \`writeFile\`.
 7. Return a short completion summary.`,
         toolDefinitions: fileSystemToolDefinitions, // Give it access to write files
-      })
+      }),
     );
-};
+  };
