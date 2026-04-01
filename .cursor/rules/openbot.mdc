@@ -3,7 +3,7 @@ alwaysApply: true
 ---
 # OpenBot Context & Architecture
 
-OpenBot is an extensible AI assistant ecosystem built on the **Melony** framework. It follows a "Manager-Agent" orchestration pattern to provide a powerful, multi-modal sidekick for developers and power users.
+OpenBot is an extensible AI assistant ecosystem built on the **Melony** framework. Its **main goal** is to solve agent fragmentation and communication problems. It follows a "Manager-Agent" orchestration pattern to provide a powerful, multi-modal sidekick for developers and power users.
 
 ## 🧠 Core Philosophy
 - **Delegate by Default**: The central Manager Agent focuses on orchestration and memory, delegating specialized tasks (shell, browser, files) to dedicated agents.

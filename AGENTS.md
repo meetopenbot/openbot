@@ -5,6 +5,10 @@
 This file gives coding agents persistent project context and working rules for OpenBot.
 Use it as the default guidance for all tasks in this repository.
 
+## Main Goal
+
+To solve agent fragmentation and communication problems.
+
 ## Project Snapshot
 
 OpenBot is a local-first, Slack-like platform for AI agents.

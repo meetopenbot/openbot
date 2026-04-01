@@ -3,7 +3,13 @@ import express from "express";
 import cors from "cors";
 import { generateId } from "melony";
 import { createOpenBot } from "./open-bot.js";
-import { loadConfig, saveConfig, isConfigured, resolvePath, DEFAULT_BASE_DIR, DEFAULT_AGENT_MD } from "./config.js";
+import {
+  loadConfig,
+  saveConfig,
+  isConfigured,
+  resolvePath,
+  DEFAULT_BASE_DIR,
+} from "./config.js";
 import {
   loadConversationState,
   saveConversationState,
@@ -29,10 +35,21 @@ import matter from "gray-matter";
 import type { ManagerEvent, ManagerState, ManagerRequest } from "./types.js";
 import { fetchProviderModels, getModelCatalog } from "./model-catalog.js";
 import type { ModelProvider } from "./model-catalog.js";
-import { DEFAULT_MODEL_BY_PROVIDER, DEFAULT_MODEL_ID } from "./model-defaults.js";
-import { listAutomations, saveAutomations, type AutomationRecord } from "./automations.js";
+import {
+  DEFAULT_MODEL_BY_PROVIDER,
+  DEFAULT_MODEL_ID,
+} from "./model-defaults.js";
+import {
+  listAutomations,
+  saveAutomations,
+  type AutomationRecord,
+} from "./automations.js";
 import { startAutomationWorker } from "./automation-worker.js";
-import { getMarketplaceRegistry, installMarketplaceAgent, installMarketplacePlugin } from "./marketplace.js";
+import {
+  getMarketplaceRegistry,
+  installMarketplaceAgent,
+  installMarketplacePlugin,
+} from "./marketplace.js";
 import { getVersionStatus } from "./version.js";
 
 export interface ServerOptions {
@@ -48,10 +65,11 @@ export async function startServer(options: ServerOptions = {}) {
   const PORT = Number(options.port ?? config.port ?? process.env.PORT ?? 4001);
   const app = express();
 
-  const createRuntime = () => createOpenBot({
-    openaiApiKey: options.openaiApiKey,
-    anthropicApiKey: options.anthropicApiKey,
-  });
+  const createRuntime = () =>
+    createOpenBot({
+      openaiApiKey: options.openaiApiKey,
+      anthropicApiKey: options.anthropicApiKey,
+    });
 
   let runtime = await createRuntime();
 
@@ -71,7 +89,10 @@ export async function startServer(options: ServerOptions = {}) {
       runtime = nextRuntime;
       console.log("[hot-reload] Runtime reloaded from ~/.openbot changes");
     } catch (error) {
-      console.error("[hot-reload] Reload failed; keeping previous runtime", error);
+      console.error(
+        "[hot-reload] Reload failed; keeping previous runtime",
+        error,
+      );
     } finally {
       reloadInProgress = false;
       if (queuedReload) {
@@ -102,10 +123,14 @@ export async function startServer(options: ServerOptions = {}) {
     }
   };
 
-  const runAutomation = async (automation: AutomationRecord, scheduledAt: Date) => {
+  const runAutomation = async (
+    automation: AutomationRecord,
+    scheduledAt: Date,
+  ) => {
     const conversationId = `channel_automation_${automation.id}`;
     const runId = `run_auto_${generateId()}`;
-    const state: ManagerState = (await loadConversationState(conversationId)) ?? {};
+    const state: ManagerState =
+      (await loadConversationState(conversationId)) ?? {};
 
     state.conversationId = conversationId;
     if (!state.cwd) state.cwd = process.cwd();
@@ -122,19 +147,24 @@ export async function startServer(options: ServerOptions = {}) {
         type: "agent:input",
         data: { content },
       },
-      { runId, state }
+      { runId, state },
     );
 
     try {
       console.log(
-        `[automations] Running "${automation.name}" (${automation.id}) at ${scheduledAt.toISOString()}`
+        `[automations] Running "${automation.name}" (${automation.id}) at ${scheduledAt.toISOString()}`,
       );
       for await (const chunk of iterator) {
         await logConversationEvent(conversationId, runId, chunk);
       }
-      console.log(`[automations] Completed "${automation.name}" (${automation.id})`);
+      console.log(
+        `[automations] Completed "${automation.name}" (${automation.id})`,
+      );
     } catch (error) {
-      console.error(`[automations] Run failed for "${automation.name}" (${automation.id})`, error);
+      console.error(
+        `[automations] Run failed for "${automation.name}" (${automation.id})`,
+        error,
+      );
       throw error;
     } finally {
       await saveConversationState(conversationId, state);
@@ -162,7 +192,10 @@ export async function startServer(options: ServerOptions = {}) {
   app.use(express.json({ limit: "20mb" }));
 
   const fileExists = async (targetPath: string) =>
-    fs.access(targetPath).then(() => true).catch(() => false);
+    fs
+      .access(targetPath)
+      .then(() => true)
+      .catch(() => false);
 
   const toTitleCaseFromSlug = (value: string) =>
     value
@@ -183,9 +216,11 @@ export async function startServer(options: ServerOptions = {}) {
 
     try {
       const allPlugins = await listPlugins(agentsDir);
-      const match = allPlugins.find((plugin) =>
-        plugin.type === "agent"
-        && (path.basename(plugin.folder) === agentIdOrName || plugin.name === agentIdOrName)
+      const match = allPlugins.find(
+        (plugin) =>
+          plugin.type === "agent" &&
+          (path.basename(plugin.folder) === agentIdOrName ||
+            plugin.name === agentIdOrName),
       );
       return match?.folder ?? null;
     } catch {
@@ -253,7 +288,10 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     try {
-      const models = await fetchProviderModels(provider as ModelProvider, apiKey.trim());
+      const models = await fetchProviderModels(
+        provider as ModelProvider,
+        apiKey.trim(),
+      );
       res.json(models);
     } catch (err) {
       console.error("Failed to preview models:", err);
@@ -301,8 +339,10 @@ export async function startServer(options: ServerOptions = {}) {
       agentName?: string;
     };
 
-    const normalizedTargetType = targetType === "agent" ? "agent" : "orchestrator";
-    const normalizedAgentName = typeof agentName === "string" ? agentName.trim() : "";
+    const normalizedTargetType =
+      targetType === "agent" ? "agent" : "orchestrator";
+    const normalizedAgentName =
+      typeof agentName === "string" ? agentName.trim() : "";
 
     if (
       typeof name !== "string" ||
@@ -323,7 +363,8 @@ export async function startServer(options: ServerOptions = {}) {
       prompt: prompt.trim(),
       cron: cron.trim(),
       targetType: normalizedTargetType,
-      agentName: normalizedTargetType === "agent" ? normalizedAgentName : undefined,
+      agentName:
+        normalizedTargetType === "agent" ? normalizedAgentName : undefined,
       enabled: true,
       createdAt: now,
       updatedAt: now,
@@ -352,24 +393,33 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     const existing = current[index];
-    const nextTargetType = targetType === "agent"
-      ? "agent"
-      : targetType === "orchestrator"
-        ? "orchestrator"
-        : existing.targetType;
-    const nextAgentName = typeof agentName === "string"
-      ? agentName.trim()
-      : (existing.agentName ?? "");
+    const nextTargetType =
+      targetType === "agent"
+        ? "agent"
+        : targetType === "orchestrator"
+          ? "orchestrator"
+          : existing.targetType;
+    const nextAgentName =
+      typeof agentName === "string"
+        ? agentName.trim()
+        : (existing.agentName ?? "");
 
     if (nextTargetType === "agent" && !nextAgentName) {
-      return res.status(400).json({ error: "agentName is required when targetType is agent" });
+      return res
+        .status(400)
+        .json({ error: "agentName is required when targetType is agent" });
     }
 
     const updated: AutomationRecord = {
       ...existing,
-      name: typeof name === "string" ? name.trim() || existing.name : existing.name,
-      prompt: typeof prompt === "string" ? prompt.trim() || existing.prompt : existing.prompt,
-      cron: typeof cron === "string" ? cron.trim() || existing.cron : existing.cron,
+      name:
+        typeof name === "string" ? name.trim() || existing.name : existing.name,
+      prompt:
+        typeof prompt === "string"
+          ? prompt.trim() || existing.prompt
+          : existing.prompt,
+      cron:
+        typeof cron === "string" ? cron.trim() || existing.cron : existing.cron,
       targetType: nextTargetType,
       agentName: nextTargetType === "agent" ? nextAgentName : undefined,
       enabled: typeof enabled === "boolean" ? enabled : existing.enabled,
@@ -433,7 +483,8 @@ export async function startServer(options: ServerOptions = {}) {
       const encodedId = id.split("/").map(encodeURIComponent).join("/");
       res.json({
         id,
-        name: typeof name === "string" && name.trim() ? name.trim() : `image${ext}`,
+        name:
+          typeof name === "string" && name.trim() ? name.trim() : `image${ext}`,
         mimeType,
         size: bytes.length,
         url: `${origin}/api/uploads/${encodedId}`,
@@ -471,7 +522,8 @@ export async function startServer(options: ServerOptions = {}) {
     res.json({
       configured: isConfigured(),
       name: cfg.name || "OpenBot",
-      description: cfg.description || "The main orchestrator and system settings",
+      description:
+        cfg.description || "The main orchestrator and system settings",
       model: cfg.model || DEFAULT_MODEL_ID,
       defaultModelId: DEFAULT_MODEL_ID,
       defaultModels: DEFAULT_MODEL_BY_PROVIDER,
@@ -481,7 +533,14 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.post("/api/config", async (req, res) => {
-    const { openai_api_key, anthropic_api_key, model, name, description, image } = req.body;
+    const {
+      openai_api_key,
+      anthropic_api_key,
+      model,
+      name,
+      description,
+      image,
+    } = req.body;
     const updates: Record<string, string> = {};
 
     if (name) updates.name = name.trim();
@@ -516,11 +575,15 @@ export async function startServer(options: ServerOptions = {}) {
       const channel = await createChannelConversation(name);
       return res.status(201).json({ success: true, channel });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create channel";
+      const message =
+        error instanceof Error ? error.message : "Failed to create channel";
       if (message === "Channel already exists") {
         return res.status(409).json({ error: message });
       }
-      if (message === "Invalid channel name" || message === "Channel name is required") {
+      if (
+        message === "Invalid channel name" ||
+        message === "Channel name is required"
+      ) {
         return res.status(400).json({ error: message });
       }
       console.error(error);
@@ -550,7 +613,12 @@ export async function startServer(options: ServerOptions = {}) {
   app.post("/api/channels/:id/members", async (req, res) => {
     const id = normalizeConversationId(req.params.id);
     const { memberId, name } = req.body as { memberId?: string; name?: string };
-    if (typeof memberId !== "string" || typeof name !== "string" || !memberId.trim() || !name.trim()) {
+    if (
+      typeof memberId !== "string" ||
+      typeof name !== "string" ||
+      !memberId.trim() ||
+      !name.trim()
+    ) {
       return res.status(400).json({ error: "memberId and name are required" });
     }
 
@@ -561,7 +629,8 @@ export async function startServer(options: ServerOptions = {}) {
       }
       return res.status(201).json(members);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to add member";
+      const message =
+        error instanceof Error ? error.message : "Failed to add member";
       if (message === "Invalid member") {
         return res.status(400).json({ error: message });
       }
@@ -583,8 +652,12 @@ export async function startServer(options: ServerOptions = {}) {
       }
       return res.json(members);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to remove member";
-      if (message === "Cannot remove this member" || message === "Member not found") {
+      const message =
+        error instanceof Error ? error.message : "Failed to remove member";
+      if (
+        message === "Cannot remove this member" ||
+        message === "Member not found"
+      ) {
         return res.status(400).json({ error: message });
       }
       console.error(error);
@@ -606,8 +679,12 @@ export async function startServer(options: ServerOptions = {}) {
       }
       return res.json(members);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update manager";
-      if (message === "Manager is required" || message === "Manager must be an existing member") {
+      const message =
+        error instanceof Error ? error.message : "Failed to update manager";
+      if (
+        message === "Manager is required" ||
+        message === "Manager must be an existing member"
+      ) {
         return res.status(400).json({ error: message });
       }
       console.error(error);
@@ -628,7 +705,8 @@ export async function startServer(options: ServerOptions = {}) {
     const agentsDir = path.join(resolvedBaseDir, "agents");
 
     const defaultName = cfg.name || "OpenBot";
-    const defaultDescription = cfg.description || "The main orchestrator and system settings";
+    const defaultDescription =
+      cfg.description || "The main orchestrator and system settings";
 
     const agents: any[] = [
       {
@@ -644,17 +722,19 @@ export async function startServer(options: ServerOptions = {}) {
 
     try {
       const allPlugins = await listPlugins(agentsDir);
-      const agentPlugins = allPlugins.filter(p => p.type === "agent");
+      const agentPlugins = allPlugins.filter((p) => p.type === "agent");
       agents.push(
         ...agentPlugins.map((plugin) => {
           const id = path.basename(plugin.folder);
-          const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(plugin.name);
+          const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(
+            plugin.name,
+          );
           return {
             ...plugin,
             id,
             name: hasUnnamedDisplayName ? toTitleCaseFromSlug(id) : plugin.name,
           };
-        })
+        }),
       );
     } catch {
       // ignore
@@ -676,31 +756,50 @@ export async function startServer(options: ServerOptions = {}) {
 
     const normalizedId = (body.id || "").trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9-_]*$/.test(normalizedId)) {
-      return res.status(400).json({ error: "Invalid agent id. Use lowercase letters, numbers, dashes, and underscores." });
+      return res
+        .status(400)
+        .json({
+          error:
+            "Invalid agent id. Use lowercase letters, numbers, dashes, and underscores.",
+        });
     }
 
     const normalizedName = (body.name || "").trim();
     const normalizedDescription = (body.description || "").trim();
     if (!normalizedName || !normalizedDescription) {
-      return res.status(400).json({ error: "name and description are required" });
+      return res
+        .status(400)
+        .json({ error: "name and description are required" });
     }
 
-    const normalizedPlugins: Array<string | { name: string; config?: unknown }> = [];
+    const normalizedPlugins: Array<
+      string | { name: string; config?: unknown }
+    > = [];
     for (const plugin of body.plugins || []) {
       if (typeof plugin === "string") {
         const normalized = plugin.trim();
         if (normalized) normalizedPlugins.push(normalized);
         continue;
       }
-      if (!plugin || typeof plugin !== "object" || typeof plugin.name !== "string") continue;
+      if (
+        !plugin ||
+        typeof plugin !== "object" ||
+        typeof plugin.name !== "string"
+      )
+        continue;
       const normalizedName = plugin.name.trim();
       if (!normalizedName) continue;
-      if (typeof plugin.config === "undefined") normalizedPlugins.push({ name: normalizedName });
-      else normalizedPlugins.push({ name: normalizedName, config: plugin.config });
+      if (typeof plugin.config === "undefined")
+        normalizedPlugins.push({ name: normalizedName });
+      else
+        normalizedPlugins.push({ name: normalizedName, config: plugin.config });
     }
 
     const normalizedSubscribe = Array.isArray(body.subscribe)
-      ? body.subscribe.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
+      ? body.subscribe
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
       : [];
 
     const cfg = loadConfig();
@@ -711,7 +810,9 @@ export async function startServer(options: ServerOptions = {}) {
 
     try {
       await fs.access(agentDir);
-      return res.status(409).json({ error: `Agent "${normalizedId}" already exists` });
+      return res
+        .status(409)
+        .json({ error: `Agent "${normalizedId}" already exists` });
     } catch {
       // expected for new agent
     }
@@ -721,9 +822,12 @@ export async function startServer(options: ServerOptions = {}) {
       description: normalizedDescription,
       plugins: normalizedPlugins,
     };
-    if (typeof body.model === "string" && body.model.trim()) frontmatter.model = body.model.trim();
-    if (typeof body.image === "string" && body.image.trim()) frontmatter.image = body.image.trim();
-    if (normalizedSubscribe.length > 0) frontmatter.subscribe = normalizedSubscribe;
+    if (typeof body.model === "string" && body.model.trim())
+      frontmatter.model = body.model.trim();
+    if (typeof body.image === "string" && body.image.trim())
+      frontmatter.image = body.image.trim();
+    if (normalizedSubscribe.length > 0)
+      frontmatter.subscribe = normalizedSubscribe;
 
     try {
       await fs.mkdir(agentDir, { recursive: true });
@@ -749,13 +853,15 @@ export async function startServer(options: ServerOptions = {}) {
       res.json(
         toolPlugins.map((plugin) => {
           const id = path.basename(plugin.folder);
-          const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(plugin.name);
+          const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(
+            plugin.name,
+          );
           return {
             ...plugin,
             id,
             name: hasUnnamedDisplayName ? toTitleCaseFromSlug(id) : plugin.name,
           };
-        })
+        }),
       );
     } catch (error) {
       console.error(error);
@@ -771,7 +877,7 @@ export async function startServer(options: ServerOptions = {}) {
           name: t.name,
           description: t.description,
           isBuiltIn: !!t.isBuiltIn,
-        }))
+        })),
       );
     } catch (error) {
       console.error(error);
@@ -802,30 +908,52 @@ export async function startServer(options: ServerOptions = {}) {
   app.post("/api/marketplace/install-agent", async (req, res) => {
     const { id } = req.body as { id?: string };
     if (typeof id !== "string" || !id.trim()) {
-      return res.status(400).json({ error: "Marketplace agent id is required" });
+      return res
+        .status(400)
+        .json({ error: "Marketplace agent id is required" });
     }
     try {
       const result = await installMarketplaceAgent(id.trim());
       scheduleReload();
-      res.json({ success: true, installedName: result.installedName, item: result.agent });
+      res.json({
+        success: true,
+        installedName: result.installedName,
+        item: result.agent,
+      });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to install agent" });
+      res
+        .status(500)
+        .json({
+          error:
+            error instanceof Error ? error.message : "Failed to install agent",
+        });
     }
   });
 
   app.post("/api/marketplace/install-plugin", async (req, res) => {
     const { id } = req.body as { id?: string };
     if (typeof id !== "string" || !id.trim()) {
-      return res.status(400).json({ error: "Marketplace plugin id is required" });
+      return res
+        .status(400)
+        .json({ error: "Marketplace plugin id is required" });
     }
     try {
       const result = await installMarketplacePlugin(id.trim());
       scheduleReload();
-      res.json({ success: true, installedName: result.installedName, item: result.plugin });
+      res.json({
+        success: true,
+        installedName: result.installedName,
+        item: result.plugin,
+      });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to install plugin" });
+      res
+        .status(500)
+        .json({
+          error:
+            error instanceof Error ? error.message : "Failed to install plugin",
+        });
     }
   });
 
@@ -913,7 +1041,9 @@ export async function startServer(options: ServerOptions = {}) {
     } else {
       const pluginFolder = await resolveAgentFolder(agentId, resolvedBaseDir);
       if (!pluginFolder) {
-        return res.status(404).json({ error: "Agent not found or invalid format" });
+        return res
+          .status(404)
+          .json({ error: "Agent not found or invalid format" });
       }
       mdPath = path.join(pluginFolder, "AGENT.md");
     }
@@ -927,10 +1057,30 @@ export async function startServer(options: ServerOptions = {}) {
       }
 
       res.json({
-        name: typeof parsed.name === "string" ? parsed.name : (agentId === defaultName || agentId === "default" ? defaultName : ""),
-        description: typeof parsed.description === "string" ? parsed.description : (agentId === defaultName || agentId === "default" ? cfg.description || "" : ""),
-        model: typeof parsed.model === "string" ? parsed.model : (agentId === defaultName || agentId === "default" ? cfg.model : undefined),
-        image: typeof parsed.image === "string" ? parsed.image : (agentId === defaultName || agentId === "default" ? cfg.image : undefined),
+        name:
+          typeof parsed.name === "string"
+            ? parsed.name
+            : agentId === defaultName || agentId === "default"
+              ? defaultName
+              : "",
+        description:
+          typeof parsed.description === "string"
+            ? parsed.description
+            : agentId === defaultName || agentId === "default"
+              ? cfg.description || ""
+              : "",
+        model:
+          typeof parsed.model === "string"
+            ? parsed.model
+            : agentId === defaultName || agentId === "default"
+              ? cfg.model
+              : undefined,
+        image:
+          typeof parsed.image === "string"
+            ? parsed.image
+            : agentId === defaultName || agentId === "default"
+              ? cfg.image
+              : undefined,
         plugins: Array.isArray(parsed.plugins) ? parsed.plugins : [],
         subscribe: Array.isArray(parsed.subscribe)
           ? parsed.subscribe.filter((item: unknown) => typeof item === "string")
@@ -972,7 +1122,9 @@ export async function startServer(options: ServerOptions = {}) {
       return res.status(400).json({ error: "Invalid agent config payload" });
     }
 
-    const normalizedPlugins: Array<string | { name: string; config?: unknown }> = [];
+    const normalizedPlugins: Array<
+      string | { name: string; config?: unknown }
+    > = [];
     for (const plugin of body.plugins) {
       if (typeof plugin === "string") {
         const normalized = plugin.trim();
@@ -980,7 +1132,11 @@ export async function startServer(options: ServerOptions = {}) {
         continue;
       }
 
-      if (!plugin || typeof plugin !== "object" || typeof plugin.name !== "string") {
+      if (
+        !plugin ||
+        typeof plugin !== "object" ||
+        typeof plugin.name !== "string"
+      ) {
         continue;
       }
 
@@ -998,7 +1154,9 @@ export async function startServer(options: ServerOptions = {}) {
     const normalizedDescription = body.description.trim();
 
     if (!normalizedName || !normalizedDescription) {
-      return res.status(400).json({ error: "name and description are required" });
+      return res
+        .status(400)
+        .json({ error: "name and description are required" });
     }
 
     const cfg = loadConfig();
@@ -1066,7 +1224,10 @@ export async function startServer(options: ServerOptions = {}) {
         saveConfig({
           name: normalizedName,
           description: normalizedDescription,
-          model: (typeof body.model === "string" && body.model.trim()) ? body.model.trim() : undefined,
+          model:
+            typeof body.model === "string" && body.model.trim()
+              ? body.model.trim()
+              : undefined,
         });
       }
 
@@ -1121,7 +1282,10 @@ export async function startServer(options: ServerOptions = {}) {
     if (agentFolder) {
       try {
         const { image } = await readAgentConfig(agentFolder);
-        if (image && (image.startsWith("http://") || image.startsWith("https://"))) {
+        if (
+          image &&
+          (image.startsWith("http://") || image.startsWith("https://"))
+        ) {
           return res.redirect(image);
         }
       } catch {
@@ -1133,20 +1297,24 @@ export async function startServer(options: ServerOptions = {}) {
     const fileNames = ["avatar", "icon", "image", "logo"];
 
     const searchDirs = [
-      (name === defaultName || name === "default")
+      name === defaultName || name === "default"
         ? path.join(resolvedBaseDir, "assets")
-        : (agentFolder ? path.join(agentFolder, "assets") : path.join(resolvedBaseDir, "agents", name, "assets")),
+        : agentFolder
+          ? path.join(agentFolder, "assets")
+          : path.join(resolvedBaseDir, "agents", name, "assets"),
       path.join(process.cwd(), "server", "src", "agents", name, "assets"),
       path.join(process.cwd(), "server", "src", "assets", "agents", name),
       path.join(process.cwd(), "server", "src", "agents", "assets"),
-      path.join(process.cwd(), "server", "src", "assets")
+      path.join(process.cwd(), "server", "src", "assets"),
     ];
 
     for (const dir of searchDirs) {
       for (const fileName of fileNames) {
         for (const ext of extensions) {
-          const isAgentSpecificDir = dir.includes(name) || (agentFolder && dir.includes(agentFolder));
-          const baseName = (dir.endsWith("assets") && !isAgentSpecificDir) ? name : fileName;
+          const isAgentSpecificDir =
+            dir.includes(name) || (agentFolder && dir.includes(agentFolder));
+          const baseName =
+            dir.endsWith("assets") && !isAgentSpecificDir ? name : fileName;
           const p = path.join(dir, `${baseName}${ext}`);
           try {
             await fs.access(p);
@@ -1180,13 +1348,15 @@ export async function startServer(options: ServerOptions = {}) {
     });
     res.flushHeaders?.();
 
-    const conversationIdRaw = typeof body.conversationId === "string" ? body.conversationId.trim() : "";
+    const conversationIdRaw =
+      typeof body.conversationId === "string" ? body.conversationId.trim() : "";
     const conversationId = normalizeConversationId(conversationIdRaw);
     if (!conversationId) {
       return res.status(400).json({ error: "conversationId is required" });
     }
     const runId = body.runId ?? `run_${generateId()}`;
-    const state: ManagerState = (await loadConversationState(conversationId)) ?? {};
+    const state: ManagerState =
+      (await loadConversationState(conversationId)) ?? {};
     state.conversationId = conversationId;
     if (!state.cwd) state.cwd = process.cwd();
     if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
@@ -1215,7 +1385,7 @@ export async function startServer(options: ServerOptions = {}) {
         res.write(
           `event: error\ndata: ${JSON.stringify({
             message: error instanceof Error ? error.message : String(error),
-          })}\n\n`
+          })}\n\n`,
         );
       }
     } finally {
@@ -1230,7 +1400,9 @@ export async function startServer(options: ServerOptions = {}) {
   app.listen(PORT, () => {
     console.log(`OpenBot server listening at http://localhost:${PORT}`);
     console.log(`  - Chat endpoint: POST /api/chat`);
-    console.log(`  - REST endpoints: /api/config, /api/conversations, /api/agents`);
+    console.log(
+      `  - REST endpoints: /api/config, /api/conversations, /api/agents`,
+    );
     if (options.openaiApiKey) console.log("  - Using OpenAI API Key from CLI");
     if (options.anthropicApiKey)
       console.log("  - Using Anthropic API Key from CLI");

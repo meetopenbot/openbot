@@ -86,7 +86,7 @@ export function setupDelegation(
   });
 
   builder.on("action:delegateTask", async function* (event: ManagerEvent, context: { runId: string; state: ManagerState }) {
-    const { agentId, toolCallId, task, stateKey, attachments } = event.data;
+    const { agentId, toolCallId, task, stateKey, attachments, threadTitle } = event.data;
     const agentRuntime = agentRuntimes.get(agentId);
 
     // If the agent is not found, return an error
@@ -103,16 +103,20 @@ export function setupDelegation(
     }
 
     const delegationId = `del_${generateId()}`;
+    const state = context.state as ManagerState;
+
+    // Register this delegation as a thread assignment for future routing
+    state.threadAssignees ??= {};
+    state.threadAssignees[delegationId] = agentId;
 
     // Signal delegation start for UI
     yield {
       type: "delegation:start",
-      meta: { delegationId, agentName: agentId },
-      data: { agent: agentId, task },
+      meta: { delegationId, agentName: agentId, threadId: delegationId },
+      data: { agent: agentId, task, title: threadTitle || task.slice(0, 50) + "..." },
     } as ManagerEvent;
 
     // Initialize agent isolated state if not present
-    const state = context.state as ManagerState;
     if (!state.agentStates) state.agentStates = {};
     if (!state.agentStates[agentId]) state.agentStates[agentId] = {};
 
@@ -122,6 +126,7 @@ export function setupDelegation(
       {
         type: "agent:input",
         data: { content: task, attachments },
+        meta: { threadId: delegationId },
       } as any,
       {
         runId: delegationId,
@@ -144,7 +149,7 @@ export function setupDelegation(
           if (suspendUiEvent && typeof suspendUiEvent === "object" && typeof suspendUiEvent.type === "string") {
             yield {
               ...suspendUiEvent,
-              meta: { ...suspendUiEvent.meta, delegationId, agentName: agentId },
+              meta: { ...suspendUiEvent.meta, delegationId, agentName: agentId, threadId: delegationId },
             } as ManagerEvent;
           }
 
@@ -161,7 +166,7 @@ export function setupDelegation(
           yield {
             ...agentEvent,
             type: "agent:sub-input",
-            meta: { ...agentEvent.meta, delegationId, agentName: agentId },
+            meta: { ...agentEvent.meta, delegationId, agentName: agentId, threadId: delegationId },
           } as ManagerEvent;
           continue;
         }
@@ -171,7 +176,7 @@ export function setupDelegation(
           yield {
             ...agentEvent,
             type: "agent:sub-action",
-            meta: { ...agentEvent.meta, delegationId, agentName: agentId },
+            meta: { ...agentEvent.meta, delegationId, agentName: agentId, threadId: delegationId },
             data: { ...agentEvent.data, originalType: agentEvent.type },
           } as ManagerEvent;
           continue;
@@ -182,7 +187,7 @@ export function setupDelegation(
           yield {
             ...agentEvent,
             type: "agent:sub-action-result",
-            meta: { ...agentEvent.meta, delegationId, agentName: agentId },
+            meta: { ...agentEvent.meta, delegationId, agentName: agentId, threadId: delegationId },
           } as ManagerEvent;
           continue;
         }
@@ -192,7 +197,7 @@ export function setupDelegation(
           yield {
             ...agentEvent,
             type: "agent:sub-usage",
-            meta: { ...agentEvent.meta, delegationId, agentName: agentId },
+            meta: { ...agentEvent.meta, delegationId, agentName: agentId, threadId: delegationId },
           } as ManagerEvent;
           continue;
         }
@@ -200,7 +205,7 @@ export function setupDelegation(
         // Pass through other events but tag them with delegationId and agentName in meta
         yield {
           ...agentEvent,
-          meta: { ...agentEvent.meta, delegationId, agentName: agentId },
+          meta: { ...agentEvent.meta, delegationId, agentName: agentId, threadId: delegationId },
         } as ManagerEvent;
 
         // accumulate agent output
@@ -212,7 +217,7 @@ export function setupDelegation(
 
           if (typeof value === "object" && value !== null && !Array.isArray(value)) {
             if (stateKey) {
-              context.state[stateKey] = value;
+              state[stateKey] = value;
               yield* maybeEmitWidget(stateKey, value);
             }
 
@@ -245,7 +250,7 @@ export function setupDelegation(
     // Signal delegation end for UI
     yield {
       type: "delegation:end",
-      meta: { delegationId, agentName: agentId },
+      meta: { delegationId, agentName: agentId, threadId: delegationId },
       data: { agent: agentId, result: lastAgentOutput || "Task completed." },
     } as ManagerEvent;
 

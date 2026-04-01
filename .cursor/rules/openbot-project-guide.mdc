@@ -8,6 +8,8 @@ alwaysApply: true
 OpenBot is a local-first, extensible AI assistant ecosystem designed to provide a Slack-like experience for interacting with multiple AI agents.
 
 ## 🌟 Project Vision
+
+- **Main Goal**: To solve agent fragmentation and communication problems.
 - **Local-First**: All data and persistence layers reside on the user's local file system.
 - **Slack-like for Agents**: A multi-agent workspace where humans and AI agents interact in channels and direct messages.
 - **Event-Driven**: Built on a minimalist, asynchronous event bus.

@@ -54,14 +54,15 @@ ${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ""}
 
           let personaPrompt = `
 <orchestrator>
-Your goal is to solve user requests by delegating tasks to expert sub-agents.
+You are the **Dispatcher** and **Project Manager** for this workspace. 
+Your goal is to coordinate a team of AI agents to solve user requests.
 
-**Directives**:
-1. **Delegate**: Use \`delegateTask\` for any task matching an agent's description.
-3. **Context**: Provide a clear, detailed task for the sub-agent. Pass any relevant user attachments.
-4. **Report**: Summarize the sub-agent's work concisely for the user.
-5. **Memory**: Use your memory tools (\`remember\`, \`recall\`) to maintain context across sessions.
-6. **State**: Use \`updateSessionState\` to modify any value in the <session_state>.
+**Zero-Human Slack Principles**:
+1. **DMs**: When messaged directly, respond as yourself or your specialized role.
+2. **Channels**: As a manager, triage incoming requests. Decide if you should handle them or delegate.
+3. **Threads**: Treat every complex task as a separate **Thread**. Use \`delegateTask\` to assign a thread to an expert.
+4. **Context**: When delegating, provide ALL necessary background so the expert can work independently in their thread.
+5. **Synthesis**: Once an expert finishes their thread, summarize the outcome for the user in the main channel.
 </orchestrator>`;
 
           if (isChannel && managerId !== "you") {
@@ -77,14 +78,13 @@ ${config.instructions}
 </identity>
 
 <orchestrator_mode>
-In addition to your personal role, you are the **Manager** of this channel.
+In addition to your personal role, you are the **Lead Orchestrator** of this channel.
 You have a team of member agents available to you. 
-When a request comes in, decide if you should handle it yourself using your own capabilities (if any) or delegate it to one of your team members.
 
 **Directives**:
-1. **Lead**: Take ownership of the conversation and ensure the user's goal is met.
-2. **Delegate**: Use \`delegateTask\` to hand off specialized tasks to your team members.
-3. **Collaborate**: You are the primary point of contact. Summarize findings from members for the user.
+1. **Lead**: Take ownership of the conversation. Ensure the user's goal is met.
+2. **Assign**: Use \`delegateTask\` to spin up a new **Thread** for specialized tasks.
+3. **Review**: You are the primary point of contact. Review and summarize findings from thread assignees for the user.
 </orchestrator_mode>`;
               } catch (err) {
                 console.error(`Failed to read manager agent config for ${managerId}:`, err);
@@ -96,7 +96,7 @@ When a request comes in, decide if you should handle it yourself using your own 
           const agentDescriptions = getAgentDescriptions(memberIds, managerId);
 
           // 3. Session State
-          const standardKeys = ["messages", "agentStates", "usage", "cwd", "workspaceRoot", "title", "conversationId", "pendingAgentTasks", "channelMembers", "channelManagerId"];
+          const standardKeys = ["messages", "agentStates", "usage", "cwd", "workspaceRoot", "title", "conversationId", "pendingAgentTasks", "channelMembers", "channelManagerId", "threadAssignees"];
           const customState: Record<string, any> = {};
           for (const key of Object.keys(state)) {
             if (!standardKeys.includes(key)) {
@@ -129,10 +129,11 @@ ${agentDescriptions}
         toolDefinitions: {
           ...memoryToolDefinitions,
           delegateTask: {
-            description: `Delegate a task to a specialized expert agent.`,
+            description: `Delegate a task to a specialized expert agent by creating a dedicated Thread.`,
             inputSchema: z.object({
               agentId: z.enum(agentIds as [string, ...string[]]).describe("The ID of the agent to use"),
               task: z.string().describe("The task for the agent to perform"),
+              threadTitle: z.string().optional().describe("A short title for the new thread (e.g. 'Fix Router Bug')"),
               stateKey: z.string().optional().describe("Optional key to store structured JSON result in the session state"),
               attachments: z.array(
                 z.object({

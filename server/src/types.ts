@@ -148,6 +148,9 @@ export interface ManagerState {
   /** Isolated state per agent, keyed by agent name */
   agentStates?: Record<string, AgentState>;
 
+  /** Map of threadId to assigned agent name/id */
+  threadAssignees?: Record<string, string>;
+
   /** Dynamic top-level state for session-wide data (e.g. project_plan, todos) */
   [key: string]: any;
 }
