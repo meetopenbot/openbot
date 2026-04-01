@@ -15,6 +15,7 @@ import path from "node:path";
 export async function setupPluginRegistry(
   resolvedBaseDir: string,
   model: any,
+  resolvedModelId: string, // Add this
   options?: { openaiApiKey?: string; anthropicApiKey?: string },
 ): Promise<PluginRegistry> {
   const registry = new PluginRegistry();
@@ -66,7 +67,7 @@ export async function setupPluginRegistry(
         Object.entries(fileSystemToolDefinitions).map(([k, v]) => [k, v.description]),
       ),
     },
-    plugin: osAgent({ model }),
+    plugin: osAgent({ model, resolvedModelId, resolvedBaseDir, registry }),
     isBuiltIn: true,
   });
 
@@ -80,7 +81,7 @@ export async function setupPluginRegistry(
         Object.entries(fileSystemToolDefinitions).map(([k, v]) => [k, v.description]),
       ),
     },
-    plugin: agentCreatorAgent({ model }),
+    plugin: agentCreatorAgent({ model, resolvedModelId, resolvedBaseDir, registry }),
     isBuiltIn: true,
   });
 
@@ -89,8 +90,8 @@ export async function setupPluginRegistry(
   const agentsDir = path.join(resolvedBaseDir, "agents");
   const pluginsDir = path.join(resolvedBaseDir, "plugins");
 
-  await discoverPlugins(pluginsDir, registry, model, options);
-  await discoverPlugins(agentsDir, registry, model, options);
+  await discoverPlugins(pluginsDir, registry, model, resolvedModelId, resolvedBaseDir, options);
+  await discoverPlugins(agentsDir, registry, model, resolvedModelId, resolvedBaseDir, options);
 
   return registry;
 }

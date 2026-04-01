@@ -1,8 +1,8 @@
 import { MelonyPlugin } from "melony";
 import { generateText, LanguageModel } from "ai";
-import { ManagerState, ManagerEvent } from "../types.js";
+import { ConversationState, ConversationEvent } from "../types.js";
 
-function getTitleSourceMessages(state: ManagerState, event: ManagerEvent): any[] {
+function getTitleSourceMessages(state: ConversationState, event: ConversationEvent): any[] {
   if (Array.isArray(state.messages) && state.messages.length >= 2) {
     return state.messages;
   }
@@ -18,14 +18,14 @@ function getTitleSourceMessages(state: ManagerState, event: ManagerEvent): any[]
   return [];
 }
 
-export const topicAgent = (options: { model: LanguageModel }): MelonyPlugin<ManagerState, ManagerEvent> => (builder) => {
+export const topicAgent = (options: { model: LanguageModel }): MelonyPlugin<ConversationState, ConversationEvent> => (builder) => {
   builder.on("agent:output" as any, async function* (event, { state }) {
     // Only title if it doesn't have one and there's history
     if (state.title) {
       return;
     }
 
-    const messagesForTitle = getTitleSourceMessages(state, event as ManagerEvent);
+    const messagesForTitle = getTitleSourceMessages(state, event as ConversationEvent);
 
     // Don't title if there are too few messages
     if (messagesForTitle.length < 2) {

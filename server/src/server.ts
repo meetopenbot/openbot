@@ -25,6 +25,7 @@ import {
   setChannelManager,
 } from "./conversation.js";
 import { listPlugins } from "./registry/index.js";
+import type { ListedPlugin } from "./registry/index.js";
 import { readAgentConfig } from "./registry/plugin-loader.js";
 import { exec } from "node:child_process";
 import os from "node:os";
@@ -32,7 +33,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import matter from "gray-matter";
-import type { ManagerEvent, ManagerState, ManagerRequest } from "./types.js";
+import type { ConversationState, ConversationEvent, ConversationRequest } from "./types.js";
 import { fetchProviderModels, getModelCatalog } from "./model-catalog.js";
 import type { ModelProvider } from "./model-catalog.js";
 import {
@@ -129,7 +130,7 @@ export async function startServer(options: ServerOptions = {}) {
   ) => {
     const conversationId = `channel_automation_${automation.id}`;
     const runId = `run_auto_${generateId()}`;
-    const state: ManagerState =
+    const state: ConversationState =
       (await loadConversationState(conversationId)) ?? {};
 
     state.conversationId = conversationId;
@@ -217,9 +218,10 @@ export async function startServer(options: ServerOptions = {}) {
     try {
       const allPlugins = await listPlugins(agentsDir);
       const match = allPlugins.find(
-        (plugin) =>
+        (plugin: ListedPlugin) =>
           plugin.type === "agent" &&
-          (path.basename(plugin.folder) === agentIdOrName ||
+          ((plugin.folder ? path.basename(plugin.folder) : plugin.id) ===
+            agentIdOrName ||
             plugin.name === agentIdOrName),
       );
       return match?.folder ?? null;
@@ -722,10 +724,12 @@ export async function startServer(options: ServerOptions = {}) {
 
     try {
       const allPlugins = await listPlugins(agentsDir);
-      const agentPlugins = allPlugins.filter((p) => p.type === "agent");
+      const agentPlugins = allPlugins.filter(
+        (p: ListedPlugin) => p.type === "agent",
+      );
       agents.push(
-        ...agentPlugins.map((plugin) => {
-          const id = path.basename(plugin.folder);
+        ...agentPlugins.map((plugin: ListedPlugin) => {
+          const id = plugin.folder ? path.basename(plugin.folder) : plugin.id;
           const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(
             plugin.name,
           );
@@ -849,10 +853,12 @@ export async function startServer(options: ServerOptions = {}) {
 
     try {
       const allPlugins = await listPlugins(pluginsDir);
-      const toolPlugins = allPlugins.filter((plugin) => plugin.type === "tool");
+      const toolPlugins = allPlugins.filter(
+        (plugin: ListedPlugin) => plugin.type === "tool",
+      );
       res.json(
-        toolPlugins.map((plugin) => {
-          const id = path.basename(plugin.folder);
+        toolPlugins.map((plugin: ListedPlugin) => {
+          const id = plugin.folder ? path.basename(plugin.folder) : plugin.id;
           const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(
             plugin.name,
           );
@@ -1333,7 +1339,7 @@ export async function startServer(options: ServerOptions = {}) {
   // ─── Chat SSE endpoint ──────────────────────────────────────────
 
   app.post("/api/chat", async (req, res) => {
-    const body = req.body as Partial<ManagerRequest>;
+    const body = req.body as Partial<ConversationRequest>;
 
     if (!body.event || typeof body.event.type !== "string") {
       return res.status(400).json({
@@ -1355,13 +1361,13 @@ export async function startServer(options: ServerOptions = {}) {
       return res.status(400).json({ error: "conversationId is required" });
     }
     const runId = body.runId ?? `run_${generateId()}`;
-    const state: ManagerState =
+    const state: ConversationState =
       (await loadConversationState(conversationId)) ?? {};
     state.conversationId = conversationId;
     if (!state.cwd) state.cwd = process.cwd();
     if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
 
-    const iterator = runtime.run(body.event as ManagerEvent, {
+    const iterator = runtime.run(body.event as ConversationEvent, {
       runId,
       state,
     });

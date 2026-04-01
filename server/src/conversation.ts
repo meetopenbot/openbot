@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { ManagerState, ManagerEvent } from "./types.js";
+import { ConversationState, ConversationEvent } from "./types.js";
 
 const CONVERSATIONS_DIR = path.join(os.homedir(), ".openbot", "conversations");
 
@@ -41,7 +41,7 @@ function getChannelSlugFromConversationId(conversationId: string): string | unde
   return slug || undefined;
 }
 
-export async function loadConversationState(conversationId: string): Promise<ManagerState | null> {
+export async function loadConversationState(conversationId: string): Promise<ConversationState | null> {
   const normalizedConversationId = normalizeConversationId(conversationId);
   const conversationDir = getConversationDir(normalizedConversationId);
   const statePath = path.join(conversationDir, "state.json");
@@ -50,7 +50,7 @@ export async function loadConversationState(conversationId: string): Promise<Man
 
   try {
     const data = fs.readFileSync(statePath, "utf-8");
-    const state: ManagerState = JSON.parse(data);
+    const state: ConversationState = JSON.parse(data);
 
     if (state.messages && state.messages.length > MAX_MESSAGES) {
       const systemMessages = [];
@@ -72,7 +72,7 @@ export async function loadConversationState(conversationId: string): Promise<Man
   }
 }
 
-export async function saveConversationState(conversationId: string, state: ManagerState) {
+export async function saveConversationState(conversationId: string, state: ConversationState) {
   const normalizedConversationId = normalizeConversationId(conversationId);
   const conversationDir = getConversationDir(normalizedConversationId);
   if (!fs.existsSync(conversationDir)) {
@@ -103,7 +103,7 @@ export async function createChannelConversation(name: string): Promise<{
     throw new Error("Channel already exists");
   }
 
-  const state: ManagerState = {
+  const state: ConversationState = {
     title: slug,
     conversationId,
     channelMembers: [{ id: "you", name: "You" }],
@@ -131,7 +131,7 @@ function sanitizeMember(input: ChannelMember): ChannelMember {
   };
 }
 
-function normalizeChannelMembersState(conversationId: string, state: ManagerState): ChannelMembersState {
+function normalizeChannelMembersState(conversationId: string, state: ConversationState): ChannelMembersState {
   const rawMembers = Array.isArray(state.channelMembers) ? state.channelMembers : [];
   const seen = new Set<string>();
   const normalizedMembers: ChannelMember[] = [];
@@ -275,7 +275,7 @@ export async function deleteChannelConversation(conversationId: string): Promise
   return true;
 }
 
-export async function logConversationEvent(conversationId: string, runId: string, event: ManagerEvent) {
+export async function logConversationEvent(conversationId: string, runId: string, event: ConversationEvent) {
   const normalizedConversationId = normalizeConversationId(conversationId);
   const conversationDir = getConversationDir(normalizedConversationId);
   if (!fs.existsSync(conversationDir)) {
@@ -292,7 +292,7 @@ export async function logConversationEvent(conversationId: string, runId: string
   fs.appendFileSync(logPath, entry + "\n", "utf-8");
 }
 
-export async function loadConversationEvents(conversationId: string): Promise<ManagerEvent[]> {
+export async function loadConversationEvents(conversationId: string): Promise<ConversationEvent[]> {
   const normalizedConversationId = normalizeConversationId(conversationId);
   const conversationDir = getConversationDir(normalizedConversationId);
   const logPath = path.join(conversationDir, "events.jsonl");
@@ -304,7 +304,7 @@ export async function loadConversationEvents(conversationId: string): Promise<Ma
     return data
       .split("\n")
       .filter((line) => line.trim() !== "")
-      .map((line) => JSON.parse(line) as ManagerEvent);
+      .map((line) => JSON.parse(line) as ConversationEvent);
   } catch (error) {
     console.error(`Failed to load events for conversation ${normalizedConversationId}:`, error);
     return [];
@@ -329,7 +329,7 @@ export async function listConversations(): Promise<Array<{
         const statePath = path.join(conversationDir, "state.json");
         if (!fs.existsSync(statePath)) continue;
 
-        const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ManagerState;
+        const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ConversationState;
         const kind = inferConversationKind(conversationId);
         const channelTitle = kind === "channel"
           ? getChannelSlugFromConversationId(conversationId)

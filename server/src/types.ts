@@ -84,10 +84,10 @@ export type DelegationEndEvent = ChatEventBase<"delegation:end", {
 export type SuspendEvent = ChatEventBase<"suspend", {
   reason?: string;
   id?: string;
-  event?: ManagerEvent;
+  event?: ConversationEvent;
 }>;
 
-export type ManagerEvent = (
+export type ConversationEvent = (
   | AgentInputEvent
   | AgentOutputEvent
   | AgentOutputDeltaEvent
@@ -115,7 +115,7 @@ export type ManagerEvent = (
 
 /**
  * Per-agent isolated state. Each agent runtime gets its own instance,
- * stored in `ManagerState.agentStates[agentName]`.
+ * stored in `ConversationState.agentStates[agentName]`.
  */
 export interface AgentState {
   messages?: any[];
@@ -128,7 +128,7 @@ export interface AgentState {
   };
 }
 
-export interface ManagerState {
+export interface ConversationState {
   title?: string;
   conversationId?: string;
   messages?: SimpleMessage[];
@@ -155,8 +155,8 @@ export interface ManagerState {
   [key: string]: any;
 }
 
-export interface ManagerRequest {
-  event: ManagerEvent;
+export interface ConversationRequest {
+  event: ConversationEvent;
   runId?: string;
   conversationId?: string;
 }

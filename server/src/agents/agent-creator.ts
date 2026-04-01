@@ -1,25 +1,32 @@
 import { MelonyPlugin } from "melony";
 import path from "node:path";
-import { llmPlugin } from "../plugins/llm/index.js";
+import { llmOrchestratorPlugin } from "../core/orchestrator.js";
 import { fileSystemToolDefinitions, fileSystemPlugin } from "../plugins/file-system/index.js";
 import { DEFAULT_BASE_DIR, resolvePath } from "../config.js";
-import { ManagerState, ManagerEvent } from "../types.js";
+import { ConversationState, ConversationEvent } from "../types.js";
 import { LanguageModel } from "ai";
+import { PluginRegistry } from "../registry/plugin-registry.js";
 
 export interface AgentCreatorOptions {
   model: LanguageModel;
+  resolvedModelId: string;
+  resolvedBaseDir: string;
+  registry: PluginRegistry;
 }
 
-export const agentCreatorAgent = (options: AgentCreatorOptions): MelonyPlugin<ManagerState, ManagerEvent> => (builder) => {
-  const { model } = options;
+export const agentCreatorAgent = (options: AgentCreatorOptions): MelonyPlugin<ConversationState, ConversationEvent> => (builder) => {
+  const { model, resolvedModelId, resolvedBaseDir, registry } = options;
   const baseDir = resolvePath(DEFAULT_BASE_DIR);
   const agentsDir = path.join(baseDir, "agents");
 
   builder
     .use(fileSystemPlugin({ baseDir }))
     .use(
-      llmPlugin({
+      llmOrchestratorPlugin({
         model,
+        resolvedModelId,
+        resolvedBaseDir,
+        registry,
         system: `You are the OpenBot Agent Creator. Your job is to help users create AND update custom OpenBot agents via natural language.
 
 Configuration storage:

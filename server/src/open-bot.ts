@@ -2,10 +2,9 @@ import { melony, Runtime } from "melony";
 import { loadConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
 import { createModel, parseModelString } from "./models.js";
 import { DEFAULT_MODEL_ID } from "./model-defaults.js";
-import { ManagerEvent, ManagerState } from "./types.js";
+import { ConversationEvent, ConversationState } from "./types.js";
 import { setupPluginRegistry } from "./core/plugins.js";
-import { createManagerPlugin } from "./core/manager.js";
-import { setupDelegation } from "./core/delegation.js";
+import { orchestrationToolsPlugin } from "./core/orchestrator.js";
 import { runOpenBot } from "./core/router.js";
 
 /**
@@ -24,44 +23,46 @@ export async function createOpenBot(options?: {
   const model = createModel(options);
 
   // 1. Setup unified registry (built-in tools + agents + community plugins)
-  const registry = await setupPluginRegistry(resolvedBaseDir, model as any, options);
+  const registry = await setupPluginRegistry(resolvedBaseDir, model as any, resolvedModelId, options);
 
   // 2. Initialize agent runtimes
-  const agentRuntimes = new Map<string, Runtime<ManagerState, ManagerEvent>>();
+  const agentRuntimes = new Map<string, Runtime<ConversationState, ConversationEvent>>();
 
   for (const agent of registry.getAgents()) {
-    const builder = melony<ManagerState, ManagerEvent>();
-    builder.use(agent.plugin!);
+    const builder = melony<ConversationState, ConversationEvent>();
+    
+    // Apply the base agent plugin
+    if (agent.plugin) {
+      builder.use(agent.plugin);
+    }
+
+    // Always apply orchestration tools so any agent can delegate if it has the tools in its prompt
+    builder.use(orchestrationToolsPlugin({ agentRuntimes }));
+    
     agentRuntimes.set(agent.id, builder.build());
   }
 
-  // 3. Initialize manager runtime
-  const managerBuilder = melony<ManagerState, ManagerEvent>();
-  managerBuilder.use(createManagerPlugin(model, resolvedModelId, resolvedBaseDir, registry));
-
-  // 4. Setup delegation
-  setupDelegation(managerBuilder, agentRuntimes);
-
-  const managerRuntime = managerBuilder.build();
-
-  // 5. Trigger initialization for all runtimes
+  // 3. Trigger initialization for all runtimes
   const initPromises: Promise<void>[] = [];
-  const exhaust = async (runtime: Runtime<ManagerState, ManagerEvent>) => {
-    const iterator = runtime.run({ type: "init" } as any, { runId: "init", state: {} as any });
+  const exhaust = async (runtime: Runtime<ConversationState, ConversationEvent>, agentId: string) => {
+    const iterator = runtime.run({ type: "init" } as any, { 
+      runId: "init", 
+      state: {} as any,
+      agentId 
+    } as any);
     for await (const _ of iterator) { /* side-effects only */ }
   };
 
-  for (const agentRuntime of agentRuntimes.values()) {
-    initPromises.push(exhaust(agentRuntime));
+  for (const [agentId, agentRuntime] of agentRuntimes.entries()) {
+    initPromises.push(exhaust(agentRuntime, agentId));
   }
-  initPromises.push(exhaust(managerRuntime));
 
   await Promise.all(initPromises);
 
-  // 6. Return the runtime
+  // 4. Return the runtime
   return {
     registry,
-    run: (event: ManagerEvent, context: { runId: string; state: ManagerState }) =>
-      runOpenBot(event, context, managerRuntime, agentRuntimes, registry),
+    run: (event: ConversationEvent, context: { runId: string; state: ConversationState }) =>
+      runOpenBot(event, context, agentRuntimes, registry),
   };
 }

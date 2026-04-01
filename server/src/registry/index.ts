@@ -14,4 +14,4 @@ export {
   ensurePluginReady,
 } from "./plugin-loader.js";
 
-export type { AgentConfig } from "./plugin-loader.js";
+export type { AgentConfig, ListedPlugin } from "./plugin-loader.js";

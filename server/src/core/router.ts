@@ -1,5 +1,5 @@
 import { Runtime } from "melony";
-import { ManagerEvent, ManagerState } from "../types.js";
+import { ConversationEvent, ConversationState } from "../types.js";
 
 function summarizeAgentEventValue(event: any): string | undefined {
   if (!event) return undefined;
@@ -10,10 +10,9 @@ function summarizeAgentEventValue(event: any): string | undefined {
 }
 
 export async function* runOpenBot(
-  event: ManagerEvent,
-  context: { runId: string; state: ManagerState },
-  managerRuntime: Runtime<ManagerState, ManagerEvent>,
-  agentRuntimes: Map<string, Runtime<ManagerState, ManagerEvent>>,
+  event: ConversationEvent,
+  context: { runId: string; state: ConversationState },
+  agentRuntimes: Map<string, Runtime<ConversationState, ConversationEvent>>,
   registry: import("../registry/index.js").PluginRegistry
 ) {
   const { state } = context;
@@ -79,22 +78,27 @@ export async function* runOpenBot(
     }
   }
 
-  // --- 2. EXECUTION: Run the target agent (or manager) ---
-  const runtime = targetAgentId ? agentRuntimes.get(targetAgentId) : managerRuntime;
-  const isTargetingManager = !targetAgentId || runtime === managerRuntime;
+  // Determine if the target is the "Lead" of the conversation
+  // The lead uses the top-level state instead of isolated agent state.
+  const isTargetingLead = !targetAgentId || targetAgentId === state.channelManagerId || targetAgentId === "you";
+
+  // --- 2. EXECUTION: Run the target agent ---
+  const runtime = targetAgentId ? agentRuntimes.get(targetAgentId) : undefined;
 
   // For non-input events with an explicit agentName, always try that agent first
   if (event.type !== "agent:input" && event.meta?.agentName) {
     const explicitRuntime = agentRuntimes.get(event.meta.agentName);
     if (explicitRuntime) {
       const target = event.meta.agentName;
-      if (!state.agentStates[target]) state.agentStates[target] = {};
+      const isLead = target === state.channelManagerId || target === "you";
+      const targetState = isLead ? state : (state.agentStates[target] ||= {});
 
       let resumedOutput = "";
       for await (const agentChunk of explicitRuntime.run(event, {
         runId: context.runId,
-        state: state.agentStates[target] as any,
-      })) {
+        state: targetState as any,
+        agentId: target, // Pass our identity in context
+      } as any)) {
         yield {
           ...agentChunk,
           meta: {
@@ -103,7 +107,7 @@ export async function* runOpenBot(
             ...(threadId ? { threadId } : {}),
             agentName: target,
           },
-        } as ManagerEvent;
+        } as ConversationEvent;
 
         if (agentChunk.type === "agent:output" || agentChunk.type === "action:result") {
           const summary = summarizeAgentEventValue(agentChunk);
@@ -127,12 +131,25 @@ export async function* runOpenBot(
             type: "delegation:end",
             meta: { delegationId: pending.delegationId, agentName: pending.agentName },
             data: { agent: pending.agentName, result: wasDenied ? "Denied" : "Completed" },
-          } as ManagerEvent;
+          } as ConversationEvent;
 
-          yield* managerRuntime.run({
-            type: "action:result",
-            data: { action: "delegateTask", result: delegateResult, toolCallId: pending.toolCallId, success: !wasDenied, halt: wasDenied },
-          } as ManagerEvent, { runId: context.runId, state: state as any });
+          // Resume the delegator
+          const delegatorId = (pending as any).delegatorAgentId;
+          const delegatorRuntime = delegatorId ? agentRuntimes.get(delegatorId) : undefined;
+          
+          if (delegatorRuntime) {
+            const isDelegatorLead = delegatorId === state.channelManagerId || delegatorId === "you";
+            const delegatorState = isDelegatorLead ? state : (state.agentStates[delegatorId] ||= {});
+            
+            yield* delegatorRuntime.run({
+              type: "action:result",
+              data: { action: "delegateTask", result: delegateResult, toolCallId: pending.toolCallId, success: !wasDenied, halt: wasDenied },
+            } as ConversationEvent, { 
+              runId: context.runId, 
+              state: delegatorState as any,
+              agentId: delegatorId
+            } as any);
+          }
         }
       }
       return;
@@ -141,13 +158,14 @@ export async function* runOpenBot(
 
   // Run the resolved runtime
   if (runtime) {
-    const targetState = isTargetingManager ? state : (state.agentStates[targetAgentId!] ||= {});
+    const targetState = isTargetingLead ? state : (state.agentStates[targetAgentId!] ||= {});
     let lastOutput = "";
 
     for await (const chunk of runtime.run(event, {
       runId: context.runId,
       state: targetState as any,
-    })) {
+      agentId: targetAgentId, // Pass our identity in context
+    } as any)) {
       if (chunk.type === "agent:output" || chunk.type === "agent:output-delta") {
         const summary = summarizeAgentEventValue(chunk);
         if (summary) lastOutput = summary;
@@ -158,20 +176,36 @@ export async function* runOpenBot(
         meta: {
           ...chunk.meta,
           ...(threadId ? { threadId } : {}),
-          ...(targetAgentId && !isTargetingManager ? { agentName: targetAgentId } : {}),
+          // Always attach the resolved runtime identity when available.
+          // This keeps channel-manager responses labeled with the actual manager
+          // instead of falling back to the default app name in the UI.
+          ...(targetAgentId ? { agentName: targetAgentId } : {}),
         },
-      } as ManagerEvent;
+      } as ConversationEvent;
     }
 
     // Auto-generate title if targeting an agent directly and title is missing
-    if (!isTargetingManager && !state.title && lastOutput) {
-      for await (const _ of managerRuntime.run({
-        type: "agent:output",
-        meta: { agentName: targetAgentId },
-        data: { content: lastOutput },
-      } as ManagerEvent, { runId: context.runId, state: state as any })) {
-        // side-effects only (topic agent)
-      }
+    if (!isTargetingLead && !state.title && lastOutput) {
+       // We can use the designated manager (if any) or a default agent to generate the title
+       const titleGeneratorId = state.channelManagerId && state.channelManagerId !== "you" ? state.channelManagerId : targetAgentId;
+       const titleGeneratorRuntime = titleGeneratorId ? agentRuntimes.get(titleGeneratorId) : undefined;
+       
+       if (titleGeneratorRuntime) {
+         const isGenLead = titleGeneratorId === state.channelManagerId || titleGeneratorId === "you";
+         const genState = isGenLead ? state : (state.agentStates[titleGeneratorId!] ||= {});
+
+         for await (const _ of titleGeneratorRuntime.run({
+           type: "agent:output",
+           meta: { agentName: targetAgentId },
+           data: { content: lastOutput },
+         } as ConversationEvent, { 
+           runId: context.runId, 
+           state: genState as any,
+           agentId: titleGeneratorId
+         } as any)) {
+           // side-effects only (topic agent)
+         }
+       }
     }
   }
 }

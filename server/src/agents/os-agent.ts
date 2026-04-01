@@ -1,13 +1,17 @@
 import { MelonyPlugin } from "melony";
-import { llmPlugin } from "../plugins/llm/index.js";
+import { llmOrchestratorPlugin } from "../core/orchestrator.js";
 import { shellPlugin, shellToolDefinitions } from "../plugins/shell/index.js";
 import { fileSystemPlugin, fileSystemToolDefinitions } from "../plugins/file-system/index.js";
 import { LanguageModel } from "ai";
-import { ManagerState, ManagerEvent } from "../types.js";
+import { ConversationState, ConversationEvent } from "../types.js";
 import approvalPlugin from "../plugins/approval/index.js";
+import { PluginRegistry } from "../registry/plugin-registry.js";
 
 export interface OSAgentOptions {
   model: LanguageModel;
+  resolvedModelId: string;
+  resolvedBaseDir: string;
+  registry: PluginRegistry;
   cwd?: string;
   systemPrompt?: string;
 }
@@ -18,8 +22,8 @@ You can read, write, list, and delete files, as well as execute shell commands.
 Always be careful with destructive operations.
 When you are done with the task, summarize what you did.`;
 
-export const osAgent = (options: OSAgentOptions): MelonyPlugin<ManagerState, ManagerEvent> => (builder) => {
-  const { model, cwd = process.cwd(), systemPrompt = DEFAULT_SYSTEM_PROMPT } = options;
+export const osAgent = (options: OSAgentOptions): MelonyPlugin<ConversationState, ConversationEvent> => (builder) => {
+  const { model, resolvedModelId, resolvedBaseDir, registry, cwd = process.cwd(), systemPrompt = DEFAULT_SYSTEM_PROMPT } = options;
 
   builder
     .use(shellPlugin({ cwd }))
@@ -27,19 +31,18 @@ export const osAgent = (options: OSAgentOptions): MelonyPlugin<ManagerState, Man
     .use(approvalPlugin({
       rules: [
         { action: "action:executeCommand", message: "The agent wants to execute a terminal command. Please review carefully." },
-        // { action: "action:writeFile", message: "The agent wants to write to a file." },
         { action: "action:deleteFile", message: "The agent wants to delete a file." },
       ],
     }))
-    .use(llmPlugin({
+    .use(llmOrchestratorPlugin({
       model,
+      resolvedModelId,
+      resolvedBaseDir,
+      registry,
       system: systemPrompt,
       toolDefinitions: {
         ...shellToolDefinitions,
         ...fileSystemToolDefinitions
       },
     }));
-
-  // NOTE: Bridge-back to the manager is handled generically by open-bot.ts.
-  // No per-agent boilerplate needed.
 };

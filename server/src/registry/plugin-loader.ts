@@ -8,9 +8,10 @@ import matter from "gray-matter";
 import { z } from "zod";
 import { PluginRegistry, ToolPluginRegistryEntry } from "./plugin-registry.js";
 import { llmPlugin } from "../plugins/llm/index.js";
+import { llmOrchestratorPlugin } from "../core/orchestrator.js";
 import { createModel } from "../models.js";
 import { resolvePath, DEFAULT_AGENT_MD } from "../config.js";
-import type { ManagerState, ManagerEvent } from "../types.js";
+import type { ConversationState, ConversationEvent } from "../types.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -93,6 +94,68 @@ export async function ensurePluginReady(pluginDir: string) {
   }
 }
 
+export interface ListedPlugin {
+  id: string;
+  name: string;
+  description: string;
+  type: "tool" | "agent";
+  folder: string;
+}
+
+export async function listPlugins(dir: string): Promise<ListedPlugin[]> {
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const listed: ListedPlugin[] = [];
+
+  for (const entry of entries) {
+    if (
+      !entry.isDirectory() ||
+      entry.name.startsWith(".") ||
+      entry.name.startsWith("_")
+    ) {
+      continue;
+    }
+
+    const pluginDir = path.join(dir, entry.name);
+    const hasAgentMd = await fileExists(path.join(pluginDir, "AGENT.md"));
+    const hasIndex = !!(await findIndexFile(pluginDir));
+    const hasPkg = await fileExists(path.join(pluginDir, "package.json"));
+
+    if (!hasAgentMd && !hasIndex && !hasPkg) continue;
+
+    const type: "tool" | "agent" = hasAgentMd ? "agent" : "tool";
+    const meta = await getPluginMetadata(pluginDir);
+    let name = meta.name || entry.name;
+    let description = meta.description || "No description";
+
+    if (hasAgentMd) {
+      try {
+        const agentConfig = await readAgentConfig(pluginDir);
+        if (agentConfig.name?.trim()) name = agentConfig.name.trim();
+        if (agentConfig.description?.trim())
+          description = agentConfig.description.trim();
+      } catch {
+        // Keep package/default metadata fallback
+      }
+    }
+
+    listed.push({
+      id: entry.name,
+      name,
+      description,
+      type,
+      folder: pluginDir,
+    });
+  }
+
+  return listed;
+}
+
 // ── AGENT.md Config ──────────────────────────────────────────────────
 
 function jsonToZod(schema: any): z.ZodType<any> {
@@ -102,9 +165,7 @@ function jsonToZod(schema: any): z.ZodType<any> {
     if (schema === "boolean") return z.boolean();
   }
   if (Array.isArray(schema)) {
-    // If it's a simple array like ["string"], take the first item
     if (schema.length === 1) return z.array(jsonToZod(schema[0]));
-    // For anything else, treat as array of any (or you could improve this)
     return z.array(z.any());
   }
   if (typeof schema === "object" && schema !== null) {
@@ -161,6 +222,8 @@ function composeAgentFromConfig(
   config: AgentConfig,
   toolRegistry: PluginRegistry,
   model: LanguageModel,
+  resolvedModelId: string,
+  resolvedBaseDir: string,
 ): { plugin: MelonyPlugin<any, any>; toolDefinitions: Record<string, any> } {
   const allToolDefinitions: Record<string, any> = {};
   const pluginFactories: { plugin: any; config: any }[] = [];
@@ -195,9 +258,12 @@ function composeAgentFromConfig(
     const resolvedBaseConfig = resolveConfigPaths(baseConfig);
 
     if (baseName === "llm") {
-      // Default built-in brain
-      builder.use(llmPlugin({
+      // Default built-in brain with orchestration
+      builder.use(llmOrchestratorPlugin({
         model,
+        resolvedModelId,
+        resolvedBaseDir,
+        registry: toolRegistry,
         system: config.instructions,
         toolDefinitions: allToolDefinitions,
         outputSchema: config.outputSchema ? jsonToZod(config.outputSchema) : undefined,
@@ -207,14 +273,15 @@ function composeAgentFromConfig(
       const baseEntry = toolRegistry.get(baseName);
       if (!baseEntry || baseEntry.type !== "tool") {
         console.error(`[plugins] "${config.name}": base plugin "${baseName}" not found or invalid. Falling back to default LLM brain.`);
-        builder.use(llmPlugin({
+        builder.use(llmOrchestratorPlugin({
           model,
+          resolvedModelId,
+          resolvedBaseDir,
+          registry: toolRegistry,
           system: config.instructions,
           toolDefinitions: allToolDefinitions,
         }));
       } else {
-        // Use the custom plugin as the autonomous engine.
-        // It must follow the Base Plugin contract (receive model, system, tools).
         builder.use(baseEntry.plugin({
           ...resolvedBaseConfig,
           model,
@@ -235,12 +302,18 @@ interface TSAgentDefinition {
   name?: string;
   description?: string;
   image?: string;
-  factory: (options: { model: LanguageModel; [key: string]: any }) => MelonyPlugin<ManagerState, ManagerEvent>;
+  factory: (options: { 
+    model: LanguageModel; 
+    resolvedModelId: string;
+    resolvedBaseDir: string;
+    registry: PluginRegistry;
+    [key: string]: any 
+  }) => MelonyPlugin<ConversationState, ConversationEvent>;
   capabilities?: Record<string, string>;
   subscribe?: string[];
 }
 
-// ── Load tool plugins from a subdirectory (used for agent-local tools) ─
+// ── Load tool plugins from a subdirectory ─
 
 async function loadToolPluginsFromDir(dir: string): Promise<ToolPluginRegistryEntry[]> {
   const plugins: ToolPluginRegistryEntry[] = [];
@@ -271,8 +344,6 @@ async function loadToolPluginsFromDir(dir: string): Promise<ToolPluginRegistryEn
             plugin: entryData.factory,
             toolDefinitions: entryData.toolDefinitions || {},
           });
-        } else {
-          console.warn(`[plugins] "${entry.name}" does not export a valid plugin entry (missing factory)`);
         }
       } catch (err) {
         console.error(`[plugins] Failed to load tool plugin "${entry.name}":`, err);
@@ -287,22 +358,12 @@ async function loadToolPluginsFromDir(dir: string): Promise<ToolPluginRegistryEn
 
 // ── Main unified discovery ───────────────────────────────────────────
 
-/**
- * Discover all plugins (tools + agents) from a directory.
- *
- * Pass 1: Load code plugins in folders without AGENT.md.
- *   - module.agent export → code-only agent
- *   - plugin/default/entry export → tool plugin
- * Pass 2: Load agent-type plugins (folders WITH AGENT.md).
- *   - AGENT.md only → declarative agent (auto-wrapped with llmPlugin)
- *   - AGENT.md + index.ts → TS agent (user controls logic, AGENT.md for UI editing)
- *
- * Discovered entries are registered directly into the provided registry.
- */
 export async function discoverPlugins(
   dir: string,
   registry: PluginRegistry,
   defaultModel: LanguageModel,
+  resolvedModelId: string,
+  resolvedBaseDir: string,
   options?: { openaiApiKey?: string; anthropicApiKey?: string },
 ): Promise<void> {
   try { await fs.mkdir(dir, { recursive: true }); } catch { /* best effort */ }
@@ -312,18 +373,15 @@ export async function discoverPlugins(
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch { return; }
 
-  // Classify each subdirectory
   const codeDirs: string[] = [];
   const agentDirs: { dir: string; hasIndex: boolean }[] = [];
 
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
-
     const pluginDir = path.join(dir, entry.name);
     const hasAgentMd = await fileExists(path.join(pluginDir, "AGENT.md"));
     const hasIndex = !!(await findIndexFile(pluginDir));
     const hasPkg = await fileExists(path.join(pluginDir, "package.json"));
-
     if (hasAgentMd) {
       agentDirs.push({ dir: pluginDir, hasIndex: hasIndex || hasPkg });
     } else if (hasIndex || hasPkg) {
@@ -331,7 +389,6 @@ export async function discoverPlugins(
     }
   }
 
-  // Pass 1: code-only agents and tool plugins
   for (const pluginDir of codeDirs) {
     await ensurePluginReady(pluginDir);
     const indexPath = await findIndexFile(pluginDir);
@@ -345,7 +402,7 @@ export async function discoverPlugins(
       if (codeAgentDef && typeof codeAgentDef.factory === "function") {
         const meta = await getPluginMetadata(pluginDir);
         const folderName = path.basename(pluginDir);
-        const id = folderName; // Folder name as slug
+        const id = folderName;
         let name = codeAgentDef.name || meta.name;
         if (!name || /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(name)) {
           name = toTitleCaseFromSlug(folderName);
@@ -356,7 +413,7 @@ export async function discoverPlugins(
           name,
           description,
           type: "agent",
-          plugin: codeAgentDef.factory({ ...options, model: defaultModel }),
+          plugin: codeAgentDef.factory({ ...options, model: defaultModel, resolvedModelId, resolvedBaseDir, registry }),
           capabilities: codeAgentDef.capabilities,
           subscribe: codeAgentDef.subscribe,
           folder: pluginDir,
@@ -381,21 +438,17 @@ export async function discoverPlugins(
         };
         registry.register(pluginEntry);
         console.log(`[plugins] Loaded tool: ${id} (${pluginEntry.name})`);
-      } else {
-        console.warn(`[plugins] "${path.basename(pluginDir)}" does not export a valid plugin (missing factory)`);
       }
     } catch (err) {
       console.error(`[plugins] Failed to load "${path.basename(pluginDir)}":`, err);
     }
   }
 
-  // Pass 2: agent plugins
   for (const { dir: agentDir, hasIndex } of agentDirs) {
     const folderName = path.basename(agentDir);
 
     try {
       if (hasIndex) {
-        // TS Agent — has AGENT.md + code. User controls logic; AGENT.md is for UI editing.
         await ensurePluginReady(agentDir);
         const indexPath = await findIndexFile(agentDir);
         if (!indexPath) continue;
@@ -418,7 +471,7 @@ export async function discoverPlugins(
             name,
             description,
             type: "agent",
-            plugin: definition.factory({ ...options, model: defaultModel }),
+            plugin: definition.factory({ ...options, model: defaultModel, resolvedModelId, resolvedBaseDir, registry }),
             capabilities: definition.capabilities,
             subscribe: definition.subscribe || config.subscribe,
             folder: agentDir,
@@ -426,7 +479,6 @@ export async function discoverPlugins(
           console.log(`[plugins] Loaded TS agent: ${id} (${name}) — ${description}`);
         }
       } else {
-        // Declarative Agent — AGENT.md only, auto-wrapped with llmPlugin.
         const config = await readAgentConfig(agentDir);
         const meta = await getPluginMetadata(agentDir);
         const id = folderName;
@@ -440,27 +492,12 @@ export async function discoverPlugins(
           ? createModel({ ...options, model: config.model })
           : defaultModel;
 
-        // Load agent-local tool plugins
         const localPlugins = await loadToolPluginsFromDir(path.join(agentDir, "plugins"));
-
-        // Scoped registry: global tools + local tools
         const scopedRegistry = new PluginRegistry();
-        for (const p of registry.getTools()) {
-          scopedRegistry.register(p);
-        }
-        for (const p of localPlugins) {
-          scopedRegistry.register(p);
-        }
+        for (const p of registry.getTools()) scopedRegistry.register(p);
+        for (const p of localPlugins) scopedRegistry.register(p);
 
-        // Initialize AGENT.md if missing
-        const agentMdPath = path.join(agentDir, "AGENT.md");
-        if (!(await fileExists(agentMdPath))) {
-          const content = DEFAULT_AGENT_MD.replace("name: Agent", `name: ${resolvedName}`);
-          await fs.writeFile(agentMdPath, content, "utf-8");
-          console.log(`[plugins] Initialized ${resolvedName}/AGENT.md`);
-        }
-
-        const { plugin, toolDefinitions } = composeAgentFromConfig(config, scopedRegistry, agentModel as LanguageModel);
+        const { plugin, toolDefinitions } = composeAgentFromConfig(config, scopedRegistry, agentModel as LanguageModel, resolvedModelId, resolvedBaseDir);
 
         registry.register({
           id,
@@ -482,88 +519,4 @@ export async function discoverPlugins(
       }
     }
   }
-}
-
-// ── Lightweight listing (for API) ────────────────────────────────────
-
-export async function listPlugins(
-  dir: string,
-): Promise<{ name: string; description: string; folder: string; type: "tool" | "agent"; hasAgentMd: boolean; image?: string }[]> {
-  const plugins: { name: string; description: string; folder: string; type: "tool" | "agent"; hasAgentMd: boolean; image?: string }[] = [];
-
-  try {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
-
-      const pluginDir = path.join(dir, entry.name);
-      const hasAgentMd = await fileExists(path.join(pluginDir, "AGENT.md"));
-      const hasCode = await fileExists(path.join(pluginDir, "package.json"))
-        || !!(await findIndexFile(pluginDir));
-
-      if (hasAgentMd) {
-        const config = await readAgentConfig(pluginDir);
-        const { name: fallbackName, description: fallbackDescription } = await getPluginMetadata(pluginDir);
-        plugins.push({
-          name: config.name || fallbackName || "Unnamed Agent",
-          description: config.description || fallbackDescription || "No description",
-          folder: pluginDir,
-          type: "agent",
-          hasAgentMd: true,
-          image: config.image,
-        });
-      } else if (hasCode) {
-        await ensurePluginReady(pluginDir);
-        const indexPath = await findIndexFile(pluginDir);
-        const { name: fallbackName, description: fallbackDescription } = await getPluginMetadata(pluginDir);
-
-        if (!indexPath) {
-          plugins.push({
-            name: fallbackName,
-            description: fallbackDescription,
-            folder: pluginDir,
-            type: "tool",
-            hasAgentMd: false,
-          });
-          continue;
-        }
-
-        try {
-          const module = await import(pathToFileURL(indexPath).href + `?update=${Date.now()}`);
-          const codeAgentDef: TSAgentDefinition | undefined = module.agent;
-          const toolEntry = module.plugin || module.default || module.entry;
-
-          if (codeAgentDef && typeof codeAgentDef.factory === "function") {
-            plugins.push({
-              name: codeAgentDef.name || fallbackName || "Unnamed Agent",
-              description: codeAgentDef.description || fallbackDescription || "Code Agent",
-              folder: pluginDir,
-              type: "agent",
-              hasAgentMd: false,
-              image: codeAgentDef.image,
-            });
-          } else if (toolEntry && typeof toolEntry.factory === "function") {
-            plugins.push({
-              name: toolEntry.name || fallbackName,
-              description: toolEntry.description || fallbackDescription,
-              folder: pluginDir,
-              type: "tool",
-              hasAgentMd: false,
-            });
-          }
-        } catch {
-          plugins.push({
-            name: fallbackName,
-            description: fallbackDescription,
-            folder: pluginDir,
-            type: "tool",
-            hasAgentMd: false,
-          });
-        }
-      }
-    }
-  } catch { /* directory doesn't exist */ }
-
-  return plugins;
 }
