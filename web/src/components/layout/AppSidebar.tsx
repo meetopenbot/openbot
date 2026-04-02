@@ -52,7 +52,15 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
   if (!open) return null;
 
   const allAgents: SidebarAgent[] = [...BUILT_IN_AGENTS, ...customAgents];
-  const channels = conversations.filter((conversation) => conversation.kind === "channel");
+  const channels = conversations
+    .filter((conversation) => conversation.kind === "channel")
+    .sort((a, b) => {
+      const labelA = (a.title || a.id).toLowerCase();
+      const labelB = (b.title || b.id).toLowerCase();
+      const byLabel = labelA.localeCompare(labelB, undefined, { sensitivity: "base" });
+      if (byLabel !== 0) return byLabel;
+      return a.id.localeCompare(b.id);
+    });
 
   const handleDeleteChannel = async (channelId: string) => {
     const confirmed = window.confirm("Remove this channel?");
@@ -161,7 +169,7 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
           <>
             <div className="mb-1.5 mt-6 flex items-center justify-between px-1.5">
               <span className="px-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
-                Bots
+                Agents
               </span>
               <button
                 type="button"

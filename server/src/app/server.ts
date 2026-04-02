@@ -641,6 +641,34 @@ export async function startServer(options: ServerOptions = {}) {
     res.json(events);
   });
 
+  app.post('/api/conversations/:id/reactions', async (req, res) => {
+    const conversationId = normalizeConversationId(req.params.id);
+    const body = req.body as { targetMessageId?: unknown; reaction?: unknown };
+    const targetMessageId =
+      typeof body.targetMessageId === 'string' ? body.targetMessageId.trim() : '';
+    const reaction = body.reaction;
+    if (!targetMessageId) {
+      return res.status(400).json({ error: 'targetMessageId is required' });
+    }
+    if (reaction !== 'like' && reaction !== 'dislike' && reaction !== 'none') {
+      return res.status(400).json({ error: 'reaction must be like, dislike, or none' });
+    }
+
+    const event: ConversationEvent = {
+      type: 'message:reaction',
+      data: { targetMessageId, reaction },
+      id: generateId(),
+    };
+
+    try {
+      await logConversationEvent(conversationId, 'client', event);
+      return res.json({ success: true });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Failed to save reaction' });
+    }
+  });
+
   app.get('/api/agents', async (_req, res) => {
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;

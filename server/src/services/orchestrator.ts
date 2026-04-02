@@ -207,14 +207,19 @@ export function orchestrationToolsPlugin(options: {
               const suspendData = (agentEvent as any).data ?? {};
               const suspendId = typeof suspendData.id === 'string' ? suspendData.id : undefined;
               if (suspendId) pendingApprovalId = suspendId;
+              const delegationMeta = {
+                ...agentEvent.meta,
+                delegationId,
+                agentName: agentId,
+                threadId: delegationId,
+              };
+              const nested = suspendData.event;
+              if (nested?.type === 'ui' && nested.data?.placement === 'attention') {
+                yield { ...nested, meta: { ...nested.meta, ...delegationMeta } } as ConversationEvent;
+              }
               yield {
                 ...agentEvent,
-                meta: {
-                  ...agentEvent.meta,
-                  delegationId,
-                  agentName: agentId,
-                  threadId: delegationId,
-                },
+                meta: delegationMeta,
               } as ConversationEvent;
               continue;
             }

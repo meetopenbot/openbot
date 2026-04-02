@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { ChatClient } from "../lib/chat-client";
-import { BASE_URL } from "../lib/api";
+import { BASE_URL, api } from "../lib/api";
 
 /** Fold raw thread events into user/assistant messages (matches channel transcript rules). */
 export function foldThreadEventsToMessages(events: any[]): any[] {
   return events.reduce((msgs: any[], event: any) => {
+    if (event.type === "message:reaction") return msgs;
     const currentMsg = msgs[msgs.length - 1];
     if (event.type === "agent:input" || event.type === "user:input") {
       msgs.push({
@@ -25,6 +26,8 @@ export function foldThreadEventsToMessages(events: any[]): any[] {
   }, []);
 }
 
+export type MessageReactionSentiment = "like" | "dislike";
+
 interface ChatContextType {
   send: (payload: any) => Promise<void>;
   stop: (threadId?: string) => void;
@@ -34,6 +37,11 @@ interface ChatContextType {
   messages: any[];
   threads: Record<string, any[]>;
   threadReplyCounts: Record<string, number>;
+  messageReactions: Record<string, MessageReactionSentiment>;
+  setMessageReaction: (
+    targetMessageId: string,
+    reaction: MessageReactionSentiment | "none",
+  ) => Promise<void>;
   reset: (events: any[]) => void;
 }
 
@@ -63,16 +71,27 @@ export function ChatProvider({
   // Compute streaming as a shorthand for main window (no threadId)
   const streaming = useMemo(() => streamingMap["main"] || false, [streamingMap]);
 
-  // Compute messages and threads from events
-  const { messages, threads } = useMemo(() => {
+  // Compute messages, threads, and reaction map from events
+  const { messages, threads, messageReactions } = useMemo(() => {
     const msgs: any[] = [];
     const threadMap: Record<string, any[]> = {};
+    const reactions: Record<string, MessageReactionSentiment> = {};
     let currentMsg: any = null;
     const seenIds = new Set<string>();
 
     events.forEach((event) => {
       if (event.id && seenIds.has(event.id)) return;
       if (event.id) seenIds.add(event.id);
+
+      if (event.type === "message:reaction") {
+        const tid = event.data?.targetMessageId;
+        const r = event.data?.reaction;
+        if (typeof tid === "string" && tid) {
+          if (r === "none") delete reactions[tid];
+          else if (r === "like" || r === "dislike") reactions[tid] = r;
+        }
+        return;
+      }
 
       const threadId = event.meta?.threadId;
       if (threadId) {
@@ -103,7 +122,7 @@ export function ChatProvider({
       }
     });
 
-    return { messages: msgs, threads: threadMap };
+    return { messages: msgs, threads: threadMap, messageReactions: reactions };
   }, [events]);
 
   const threadReplyCounts = useMemo(() => {
@@ -172,6 +191,26 @@ export function ChatProvider({
     setStreamingMap(prev => ({ ...prev, [threadId || "main"]: false }));
   }, [client]);
 
+  const setMessageReaction = useCallback(
+    async (targetMessageId: string, reaction: MessageReactionSentiment | "none") => {
+      const optimistic = {
+        type: "message:reaction" as const,
+        data: { targetMessageId, reaction },
+        id: `local_${crypto.randomUUID()}`,
+        timestamp: Date.now(),
+        runId: "client",
+      };
+      setEvents((prev) => [...prev, optimistic]);
+      try {
+        await api.postMessageReaction(conversationId, { targetMessageId, reaction });
+      } catch (err) {
+        console.error("Failed to save reaction:", err);
+        setEvents((prev) => prev.filter((ev) => ev.id !== optimistic.id));
+      }
+    },
+    [conversationId],
+  );
+
   const value = useMemo(() => ({
     send,
     stop,
@@ -181,8 +220,10 @@ export function ChatProvider({
     messages,
     threads,
     threadReplyCounts,
+    messageReactions,
+    setMessageReaction,
     reset
-  }), [send, stop, streaming, streamingMap, events, messages, threads, threadReplyCounts, reset]);
+  }), [send, stop, streaming, streamingMap, events, messages, threads, threadReplyCounts, messageReactions, setMessageReaction, reset]);
 
   return (
     <ChatContext.Provider value={value}>

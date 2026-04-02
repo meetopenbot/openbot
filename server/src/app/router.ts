@@ -225,16 +225,26 @@ export async function* runOpenBot(
         if (summary) lastOutput = summary;
       }
 
+      const outMeta = {
+        ...chunk.meta,
+        ...(threadId ? { threadId } : {}),
+        // Always attach the resolved runtime identity when available.
+        // This keeps channel-manager responses labeled with the actual manager
+        // instead of falling back to the default app name in the UI.
+        ...(targetAgentId ? { agentName: targetAgentId } : {}),
+      };
+
+      // Suspend still carries nested UI for Melony; emit the same block as a top-level `ui` so SDUI consumers (e.g. AttentionRail) stay consistent.
+      if (chunk.type === "suspend") {
+        const nested = (chunk as any).data?.event;
+        if (nested?.type === "ui" && nested.data?.placement === "attention") {
+          yield { ...nested, meta: { ...nested.meta, ...outMeta } } as ConversationEvent;
+        }
+      }
+
       yield {
         ...chunk,
-        meta: {
-          ...chunk.meta,
-          ...(threadId ? { threadId } : {}),
-          // Always attach the resolved runtime identity when available.
-          // This keeps channel-manager responses labeled with the actual manager
-          // instead of falling back to the default app name in the UI.
-          ...(targetAgentId ? { agentName: targetAgentId } : {}),
-        },
+        meta: outMeta,
       } as ConversationEvent;
     }
 

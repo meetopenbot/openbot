@@ -87,6 +87,11 @@ export type SuspendEvent = ChatEventBase<"suspend", {
   event?: ConversationEvent;
 }>;
 
+export type MessageReactionEvent = ChatEventBase<"message:reaction", {
+  targetMessageId: string;
+  reaction: "like" | "dislike" | "none";
+}>;
+
 export type ConversationEvent = (
   | AgentInputEvent
   | AgentOutputEvent
@@ -105,6 +110,7 @@ export type ConversationEvent = (
   | DelegationStartEvent
   | DelegationEndEvent
   | SuspendEvent
+  | MessageReactionEvent
 ) & {
   meta?: {
     delegationId?: string;

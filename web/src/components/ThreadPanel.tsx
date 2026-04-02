@@ -9,7 +9,8 @@ export function ThreadPanel({
   threadId: string;
   onClose: () => void;
 }) {
-  const { messages, threads, streaming } = useChat(threadId);
+  const { messages, threads, streaming, messageReactions, setMessageReaction } =
+    useChat(threadId);
 
   // Find the parent message
   const parentMessage = messages.find(m => m.id === threadId);
@@ -22,7 +23,7 @@ export function ThreadPanel({
   return (
     <div className="flex flex-col h-full bg-background border-l border-border/50 animate-in slide-in-from-right duration-300">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-muted/20">
+      <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
         <div className="flex flex-col">
            <h3 className="text-sm font-bold text-foreground">Thread</h3>
            <p className="text-[11px] text-muted-foreground truncate max-w-[200px]">
@@ -46,6 +47,8 @@ export function ThreadPanel({
              <ThreadView 
                 messages={[parentMessage]} 
                 isThreadPanel 
+                messageReactions={messageReactions}
+                onMessageReaction={setMessageReaction}
              />
            )}
         </div>
@@ -56,12 +59,14 @@ export function ThreadPanel({
               messages={threadMessages} 
               streaming={streaming}
               isThreadPanel 
+              messageReactions={messageReactions}
+              onMessageReaction={setMessageReaction}
            />
         </div>
       </div>
 
       {/* Composer */}
-      <div className="p-4 border-t border-border/30">
+      <div className="p-4 pt-0">
         <Composer threadId={threadId} />
       </div>
     </div>

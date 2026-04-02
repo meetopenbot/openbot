@@ -172,6 +172,15 @@ export const api = {
 
   getConversationEvents: (id: string) => request<any[]>(`/api/conversations/${encodeURIComponent(id)}/events`),
 
+  postMessageReaction: (
+    conversationId: string,
+    payload: { targetMessageId: string; reaction: "like" | "dislike" | "none" },
+  ) =>
+    request<{ success: boolean }>(
+      `/api/conversations/${encodeURIComponent(conversationId)}/reactions`,
+      { method: "POST", body: JSON.stringify(payload) },
+    ),
+
   getAgents: () =>
     request<{ id: string; name: string; description: string; folder: string; isDefault?: boolean; hasAgentMd?: boolean; image?: string }[]>("/api/agents"),
 

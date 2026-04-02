@@ -303,6 +303,8 @@ function normalizeStoredLogLine(
 }
 
 export async function logConversationEvent(conversationId: string, runId: string, event: ConversationEvent) {
+  if (event.type === "agent:output-delta") return;
+
   const normalizedConversationId = normalizeConversationId(conversationId);
   const conversationDir = getConversationDir(normalizedConversationId);
   if (!fs.existsSync(conversationDir)) {

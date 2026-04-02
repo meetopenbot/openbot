@@ -11,7 +11,8 @@ export function Chat({
   placeholderNode?: any;
   onReply?: (messageId: string) => void;
 }) {
-  const { messages, streaming, threadReplyCounts } = useChat();
+  const { messages, streaming, threadReplyCounts, messageReactions, setMessageReaction } =
+    useChat();
 
   return (
     <ThreadView
@@ -21,6 +22,8 @@ export function Chat({
       placeholderNode={placeholderNode}
       onReply={onReply}
       threadReplyCounts={threadReplyCounts}
+      messageReactions={messageReactions}
+      onMessageReaction={setMessageReaction}
     />
   );
 }

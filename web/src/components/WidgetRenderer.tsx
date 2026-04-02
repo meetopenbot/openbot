@@ -1,5 +1,6 @@
 import { useChat } from '../hooks/use-chat';
 import { cn } from '../lib/utils';
+import { MessageMarkdown } from './MessageMarkdown';
 
 export interface UIBlock {
   type: "ui-block";
@@ -91,11 +92,7 @@ function StatusWidget({ message, severity = 'info' }: { message: string, severit
 }
 
 function TextWidget({ value }: { value: string }) {
-  return (
-    <div className="text-[13px] leading-relaxed text-foreground/80 whitespace-pre-wrap">
-      {value}
-    </div>
-  );
+  return <MessageMarkdown>{value}</MessageMarkdown>;
 }
 
 function ApprovalCardWidget({ title, summary, details, rawPayload, approveAction, denyAction, onAction, isCompact }: any) {
@@ -304,12 +301,7 @@ function CodeSnippetWidget({ code, language }: any) {
 }
 
 function MarkdownWidget({ value }: { value: string }) {
-  // Simple markdown renderer for now, or use a library
-  return (
-    <div className="prose prose-sm dark:prose-invert max-w-none text-[13px] leading-relaxed">
-      {value}
-    </div>
-  );
+  return <MessageMarkdown>{value}</MessageMarkdown>;
 }
 
 function TodoListWidget({ todos, isCompact }: { todos: any[], isCompact?: boolean }) {
