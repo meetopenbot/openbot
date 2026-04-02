@@ -326,6 +326,13 @@ export async function logConversationEvent(conversationId: string, runId: string
   });
 
   fs.appendFileSync(logPath, entry + "\n", "utf-8");
+
+  // Keep conversation-level activity metadata in state for fast unread checks.
+  const state = (await loadConversationState(normalizedConversationId)) ?? {};
+  state.conversationId = normalizedConversationId;
+  state.lastEventId = id;
+  state.lastEventAt = Date.now();
+  await saveConversationState(normalizedConversationId, state);
 }
 
 export async function loadConversationEvents(conversationId: string): Promise<ConversationEvent[]> {
@@ -347,14 +354,28 @@ export async function loadConversationEvents(conversationId: string): Promise<Co
   }
 }
 
-export async function listConversations(): Promise<Array<{
+export async function listConversations(userId = "you"): Promise<Array<{
   id: string;
   kind: "dm" | "channel";
   title?: string;
   agentId?: string;
   mtime: Date;
+  lastEventId?: string;
+  lastEventAt?: number;
+  lastReadAt?: number;
+  unread: boolean;
 }>> {
-  const items: Array<{ id: string; kind: "dm" | "channel"; title?: string; agentId?: string; mtime: Date }> = [];
+  const items: Array<{
+    id: string;
+    kind: "dm" | "channel";
+    title?: string;
+    agentId?: string;
+    mtime: Date;
+    lastEventId?: string;
+    lastEventAt?: number;
+    lastReadAt?: number;
+    unread: boolean;
+  }> = [];
 
   if (fs.existsSync(CONVERSATIONS_DIR)) {
     try {
@@ -366,6 +387,15 @@ export async function listConversations(): Promise<Array<{
         if (!fs.existsSync(statePath)) continue;
 
         const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ConversationState;
+        const readState = state.readByUser?.[userId];
+        const lastReadAt =
+          typeof readState?.lastReadAt === "number" && Number.isFinite(readState.lastReadAt)
+            ? readState.lastReadAt
+            : undefined;
+        const lastEventAt =
+          typeof state.lastEventAt === "number" && Number.isFinite(state.lastEventAt)
+            ? state.lastEventAt
+            : undefined;
         const kind = inferConversationKind(conversationId);
         const channelTitle = kind === "channel"
           ? getChannelSlugFromConversationId(conversationId)
@@ -376,6 +406,10 @@ export async function listConversations(): Promise<Array<{
           title: channelTitle ?? state.title ?? undefined,
           agentId: kind === "dm" ? conversationId.slice(3) : undefined,
           mtime: fs.statSync(statePath).mtime,
+          lastEventId: typeof state.lastEventId === "string" ? state.lastEventId : undefined,
+          lastEventAt,
+          lastReadAt,
+          unread: typeof lastEventAt === "number" && (lastReadAt ?? 0) < lastEventAt,
         });
       }
     } catch (error) {
@@ -386,4 +420,29 @@ export async function listConversations(): Promise<Array<{
   return items
     .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
     .slice(0, MAX_LISTED_CONVERSATIONS);
+}
+
+export async function markConversationRead(
+  conversationId: string,
+  userId = "you",
+): Promise<ConversationState | null> {
+  const normalizedConversationId = normalizeConversationId(conversationId);
+  const state = await loadConversationState(normalizedConversationId);
+  if (!state) return null;
+
+  const readByUser = state.readByUser ?? {};
+  const current = readByUser[userId] ?? {};
+  readByUser[userId] = {
+    ...current,
+    lastReadEventId: state.lastEventId ?? current.lastReadEventId,
+    lastReadAt:
+      typeof state.lastEventAt === "number" && Number.isFinite(state.lastEventAt)
+        ? state.lastEventAt
+        : Date.now(),
+  };
+
+  state.readByUser = readByUser;
+  state.conversationId = normalizedConversationId;
+  await saveConversationState(normalizedConversationId, state);
+  return state;
 }

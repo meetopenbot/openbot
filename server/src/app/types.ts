@@ -137,6 +137,15 @@ export interface AgentState {
 export interface ConversationState {
   title?: string;
   conversationId?: string;
+  lastEventId?: string;
+  lastEventAt?: number;
+  readByUser?: Record<
+    string,
+    {
+      lastReadEventId?: string;
+      lastReadAt?: number;
+    }
+  >;
   messages?: SimpleMessage[];
   cwd?: string;
   workspaceRoot?: string;

@@ -133,10 +133,12 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
             .map((conversation: ConversationInfo) => {
               const isActive = conversation.id === conversationId && currentTab === "chat";
               const showChannelSpinner = !!conversationsActivity?.byConversation?.[conversation.id]?.active;
+              const showUnreadDot = !isActive && !!conversation.unread;
 
             return (
               <div
                 key={conversation.id}
+                onClick={() => onNavigate(`/?conversationId=${conversation.id}`)}
                 className={cn(
                   "group flex items-center gap-2.5 w-full px-2.5 h-8 rounded-md text-[13px] text-left transition-all duration-150",
                   isActive
@@ -145,20 +147,31 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
                 )}
               >
                 <button
-                  onClick={() => onNavigate(`/?conversationId=${conversation.id}`)}
                   className="flex items-center justify-start gap-2.5 min-w-0 flex-1 text-left"
                 >
+                  <span className="w-3 shrink-0 flex items-center justify-center">
+                    {showChannelSpinner && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary/90 shrink-0" />
+                    )}
+                    {!showChannelSpinner && showUnreadDot && (
+                      <span
+                        className="size-2 rounded-full bg-primary shrink-0"
+                        aria-label="Unread messages"
+                        title="Unread messages"
+                      />
+                    )}
+                  </span>
                   <span className="font-mono text-muted-foreground/80">#</span>
                   <span className="min-w-0 flex-1 block truncate">
                     {conversation.title || conversation.id}
                   </span>
-                  {showChannelSpinner && (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary/90 shrink-0" />
-                  )}
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDeleteChannel(conversation.id)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleDeleteChannel(conversation.id);
+                  }}
                   className="opacity-0 group-hover:opacity-100 rounded p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition"
                   aria-label={`Remove ${conversation.title || conversation.id}`}
                   title="Remove channel"
@@ -200,6 +213,8 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
                   const isActive = dmId === conversationId && currentTab === "chat";
                   const isActiveDmAgent = !!conversationsActivity?.byConversation?.[dmId]?.active;
                   const showAgentSpinner = isActiveDmAgent;
+                  const dmConversation = conversations.find((conversation) => conversation.id === dmId);
+                  const showUnreadDot = !isActive && !!dmConversation?.unread;
 
                   return (
                     <button
@@ -212,14 +227,23 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
                           : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                       )}
                     >
+                      <span className="w-3 shrink-0 flex items-center justify-center">
+                        {showAgentSpinner && (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary/90 shrink-0" />
+                        )}
+                        {!showAgentSpinner && showUnreadDot && (
+                          <span
+                            className="size-2 rounded-full bg-primary shrink-0"
+                            aria-label="Unread messages"
+                            title="Unread messages"
+                          />
+                        )}
+                      </span>
                       <AgentAvatar
                         name={agent.isDefault ? "default" : agent.name}
                         className="size-[18px] shrink-0 rounded-[3px]"
                       />
                       <span className="min-w-0 flex-1 block truncate">{agent.name}</span>
-                      {showAgentSpinner && (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary/90 shrink-0" />
-                      )}
                     </button>
                   );
                 })}

@@ -1,10 +1,11 @@
 import { ChatProvider } from "./hooks/use-chat";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "./hooks/use-session";
 import { useConfig } from "./hooks/use-config";
 import { useConversations } from "./hooks/use-sessions";
 import { cn } from "./lib/utils";
+import { api } from "./lib/api";
 import { AppLayout, AppLayoutProvider } from "./components/layout/AppLayout";
 import { ChatPage } from "./components/pages/ChatPage";
 import { AutomationsPage } from "./components/pages/AutomationsPage";
@@ -22,6 +23,18 @@ export function App() {
   const [sessionStateSidebarOpen, setSessionStateSidebarOpen] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const activeConversationId = conversationId || conversations[0]?.id || "";
+  const markConversationRead = useCallback(
+    async (id: string) => {
+      if (!id) return;
+      try {
+        await api.markConversationRead(id);
+        queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      } catch (error) {
+        console.error("Failed to mark conversation read:", error);
+      }
+    },
+    [queryClient],
+  );
 
   const tab = useMemo(() => {
     return new URLSearchParams(path).get("tab") || "chat";
@@ -44,9 +57,10 @@ export function App() {
       },
       "stream:done": async () => {
         queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        await markConversationRead(activeConversationId);
       },
     }),
-    [queryClient, ensureConversationInUrl, activeConversationId]
+    [queryClient, ensureConversationInUrl, activeConversationId, markConversationRead]
   );
 
   useEffect(() => {
@@ -54,6 +68,18 @@ export function App() {
       ensureConversationInUrl(activeConversationId);
     }
   }, [conversationId, activeConversationId, ensureConversationInUrl]);
+
+  useEffect(() => {
+    void markConversationRead(activeConversationId);
+  }, [activeConversationId, markConversationRead]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void markConversationRead(activeConversationId);
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [activeConversationId, markConversationRead]);
 
   if (configLoading) return <LoadingScreen />;
   if (config && !config.configured) {

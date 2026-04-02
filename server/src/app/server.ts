@@ -10,6 +10,7 @@ import {
   logConversationEvent,
   loadConversationEvents,
   listConversations,
+  markConversationRead,
   createChannelConversation,
   deleteChannelConversation,
   normalizeConversationId,
@@ -621,6 +622,20 @@ export async function startServer(options: ServerOptions = {}) {
   app.get('/api/conversations', async (_req, res) => {
     const conversations = await listConversations();
     res.json(conversations);
+  });
+
+  app.post('/api/conversations/:id/read', async (req, res) => {
+    const conversationId = normalizeConversationId(req.params.id);
+    const updated = await markConversationRead(conversationId, 'you');
+    if (!updated) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    return res.json({
+      success: true,
+      conversationId,
+      lastReadEventId: updated.readByUser?.you?.lastReadEventId,
+      lastReadAt: updated.readByUser?.you?.lastReadAt,
+    });
   });
 
   app.get('/api/conversations/activity', async (_req, res) => {

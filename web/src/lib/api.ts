@@ -26,6 +26,10 @@ export interface ConversationInfo {
   title?: string;
   agentId?: string;
   mtime: string;
+  lastEventId?: string;
+  lastEventAt?: number;
+  lastReadAt?: number;
+  unread?: boolean;
 }
 
 export interface ChannelInfo {
@@ -141,6 +145,11 @@ export const api = {
   }) => request<{ success: boolean }>("/api/config", { method: "POST", body: JSON.stringify(data) }),
 
   getConversations: () => request<ConversationInfo[]>("/api/conversations"),
+  markConversationRead: (id: string) =>
+    request<{ success: boolean; conversationId: string; lastReadEventId?: string; lastReadAt?: number }>(
+      `/api/conversations/${encodeURIComponent(id)}/read`,
+      { method: "POST" },
+    ),
   getConversationsActivity: () =>
     request<ConversationsActivityResponse>("/api/conversations/activity"),
 
