@@ -1,51 +1,57 @@
-import { ChatProvider } from "./hooks/use-chat";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useSession } from "./hooks/use-session";
-import { useConfig } from "./hooks/use-config";
-import { useConversations } from "./hooks/use-sessions";
-import { cn } from "./lib/utils";
-import { api } from "./lib/api";
-import { AppLayout, AppLayoutProvider } from "./components/layout/AppLayout";
-import { ChatPage } from "./components/pages/ChatPage";
-import { AutomationsPage } from "./components/pages/AutomationsPage";
-import { SettingsPage } from "./components/pages/SettingsPage";
-import { Onboarding } from "./components/Onboarding";
-import { ThemeProvider } from "./components/ThemeProvider";
-import { SessionStateSidebar } from "./components/SessionStateSidebar";
-import { ThreadPanel } from "./components/ThreadPanel";
+import { ChatProvider } from './hooks/use-chat';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSession } from './hooks/use-session';
+import { useConfig } from './hooks/use-config';
+import { useConversations } from './hooks/use-sessions';
+import { api } from './lib/api';
+import { AppLayout, AppLayoutProvider } from './components/layout/AppLayout';
+import { ChatPage } from './components/pages/ChatPage';
+import { AutomationsPage } from './components/pages/AutomationsPage';
+import { SettingsPage } from './components/pages/SettingsPage';
+import { Onboarding } from './components/Onboarding';
+import { ThemeProvider } from './components/ThemeProvider';
+import { ThreadPanel } from './components/ThreadPanel';
+import { ChannelMembersPanel } from '@/components/ChannelMembersPanel';
+import { SessionStateSidebar } from './components/SessionStateSidebar';
+import { Button } from './components/ui/button';
+import { InfoIcon } from 'lucide-react';
 
 export function App() {
   const queryClient = useQueryClient();
   const { conversationId, path, navigate, ensureConversationInUrl } = useSession();
   const { data: conversations = [] } = useConversations();
   const { data: config, isLoading: configLoading } = useConfig();
-  const [sessionStateSidebarOpen, setSessionStateSidebarOpen] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const activeConversationId = conversationId || conversations[0]?.id || "";
+  const [rightPanel, setRightPanel] = useState<'members' | 'session' | null>(null);
+  const activeConversationId = conversationId || conversations[0]?.id || '';
+  const activeConversation = conversations.find(
+    (conversation) => conversation.id === activeConversationId,
+  );
+  const isChannelConversation = activeConversation?.kind === 'channel';
   const markConversationRead = useCallback(
     async (id: string) => {
       if (!id) return;
       try {
         await api.markConversationRead(id);
-        queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
       } catch (error) {
-        console.error("Failed to mark conversation read:", error);
+        console.error('Failed to mark conversation read:', error);
       }
     },
     [queryClient],
   );
 
   const tab = useMemo(() => {
-    return new URLSearchParams(path).get("tab") || "chat";
+    return new URLSearchParams(path).get('tab') || 'chat';
   }, [path]);
 
   const eventHandlers = useMemo(
     () => ({
-      "agent:input": async () => {
+      'agent:input': async () => {
         ensureConversationInUrl(activeConversationId);
       },
-      "client:invalidate": async (chunk: any) => {
+      'client:invalidate': async (chunk: any) => {
         if (Array.isArray(chunk.data?.tags)) {
           queryClient.invalidateQueries({
             predicate: (query) => {
@@ -55,12 +61,12 @@ export function App() {
           });
         }
       },
-      "stream:done": async () => {
-        queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      'stream:done': async () => {
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
         await markConversationRead(activeConversationId);
       },
     }),
-    [queryClient, ensureConversationInUrl, activeConversationId, markConversationRead]
+    [queryClient, ensureConversationInUrl, activeConversationId, markConversationRead],
   );
 
   useEffect(() => {
@@ -77,79 +83,82 @@ export function App() {
     const handleFocus = () => {
       void markConversationRead(activeConversationId);
     };
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [activeConversationId, markConversationRead]);
 
   if (configLoading) return <LoadingScreen />;
   if (config && !config.configured) {
     return (
       <ThemeProvider>
-        <Onboarding
-          defaultModelId={config.defaultModelId}
-          defaultModels={config.defaultModels}
-        />
+        <Onboarding defaultModelId={config.defaultModelId} defaultModels={config.defaultModels} />
       </ThemeProvider>
     );
   }
 
   return (
-    <ChatProvider
-      conversationId={activeConversationId}
-      eventHandlers={eventHandlers}
-    >
+    <ChatProvider conversationId={activeConversationId} eventHandlers={eventHandlers}>
       <ThemeProvider>
         <AppLayoutProvider>
           <AppLayout
             conversationId={activeConversationId}
-            currentTab={tab === "agents" ? "settings" : tab}
+            currentTab={tab === 'agents' ? 'settings' : tab}
             onNavigate={navigate}
-            rightOpen={Boolean(activeThreadId || sessionStateSidebarOpen)}
-            rightWidth={activeThreadId ? 450 : 300}
+            rightOpen={Boolean(activeThreadId || rightPanel)}
+            rightWidth={activeThreadId ? 450 : 360}
+            isChannelMembersPanelOpen={rightPanel === 'members'}
+            onOpenChannelMembersPanel={() => {
+              setActiveThreadId(null);
+              setRightPanel((panel) => (panel === 'members' ? null : 'members'));
+            }}
             rightSidebar={
               activeThreadId ? (
-                <ThreadPanel
-                  threadId={activeThreadId}
-                  onClose={() => setActiveThreadId(null)}
+                <ThreadPanel threadId={activeThreadId} onClose={() => setActiveThreadId(null)} />
+              ) : rightPanel === 'members' && isChannelConversation ? (
+                <ChannelMembersPanel
+                  channelId={activeConversationId}
+                  channelName={
+                    activeConversation?.title || activeConversationId.replace('channel_', '')
+                  }
+                  onClose={() => setRightPanel(null)}
                 />
-              ) : sessionStateSidebarOpen ? (
-                <SessionStateSidebar />
+              ) : rightPanel === 'session' ? (
+                <SessionStateSidebar onClose={() => setRightPanel(null)} />
               ) : null
             }
-            rightActions={tab === "chat" ? (
-              <button
-                onClick={() => {
-                  if (activeThreadId) {
+            rightActions={
+              tab === 'chat' ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
                     setActiveThreadId(null);
-                  } else {
-                    setSessionStateSidebarOpen((v) => !v);
+                    setRightPanel((panel) => (panel === 'session' ? null : 'session'));
+                  }}
+                  aria-pressed={rightPanel === 'session'}
+                  title={
+                    rightPanel === 'session' ? 'Hide conversation state' : 'Show conversation state'
                   }
-                }}
-                className={cn(
-                  "p-2 rounded-lg transition-all duration-150",
-                  (activeThreadId || sessionStateSidebarOpen)
-                    ? "bg-primary/10 text-primary" 
-                    : "hover:bg-muted/80 text-muted-foreground/70 hover:text-foreground"
-                )}
-                aria-label={(activeThreadId || sessionStateSidebarOpen) ? "Hide right panel" : "Show right panel"}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect width="18" height="18" x="3" y="3" rx="2" />
-                  <path d="M15 3v18" />
-                </svg>
-              </button>
-            ) : null}
+                >
+                  <InfoIcon className="size-3" />
+                </Button>
+              ) : null
+            }
           >
-            {tab === "chat" && activeConversationId && (
+            {tab === 'chat' && activeConversationId && (
               <ChatPage
                 conversationId={activeConversationId}
-                onReply={(id) => setActiveThreadId(id)}
+                onReply={(id) => {
+                  setRightPanel(null);
+                  setActiveThreadId(id);
+                }}
               />
             )}
-            {tab === "chat" && !activeConversationId && <NoConversationsPlaceholder />}
-            {tab === "agents" && <SettingsPage defaultSection="agents" />}
-            {tab === "automations" && <AutomationsPage />}
-            {tab === "settings" && <SettingsPage />}
+            {tab === 'chat' && !activeConversationId && <NoConversationsPlaceholder />}
+            {tab === 'agents' && <SettingsPage defaultSection="agents" />}
+            {tab === 'automations' && <AutomationsPage />}
+            {tab === 'settings' && <SettingsPage />}
           </AppLayout>
         </AppLayoutProvider>
       </ThemeProvider>

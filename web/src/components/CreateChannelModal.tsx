@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
-import { Dialog, DialogClose, DialogContent, DialogTitle } from "./ui/dialog";
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '../lib/api';
+import { Dialog, DialogClose, DialogContent, DialogTitle } from './ui/dialog';
+import { Button } from './ui/button';
 
 interface CreateChannelModalProps {
   onClose: () => void;
@@ -10,32 +11,25 @@ interface CreateChannelModalProps {
 
 export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalProps) {
   const queryClient = useQueryClient();
-  const [name, setName] = useState("");
-  const [managerId, setManagerId] = useState("");
+  const [name, setName] = useState('');
+  const [managerId, setManagerId] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   const { data: agents = [] } = useQuery({
-    queryKey: ["agents"],
+    queryKey: ['agents'],
     queryFn: api.getAgents,
   });
 
-  const selectableAgents = useMemo(
-    () => agents.filter((agent) => !agent.isDefault),
-    [agents]
-  );
+  const selectableAgents = useMemo(() => agents.filter((agent) => !agent.isDefault), [agents]);
 
   const createChannelMutation = useMutation({
-    mutationFn: async (payload: {
-      channelName: string;
-      manager: string;
-      members: string[];
-    }) => {
+    mutationFn: async (payload: { channelName: string; manager: string; members: string[] }) => {
       const created = await api.createChannel(payload.channelName);
       const channelId = created.channel.id;
 
       const agentNameById = new Map(
-        selectableAgents.map((agent) => [agent.id, agent.name] as const)
+        selectableAgents.map((agent) => [agent.id, agent.name] as const),
       );
 
       const uniqueMembers = Array.from(new Set(payload.members));
@@ -52,14 +46,14 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
       return channelId;
     },
     onSuccess: (channelId) => {
-      setError("");
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      queryClient.invalidateQueries({ queryKey: ["channel-members", channelId] });
+      setError('');
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['channel-members', channelId] });
       onCreated(channelId);
       onClose();
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : "Failed to create channel");
+      setError(err instanceof Error ? err.message : 'Failed to create channel');
     },
   });
 
@@ -73,11 +67,11 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
   const submit = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setError("Channel name is required");
+      setError('Channel name is required');
       return;
     }
     if (!managerId) {
-      setError("Select a manager bot");
+      setError('Select a manager bot');
       return;
     }
 
@@ -102,7 +96,16 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
             </p>
           </div>
           <DialogClose className="inline-flex shrink-0 self-center items-center justify-center rounded-xl p-2 text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M18 6 6 18" />
               <path d="m6 6 12 12" />
             </svg>
@@ -148,7 +151,10 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
               {selectableAgents.map((agent) => {
                 const checked = selectedMemberIds.includes(agent.id);
                 return (
-                  <label key={agent.id} className="flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-muted/30 cursor-pointer">
+                  <label
+                    key={agent.id}
+                    className="flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-muted/30 cursor-pointer"
+                  >
                     <div className="min-w-0">
                       <p className="text-sm text-foreground truncate">{agent.name}</p>
                       <p className="text-[11px] text-muted-foreground">@{agent.id}</p>
@@ -171,21 +177,12 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
           {error && <p className="text-xs text-destructive">{error}</p>}
 
           <div className="flex items-center justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-9 px-3 rounded-md border border-border/70 text-sm hover:bg-muted/50"
-            >
+            <Button type="button" onClick={onClose} variant="outline">
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={submit}
-              disabled={createChannelMutation.isPending}
-              className="h-9 px-3 rounded-md bg-foreground text-background text-sm hover:opacity-90 disabled:opacity-50"
-            >
-              {createChannelMutation.isPending ? "Creating..." : "Create channel"}
-            </button>
+            </Button>
+            <Button type="button" onClick={submit} disabled={createChannelMutation.isPending}>
+              {createChannelMutation.isPending ? 'Creating...' : 'Create channel'}
+            </Button>
           </div>
         </div>
       </DialogContent>

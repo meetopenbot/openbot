@@ -1,40 +1,41 @@
-import { useMemo, useState } from "react";
-import { useTheme } from "../ThemeProvider";
-import { useConfig, useUpdateConfig } from "../../hooks/use-config";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type MarketplaceItem } from "../../lib/api";
-import { useSession } from "../../hooks/use-session";
-import { cn } from "../../lib/utils";
-import { AgentsPage } from "./AgentsPage";
-import { ExtensionItem } from "../ExtensionItem";
+import { useMemo, useState } from 'react';
+import { useTheme } from '../ThemeProvider';
+import { useConfig, useUpdateConfig } from '../../hooks/use-config';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, type MarketplaceItem } from '../../lib/api';
+import { useSession } from '../../hooks/use-session';
+import { cn } from '../../lib/utils';
+import { AgentsPage } from './AgentsPage';
+import { ExtensionItem } from '../ExtensionItem';
+import { Button } from '../ui/button';
 
-type Theme = "light" | "dark" | "system";
-const MASKED_KEY_VALUE = "**********";
+type Theme = 'light' | 'dark' | 'system';
+const MASKED_KEY_VALUE = '**********';
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: string }[] = [
-  { value: "light", label: "Light", icon: "sun" },
-  { value: "dark", label: "Dark", icon: "moon" },
-  { value: "system", label: "System", icon: "monitor" },
+  { value: 'light', label: 'Light', icon: 'sun' },
+  { value: 'dark', label: 'Dark', icon: 'moon' },
+  { value: 'system', label: 'System', icon: 'monitor' },
 ];
 
 export function SettingsPage({ defaultSection }: { defaultSection?: SettingsSection }) {
   return <SettingsPageWithSections defaultSection={defaultSection} />;
 }
 
-type SettingsSection = "general" | "agents" | "plugins" | "system";
+type SettingsSection = 'general' | 'agents' | 'plugins' | 'system';
 
 const SETTINGS_SECTIONS: Array<{ id: SettingsSection; label: string }> = [
-  { id: "general", label: "General" },
-  { id: "agents", label: "Agents" },
-  { id: "plugins", label: "Plugins" },
-  { id: "system", label: "System" },
+  { id: 'general', label: 'General' },
+  { id: 'agents', label: 'Agents' },
+  { id: 'plugins', label: 'Plugins' },
+  { id: 'system', label: 'System' },
 ];
 
 function resolveSettingsSection(raw: string | null): SettingsSection {
-  if (raw === "general" || raw === "agents" || raw === "plugins" || raw === "system") {
+  if (raw === 'general' || raw === 'agents' || raw === 'plugins' || raw === 'system') {
     return raw;
   }
-  return "general";
+  return 'general';
 }
 
 function SettingsPageWithSections({ defaultSection }: { defaultSection?: SettingsSection }) {
@@ -44,8 +45,8 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
   const { theme, setTheme } = useTheme();
   const queryClient = useQueryClient();
 
-  const [openaiKey, setOpenaiKey] = useState("");
-  const [anthropicKey, setAnthropicKey] = useState("");
+  const [openaiKey, setOpenaiKey] = useState('');
+  const [anthropicKey, setAnthropicKey] = useState('');
   const [openaiEditing, setOpenaiEditing] = useState(false);
   const [anthropicEditing, setAnthropicEditing] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -55,47 +56,48 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
 
   const settingsSection = useMemo(() => {
     const params = new URLSearchParams(path);
-    const fromQuery = resolveSettingsSection(params.get("settingsSection"));
-    if (params.has("settingsSection")) return fromQuery;
-    return defaultSection ?? "general";
+    const fromQuery = resolveSettingsSection(params.get('settingsSection'));
+    if (params.has('settingsSection')) return fromQuery;
+    return defaultSection ?? 'general';
   }, [path, defaultSection]);
 
   const setSettingsSection = (section: SettingsSection) => {
     const params = new URLSearchParams(path);
-    params.set("tab", "settings");
-    params.set("settingsSection", section);
-    if (section !== "agents") {
-      params.delete("agentId");
+    params.set('tab', 'settings');
+    params.set('settingsSection', section);
+    if (section !== 'agents') {
+      params.delete('agentId');
     }
     navigate(`/?${params.toString()}`);
   };
 
   const { data: plugins = [], isLoading: loadingPlugins } = useQuery({
-    queryKey: ["plugins"],
+    queryKey: ['plugins'],
     queryFn: api.getInstalledPlugins,
   });
 
   const { data: marketplacePlugins = [], isLoading: loadingMarketplacePlugins } = useQuery({
-    queryKey: ["marketplace", "plugins"],
+    queryKey: ['marketplace', 'plugins'],
     queryFn: api.getMarketplacePlugins,
   });
 
   const installedPluginKeys = useMemo(() => {
     return new Set(
-      plugins.map((plugin) => [plugin.id, plugin.name].map((v) => (v || "").toLowerCase())).flat()
+      plugins.map((plugin) => [plugin.id, plugin.name].map((v) => (v || '').toLowerCase())).flat(),
     );
   }, [plugins]);
 
   const isPluginInstalled = (item: MarketplaceItem) =>
-    installedPluginKeys.has(item.id.toLowerCase()) || installedPluginKeys.has(item.name.toLowerCase());
+    installedPluginKeys.has(item.id.toLowerCase()) ||
+    installedPluginKeys.has(item.name.toLowerCase());
 
   const handleInstallPlugin = async (item: MarketplaceItem) => {
     setInstallError(null);
     setInstallingPluginId(item.id);
     try {
       await api.installMarketplacePlugin(item.id);
-      await queryClient.invalidateQueries({ queryKey: ["plugins"] });
-      await queryClient.invalidateQueries({ queryKey: ["marketplace", "plugins"] });
+      await queryClient.invalidateQueries({ queryKey: ['plugins'] });
+      await queryClient.invalidateQueries({ queryKey: ['marketplace', 'plugins'] });
     } catch (err) {
       console.error(err);
       setInstallError(`Failed to install plugin "${item.name}"`);
@@ -105,14 +107,14 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
   };
 
   const recommendedPlugins = useMemo(() => {
-    return marketplacePlugins.filter(item =>
-      item.tags?.includes("recommended") && !isPluginInstalled(item)
+    return marketplacePlugins.filter(
+      (item) => item.tags?.includes('recommended') && !isPluginInstalled(item),
     );
   }, [marketplacePlugins, installedPluginKeys]);
 
   const otherMarketplacePlugins = useMemo(() => {
-    return marketplacePlugins.filter(item =>
-      !item.tags?.includes("recommended") && !isPluginInstalled(item)
+    return marketplacePlugins.filter(
+      (item) => !item.tags?.includes('recommended') && !isPluginInstalled(item),
     );
   }, [marketplacePlugins, installedPluginKeys]);
 
@@ -128,7 +130,7 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
           setSaved(true);
           setTimeout(() => setSaved(false), 2000);
         },
-      }
+      },
     );
   };
 
@@ -149,10 +151,10 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                 type="button"
                 onClick={() => setSettingsSection(section.id)}
                 className={cn(
-                  "w-full rounded-md px-2.5 py-2 text-left text-[13px] transition-colors",
+                  'w-full rounded-md px-2.5 py-2 text-left text-[13px] transition-colors',
                   settingsSection === section.id
-                    ? "bg-muted/70 text-foreground font-medium"
-                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    ? 'bg-muted/70 text-foreground font-medium'
+                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
                 )}
               >
                 {section.label}
@@ -161,11 +163,11 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
           </div>
         </aside>
         <div className="flex-1 min-w-0 h-full">
-          {settingsSection === "agents" && <AgentsPage />}
-          {settingsSection !== "agents" && (
+          {settingsSection === 'agents' && <AgentsPage />}
+          {settingsSection !== 'agents' && (
             <div className="h-full overflow-auto">
               <div className="mx-auto flex max-w-xl flex-col gap-10 px-6 py-10 animate-in fade-in">
-                {settingsSection === "general" && (
+                {settingsSection === 'general' && (
                   <>
                     <div className="flex flex-col gap-1">
                       <h2 className="text-lg font-semibold tracking-tight">General</h2>
@@ -188,8 +190,8 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                             onClick={() => setTheme(opt.value)}
                             className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px] font-medium transition-all duration-150 ${
                               theme === opt.value
-                                ? "border-foreground/15 bg-foreground/4 text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                                : "border-border/50 text-muted-foreground hover:border-border hover:text-foreground"
+                                ? 'border-foreground/15 bg-foreground/4 text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
+                                : 'border-border/50 text-muted-foreground hover:border-border hover:text-foreground'
                             }`}
                           >
                             <ThemeIcon type={opt.icon} />
@@ -208,14 +210,20 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                         </div>
                         <div className="flex flex-col gap-3">
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-muted-foreground/70">OpenAI</label>
+                            <label className="text-xs font-medium text-muted-foreground/70">
+                              OpenAI
+                            </label>
                             <input
                               type="password"
-                              value={openaiEditing ? openaiKey : openaiKey || (config.hasOpenAIKey ? MASKED_KEY_VALUE : "")}
+                              value={
+                                openaiEditing
+                                  ? openaiKey
+                                  : openaiKey || (config.hasOpenAIKey ? MASKED_KEY_VALUE : '')
+                              }
                               onChange={(e) => setOpenaiKey(e.target.value)}
                               onFocus={() => {
                                 if (!openaiEditing && !openaiKey && config.hasOpenAIKey) {
-                                  setOpenaiKey("");
+                                  setOpenaiKey('');
                                 }
                                 setOpenaiEditing(true);
                               }}
@@ -227,14 +235,20 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                             />
                           </div>
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-muted-foreground/70">Anthropic</label>
+                            <label className="text-xs font-medium text-muted-foreground/70">
+                              Anthropic
+                            </label>
                             <input
                               type="password"
-                              value={anthropicEditing ? anthropicKey : anthropicKey || (config.hasAnthropicKey ? MASKED_KEY_VALUE : "")}
+                              value={
+                                anthropicEditing
+                                  ? anthropicKey
+                                  : anthropicKey || (config.hasAnthropicKey ? MASKED_KEY_VALUE : '')
+                              }
                               onChange={(e) => setAnthropicKey(e.target.value)}
                               onFocus={() => {
                                 if (!anthropicEditing && !anthropicKey && config.hasAnthropicKey) {
-                                  setAnthropicKey("");
+                                  setAnthropicKey('');
                                 }
                                 setAnthropicEditing(true);
                               }}
@@ -248,18 +262,14 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                         </div>
                       </section>
                       <div className="flex justify-end">
-                        <button
-                          type="submit"
-                          disabled={updateConfig.isPending}
-                          className="rounded-xl bg-foreground px-5 py-2 text-[13px] font-medium text-background transition-all duration-150 hover:opacity-80 disabled:opacity-40"
-                        >
-                          {saved ? "Saved" : updateConfig.isPending ? "Saving..." : "Save changes"}
-                        </button>
+                        <Button type="submit" disabled={updateConfig.isPending}>
+                          {saved ? 'Saved' : updateConfig.isPending ? 'Saving...' : 'Save changes'}
+                        </Button>
                       </div>
                     </form>
                   </>
                 )}
-                {settingsSection === "plugins" && (
+                {settingsSection === 'plugins' && (
                   <section className="flex flex-col gap-6 pb-20">
                     <div className="flex flex-col gap-1">
                       <h2 className="text-lg font-semibold tracking-tight">Plugins</h2>
@@ -274,11 +284,16 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                     )}
                     <div className="flex flex-col gap-8">
                       <div>
-                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Installed</h4>
+                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">
+                          Installed
+                        </h4>
                         {loadingPlugins ? (
                           <div className="flex flex-col gap-2">
                             {[1, 2].map((i) => (
-                              <div key={i} className="h-16 rounded-xl bg-muted/10 border border-border/20 animate-pulse" />
+                              <div
+                                key={i}
+                                className="h-16 rounded-xl bg-muted/10 border border-border/20 animate-pulse"
+                              />
                             ))}
                           </div>
                         ) : (
@@ -304,7 +319,9 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                       </div>
                       {recommendedPlugins.length > 0 && (
                         <div>
-                          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Recommended</h4>
+                          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">
+                            Recommended
+                          </h4>
                           <div className="flex flex-col gap-1 -mx-3">
                             {recommendedPlugins.map((item) => (
                               <ExtensionItem
@@ -323,11 +340,16 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                       )}
                       {otherMarketplacePlugins.length > 0 && (
                         <div>
-                          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Marketplace</h4>
+                          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">
+                            Marketplace
+                          </h4>
                           {loadingMarketplacePlugins ? (
                             <div className="flex flex-col gap-2">
                               {[1, 2].map((i) => (
-                                <div key={i} className="h-16 rounded-xl bg-muted/10 border border-border/20 animate-pulse" />
+                                <div
+                                  key={i}
+                                  className="h-16 rounded-xl bg-muted/10 border border-border/20 animate-pulse"
+                                />
                               ))}
                             </div>
                           ) : (
@@ -351,7 +373,7 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                     </div>
                   </section>
                 )}
-                {settingsSection === "system" && (
+                {settingsSection === 'system' && (
                   <section className="flex flex-col gap-4 pb-20">
                     <div className="flex flex-col gap-1">
                       <h2 className="text-lg font-semibold tracking-tight">System</h2>
@@ -368,7 +390,7 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                             setSaved(true);
                             setTimeout(() => setSaved(false), 2000);
                           } catch (err) {
-                            console.error("Reload failed", err);
+                            console.error('Reload failed', err);
                           }
                         }}
                         className="rounded-xl border border-border/60 px-4 py-2.5 text-[13px] font-medium text-foreground transition-all duration-150 hover:border-border hover:bg-foreground/5"
@@ -376,7 +398,8 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                         Reload Runtime
                       </button>
                       <p className="text-[11px] text-muted-foreground/50">
-                        Reloads agents and plugins from disk. Use this if you've manually modified configuration files.
+                        Reloads agents and plugins from disk. Use this if you've manually modified
+                        configuration files.
                       </p>
                     </div>
                   </section>
@@ -391,23 +414,38 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
 }
 
 function ThemeIcon({ type }: { type: string }) {
-  const props = { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const props = {
+    width: 14,
+    height: 14,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.5,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  };
 
-  if (type === "sun") return (
-    <svg {...props}>
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2" /><path d="M12 20v2" />
-      <path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" />
-      <path d="M2 12h2" /><path d="M20 12h2" />
-      <path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
-    </svg>
-  );
+  if (type === 'sun')
+    return (
+      <svg {...props}>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2" />
+        <path d="M12 20v2" />
+        <path d="m4.93 4.93 1.41 1.41" />
+        <path d="m17.66 17.66 1.41 1.41" />
+        <path d="M2 12h2" />
+        <path d="M20 12h2" />
+        <path d="m6.34 17.66-1.41 1.41" />
+        <path d="m19.07 4.93-1.41 1.41" />
+      </svg>
+    );
 
-  if (type === "moon") return (
-    <svg {...props}>
-      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-    </svg>
-  );
+  if (type === 'moon')
+    return (
+      <svg {...props}>
+        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+      </svg>
+    );
 
   return (
     <svg {...props}>

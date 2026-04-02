@@ -1,18 +1,15 @@
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type AutomationItem } from "../../lib/api";
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, type AutomationItem } from '../../lib/api';
+import { Button } from '../ui/button';
 
-const EXAMPLE_CRONS = [
-  "0 9 * * 1-5",
-  "0 * * * *",
-  "0 18 * * 1",
-];
+const EXAMPLE_CRONS = ['0 9 * * 1-5', '0 * * * *', '0 18 * * 1'];
 
 type AutomationEditorValue = {
   name: string;
   prompt: string;
   cron: string;
-  targetType: "orchestrator" | "agent";
+  targetType: 'orchestrator' | 'agent';
   agentName: string;
 };
 
@@ -28,24 +25,24 @@ function AutomationModal({
   const queryClient = useQueryClient();
   const isEditing = Boolean(automation);
   const [value, setValue] = useState<AutomationEditorValue>({
-    name: automation?.name ?? "",
-    prompt: automation?.prompt ?? "",
-    cron: automation?.cron ?? "0 9 * * 1-5",
-    targetType: automation?.targetType ?? "orchestrator",
-    agentName: automation?.agentName ?? (agents[0]?.name ?? ""),
+    name: automation?.name ?? '',
+    prompt: automation?.prompt ?? '',
+    cron: automation?.cron ?? '0 9 * * 1-5',
+    targetType: automation?.targetType ?? 'orchestrator',
+    agentName: automation?.agentName ?? agents[0]?.name ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["automations"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['automations'] });
 
   const save = async () => {
     if (!value.name.trim() || !value.prompt.trim() || !value.cron.trim()) {
-      setError("Name, cron, and prompt are required.");
+      setError('Name, cron, and prompt are required.');
       return;
     }
-    if (value.targetType === "agent" && !value.agentName.trim()) {
-      setError("Select an agent when target is Specific Agent.");
+    if (value.targetType === 'agent' && !value.agentName.trim()) {
+      setError('Select an agent when target is Specific Agent.');
       return;
     }
 
@@ -57,7 +54,7 @@ function AutomationModal({
         prompt: value.prompt.trim(),
         cron: value.cron.trim(),
         targetType: value.targetType,
-        agentName: value.targetType === "agent" ? value.agentName.trim() : undefined,
+        agentName: value.targetType === 'agent' ? value.agentName.trim() : undefined,
       };
 
       if (automation) {
@@ -69,7 +66,7 @@ function AutomationModal({
       await refresh();
       onClose();
     } catch {
-      setError(isEditing ? "Failed to update automation." : "Failed to create automation.");
+      setError(isEditing ? 'Failed to update automation.' : 'Failed to create automation.');
     } finally {
       setSaving(false);
     }
@@ -80,10 +77,22 @@ function AutomationModal({
       <div className="flex w-full max-w-2xl flex-col gap-4 rounded-2xl border border-border/50 bg-background p-6 shadow-xl animate-in fade-in zoom-in-95">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight">
-            {isEditing ? `Edit ${automation?.name}` : "Create Automation"}
+            {isEditing ? `Edit ${automation?.name}` : 'Create Automation'}
           </h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
           </button>
         </div>
 
@@ -106,7 +115,7 @@ function AutomationModal({
                 onChange={(e) =>
                   setValue((prev) => ({
                     ...prev,
-                    targetType: e.target.value as "orchestrator" | "agent",
+                    targetType: e.target.value as 'orchestrator' | 'agent',
                   }))
                 }
                 className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm"
@@ -116,7 +125,7 @@ function AutomationModal({
               </select>
             </div>
 
-            {value.targetType === "agent" && (
+            {value.targetType === 'agent' && (
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-muted-foreground">Agent</label>
                 <select
@@ -143,7 +152,7 @@ function AutomationModal({
               placeholder="0 9 * * 1-5"
             />
             <p className="text-[11px] text-muted-foreground/70">
-              Examples: {EXAMPLE_CRONS.join("  |  ")}
+              Examples: {EXAMPLE_CRONS.join('  |  ')}
             </p>
           </div>
 
@@ -165,19 +174,12 @@ function AutomationModal({
         )}
 
         <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="rounded-xl px-5 py-2 text-[13px] font-medium text-muted-foreground hover:bg-muted/50"
-          >
+          <Button onClick={onClose} variant="outline">
             Cancel
-          </button>
-          <button
-            onClick={() => void save()}
-            disabled={saving}
-            className="rounded-xl bg-foreground px-5 py-2 text-[13px] font-medium text-background transition-all duration-150 hover:opacity-80 disabled:opacity-40"
-          >
-            {saving ? "Saving..." : isEditing ? "Save Changes" : "Create"}
-          </button>
+          </Button>
+          <Button onClick={() => void save()} disabled={saving}>
+            {saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create'}
+          </Button>
         </div>
       </div>
     </div>
@@ -187,11 +189,11 @@ function AutomationModal({
 export function AutomationsPage() {
   const queryClient = useQueryClient();
   const { data: automations = [], isLoading } = useQuery({
-    queryKey: ["automations"],
+    queryKey: ['automations'],
     queryFn: api.getAutomations,
   });
   const { data: agents = [] } = useQuery({
-    queryKey: ["agents"],
+    queryKey: ['agents'],
     queryFn: api.getAgents,
   });
 
@@ -199,7 +201,7 @@ export function AutomationsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["automations"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['automations'] });
 
   const toggleEnabled = async (item: AutomationItem) => {
     setError(null);
@@ -207,7 +209,7 @@ export function AutomationsPage() {
       await api.updateAutomation(item.id, { enabled: !item.enabled });
       await refresh();
     } catch {
-      setError("Failed to update automation status.");
+      setError('Failed to update automation status.');
     }
   };
 
@@ -217,7 +219,7 @@ export function AutomationsPage() {
       await api.deleteAutomation(id);
       await refresh();
     } catch {
-      setError("Failed to delete automation.");
+      setError('Failed to delete automation.');
     }
   };
 
@@ -228,7 +230,8 @@ export function AutomationsPage() {
           <div className="flex flex-col gap-1">
             <h2 className="text-2xl font-semibold tracking-tight">Automations</h2>
             <p className="text-[13px] text-muted-foreground/70">
-              Create scheduled tasks and choose whether they run through the orchestrator or a specific agent.
+              Create scheduled tasks and choose whether they run through the orchestrator or a
+              specific agent.
             </p>
           </div>
 
@@ -272,23 +275,25 @@ export function AutomationsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h4 className="truncate text-sm font-medium">{automation.name}</h4>
-                        <p className="mt-1 text-xs font-mono text-muted-foreground/70">{automation.cron}</p>
+                        <p className="mt-1 text-xs font-mono text-muted-foreground/70">
+                          {automation.cron}
+                        </p>
                       </div>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
                           automation.enabled
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
-                            : "bg-muted text-muted-foreground"
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                            : 'bg-muted text-muted-foreground'
                         }`}
                       >
-                        {automation.enabled ? "Enabled" : "Paused"}
+                        {automation.enabled ? 'Enabled' : 'Paused'}
                       </span>
                     </div>
 
                     <p className="text-xs text-muted-foreground/75">
-                      {automation.targetType === "agent"
+                      {automation.targetType === 'agent'
                         ? `Agent: ${automation.agentName}`
-                        : "Target: Orchestrator"}
+                        : 'Target: Orchestrator'}
                     </p>
 
                     <p className="text-xs text-muted-foreground/85">{automation.prompt}</p>
@@ -302,7 +307,7 @@ export function AutomationsPage() {
                           <button
                             onClick={(e) => {
                               setEditingAutomation(automation);
-                              e.currentTarget.closest("details")?.removeAttribute("open");
+                              e.currentTarget.closest('details')?.removeAttribute('open');
                             }}
                             className="block w-full rounded-md px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                           >
@@ -311,16 +316,16 @@ export function AutomationsPage() {
                           <button
                             onClick={(e) => {
                               void toggleEnabled(automation);
-                              e.currentTarget.closest("details")?.removeAttribute("open");
+                              e.currentTarget.closest('details')?.removeAttribute('open');
                             }}
                             className="block w-full rounded-md px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                           >
-                            {automation.enabled ? "Pause" : "Enable"}
+                            {automation.enabled ? 'Pause' : 'Enable'}
                           </button>
                           <button
                             onClick={(e) => {
                               void removeAutomation(automation.id);
-                              e.currentTarget.closest("details")?.removeAttribute("open");
+                              e.currentTarget.closest('details')?.removeAttribute('open');
                             }}
                             className="block w-full rounded-md px-3 py-2 text-left text-xs text-red-500 hover:bg-red-500/10"
                           >
