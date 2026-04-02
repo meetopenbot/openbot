@@ -20,13 +20,20 @@ OpenBot will start listening for you at `http://localhost:4001`.
 
 ## Say Hello
 
-You can talk to OpenBot using a simple POST request:
+You can start a run with a simple POST request:
 
 ```bash
-curl -N \
+curl \
   -H "Content-Type: application/json" \
-  -d '{"event":{"type":"agent:input","data":{"content":"Hello!"}}}' \
-  http://localhost:4001/api/chat
+  -H "x-openbot-conversation-id: dm_default" \
+  -d '{"type":"agent:input","data":{"content":"Hello!"}}' \
+  http://localhost:4001/api/runs
 ```
 
-That's it! OpenBot will stream its response right back to you. 🚀
+Then subscribe to live updates:
+
+```bash
+curl -N http://localhost:4001/api/conversations/dm_default/stream
+```
+
+That's it! OpenBot keeps running in the background and the stream can reconnect. 🚀

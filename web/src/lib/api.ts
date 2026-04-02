@@ -124,6 +124,10 @@ export interface MarketplaceItem {
   image?: string;
 }
 
+export interface ConversationsActivityResponse {
+  byConversation: Record<string, { active: boolean; agents: string[] }>;
+}
+
 export const api = {
   getConfig: () => request<AppConfig>("/api/config"),
 
@@ -137,6 +141,8 @@ export const api = {
   }) => request<{ success: boolean }>("/api/config", { method: "POST", body: JSON.stringify(data) }),
 
   getConversations: () => request<ConversationInfo[]>("/api/conversations"),
+  getConversationsActivity: () =>
+    request<ConversationsActivityResponse>("/api/conversations/activity"),
 
   createChannel: (name: string) =>
     request<{ success: boolean; channel: ChannelInfo }>("/api/channels", {
@@ -171,6 +177,29 @@ export const api = {
     }),
 
   getConversationEvents: (id: string) => request<any[]>(`/api/conversations/${encodeURIComponent(id)}/events`),
+  getConversationStreamUrl: (id: string, afterId?: string) => {
+    const base = `${BASE_URL}/api/conversations/${encodeURIComponent(id)}/stream`;
+    if (!afterId) return base;
+    return `${base}?afterId=${encodeURIComponent(afterId)}`;
+  },
+  createRun: (
+    conversationId: string,
+    event: any,
+    options?: { runId?: string },
+  ) =>
+    request<{ runId: string }>('/api/runs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-openbot-conversation-id': conversationId,
+        ...(options?.runId ? { 'x-openbot-run-id': options.runId } : {}),
+      },
+      body: JSON.stringify(event),
+    }),
+  cancelRun: (runId: string) =>
+    request<{ success: boolean }>(`/api/runs/${encodeURIComponent(runId)}/cancel`, {
+      method: 'POST',
+    }),
 
   postMessageReaction: (
     conversationId: string,

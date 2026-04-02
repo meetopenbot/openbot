@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { ChatClient } from "../lib/chat-client";
-import { BASE_URL, api } from "../lib/api";
+import { api } from "../lib/api";
 
 /** Fold raw thread events into user/assistant messages (matches channel transcript rules). */
 export function foldThreadEventsToMessages(events: any[]): any[] {
@@ -47,6 +46,21 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
+type ChatEventHandler = (chunk: any) => Promise<void> | void;
+
+function mergeUniqueEvents(previous: any[], incoming: any[]): any[] {
+  if (incoming.length === 0) return previous;
+  const existingIds = new Set(previous.map((item) => item?.id).filter(Boolean));
+  const next = [...previous];
+  for (const event of incoming) {
+    const id = event?.id;
+    if (id && existingIds.has(id)) continue;
+    if (id) existingIds.add(id);
+    next.push(event);
+  }
+  return next;
+}
+
 export function ChatProvider({ 
   children, 
   conversationId, 
@@ -54,19 +68,39 @@ export function ChatProvider({
 }: { 
   children: React.ReactNode; 
   conversationId: string; 
-  eventHandlers?: Record<string, (chunk: any, context: { client: ChatClient }) => Promise<void>>;
+  eventHandlers?: Record<string, ChatEventHandler>;
 }) {
   const [events, setEvents] = useState<any[]>([]);
-  const [streamingMap, setStreamingMap] = useState<Record<string, boolean>>({});
-  const streamingRef = useRef<Record<string, boolean>>({});
-  const client = useMemo(() => new ChatClient({ url: `${BASE_URL}/api/chat` }), []);
+  const [submittingByThread, setSubmittingByThread] = useState<Record<string, boolean>>({});
+  const latestEventIdRef = useRef<string | null>(null);
 
-  // Update ref when state changes
-  useEffect(() => {
-    streamingRef.current = streamingMap;
-  }, [streamingMap]);
+  const threadRunsMap = useMemo(() => {
+    const active = new Map<string, string>();
+    for (const event of events) {
+      if (!event || typeof event !== "object") continue;
+      const runId = event.data?.runId;
+      if (!runId || typeof runId !== "string") continue;
+      const threadId = event.meta?.threadId || "main";
+      if (event.type === "run:started") active.set(threadId, runId);
+      if (
+        event.type === "run:finished" ||
+        event.type === "run:cancelled" ||
+        event.type === "run:failed"
+      ) {
+        if (active.get(threadId) === runId) active.delete(threadId);
+      }
+    }
+    return active;
+  }, [events]);
 
-  // Compute streaming as a shorthand for main window (no threadId)
+  const streamingMap = useMemo(() => {
+    const next: Record<string, boolean> = { ...submittingByThread };
+    threadRunsMap.forEach((_runId, threadId) => {
+      next[threadId] = true;
+    });
+    return next;
+  }, [threadRunsMap, submittingByThread]);
+
   const streaming = useMemo(() => streamingMap["main"] || false, [streamingMap]);
 
   // Compute messages, threads, and reaction map from events
@@ -132,14 +166,14 @@ export function ChatProvider({
   }, [threads]);
 
   const reset = useCallback((newEvents: any[]) => {
-    setEvents(newEvents);
+    setEvents(mergeUniqueEvents([], newEvents));
   }, []);
 
   const send = useCallback(async (payload: any) => {
     const threadId = payload.meta?.threadId || "main";
-    if (streamingRef.current[threadId]) return;
-    
-    setStreamingMap(prev => ({ ...prev, [threadId]: true }));
+    if (streamingMap[threadId]) return;
+    setSubmittingByThread((prev) => ({ ...prev, [threadId]: true }));
+
     // Ensure we have a stable ID for deduplication
     const eventWithId = {
       ...payload,
@@ -151,42 +185,25 @@ export function ChatProvider({
     setEvents(prev => [...prev, eventWithId]);
 
     try {
-      const generator = client.send(eventWithId, { 
-        conversationId,
-        requestId: threadId,
-      });
-
-      for await (const chunk of generator) {
-        setEvents(prev => [...prev, chunk]);
-        
-        // Call handler for the chunk type itself (e.g. client:invalidate)
-        if (eventHandlers && eventHandlers[chunk.type]) {
-          await eventHandlers[chunk.type](chunk, { client });
-        }
-        
-        // Call handler for the original payload type (legacy behavior)
-        if (eventHandlers && eventHandlers[payload.type] && payload.type !== chunk.type) {
-          await eventHandlers[payload.type](chunk, { client });
-        }
+      await api.createRun(conversationId, eventWithId);
+      if (eventHandlers && eventHandlers[payload.type]) {
+        await eventHandlers[payload.type](eventWithId);
       }
     } catch (error) {
-      if ((error as Error).name === "AbortError") {
-        console.log("Chat stream aborted");
-      } else {
-        console.error("Chat stream error:", error);
-      }
+      console.error("Failed to create run:", error);
     } finally {
-      setStreamingMap(prev => ({ ...prev, [threadId]: false }));
-      if (eventHandlers && eventHandlers["stream:done"]) {
-        await eventHandlers["stream:done"]({}, { client });
-      }
+      setSubmittingByThread((prev) => ({ ...prev, [threadId]: false }));
     }
-  }, [client, conversationId, eventHandlers]);
+  }, [conversationId, eventHandlers, streamingMap]);
 
   const stop = useCallback((threadId?: string) => {
-    client.stop(threadId || "main");
-    setStreamingMap(prev => ({ ...prev, [threadId || "main"]: false }));
-  }, [client]);
+    const id = threadId || "main";
+    const runId = threadRunsMap.get(id);
+    if (!runId) return;
+    void api.cancelRun(runId).catch((err) => {
+      console.error("Failed to cancel run:", err);
+    });
+  }, [threadRunsMap]);
 
   const setMessageReaction = useCallback(
     async (targetMessageId: string, reaction: MessageReactionSentiment | "none") => {
@@ -221,6 +238,65 @@ export function ChatProvider({
     setMessageReaction,
     reset
   }), [send, stop, streaming, streamingMap, events, messages, threads, threadReplyCounts, messageReactions, setMessageReaction, reset]);
+
+  useEffect(() => {
+    latestEventIdRef.current = null;
+    setSubmittingByThread({});
+    setEvents([]);
+  }, [conversationId]);
+
+  useEffect(() => {
+    let isClosed = false;
+    let reconnectTimer: number | undefined;
+    let source: EventSource | undefined;
+
+    const connect = () => {
+      if (isClosed || !conversationId) return;
+      const url = api.getConversationStreamUrl(conversationId, latestEventIdRef.current ?? undefined);
+      source = new EventSource(url);
+
+      source.onmessage = (message) => {
+        if (!message.data) return;
+        try {
+          const chunk = JSON.parse(message.data);
+          setEvents((prev) => mergeUniqueEvents(prev, [chunk]));
+          if (chunk?.id && typeof chunk.id === "string") {
+            latestEventIdRef.current = chunk.id;
+          }
+          if (eventHandlers && eventHandlers[chunk.type]) {
+            void eventHandlers[chunk.type](chunk);
+          }
+          if (
+            eventHandlers &&
+            (chunk.type === "run:finished" || chunk.type === "run:cancelled" || chunk.type === "run:failed") &&
+            eventHandlers["stream:done"]
+          ) {
+            void eventHandlers["stream:done"](chunk);
+          }
+        } catch (error) {
+          console.error("Failed to parse stream event:", error);
+        }
+      };
+
+      source.onerror = () => {
+        source?.close();
+        if (!isClosed) reconnectTimer = window.setTimeout(connect, 1000);
+      };
+    };
+
+    connect();
+    return () => {
+      isClosed = true;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      source?.close();
+    };
+  }, [conversationId, eventHandlers]);
+
+  useEffect(() => {
+    const last = events[events.length - 1];
+    const id = last?.id;
+    if (id && typeof id === "string") latestEventIdRef.current = id;
+  }, [events]);
 
   return (
     <ChatContext.Provider value={value}>

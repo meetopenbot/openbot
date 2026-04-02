@@ -8,6 +8,7 @@ import type { ConversationInfo } from "../../lib/api";
 import { AgentAvatar } from "../AgentAvatar";
 import { CreateBotModal } from "../CreateBotModal";
 import { CreateChannelModal } from "../CreateChannelModal";
+import { Loader2 } from "lucide-react";
 
 const BUILT_IN_AGENTS = [
   { id: "os", name: "os", description: "Handles shell commands and file system operations" },
@@ -39,6 +40,11 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
     queryKey: ["agents"],
     queryFn: api.getAgents,
   });
+  const { data: conversationsActivity } = useQuery({
+    queryKey: ["conversations-activity"],
+    queryFn: api.getConversationsActivity,
+    refetchInterval: 1000,
+  });
 
   const deleteChannelMutation = useMutation({
     mutationFn: (id: string) => api.deleteChannel(id),
@@ -47,9 +53,6 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
       onNavigate("/");
     },
   });
-
-
-  if (!open) return null;
 
   const allAgents: SidebarAgent[] = [...BUILT_IN_AGENTS, ...customAgents];
   const channels = conversations
@@ -71,6 +74,8 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
       window.alert(error instanceof Error ? error.message : "Failed to remove channel");
     }
   };
+
+  if (!open) return null;
 
 
   return (
@@ -127,6 +132,7 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
             .slice(0, 20)
             .map((conversation: ConversationInfo) => {
               const isActive = conversation.id === conversationId && currentTab === "chat";
+              const showChannelSpinner = !!conversationsActivity?.byConversation?.[conversation.id]?.active;
 
             return (
               <div
@@ -146,6 +152,9 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
                   <span className="min-w-0 flex-1 block truncate">
                     {conversation.title || conversation.id}
                   </span>
+                  {showChannelSpinner && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary/90 shrink-0" />
+                  )}
                 </button>
                 <button
                   type="button"
@@ -189,6 +198,8 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
                   const agentId = agent.id || agent.name;
                   const dmId = `dm_${agentId}`;
                   const isActive = dmId === conversationId && currentTab === "chat";
+                  const isActiveDmAgent = !!conversationsActivity?.byConversation?.[dmId]?.active;
+                  const showAgentSpinner = isActiveDmAgent;
 
                   return (
                     <button
@@ -206,6 +217,9 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
                         className="size-[18px] shrink-0 rounded-[3px]"
                       />
                       <span className="min-w-0 flex-1 block truncate">{agent.name}</span>
+                      {showAgentSpinner && (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary/90 shrink-0" />
+                      )}
                     </button>
                   );
                 })}

@@ -140,7 +140,7 @@ export async function startServer(options: ServerOptions = {}) {
         `[automations] Running "${automation.name}" (${automation.id}) at ${scheduledAt.toISOString()}`,
       );
       for await (const chunk of iterator) {
-        await logConversationEvent(conversationId, runId, chunk);
+        await appendConversationEvent(conversationId, runId, chunk);
       }
       console.log(`[automations] Completed "${automation.name}" (${automation.id})`);
     } catch (error) {
@@ -170,6 +170,107 @@ export async function startServer(options: ServerOptions = {}) {
 
   app.use(cors());
   app.use(express.json({ limit: '20mb' }));
+
+  const conversationSubscribers = new Map<string, Set<(event: ConversationEvent) => void>>();
+  const runQueue: Array<{ conversationId: string; runId: string; event: ConversationEvent }> = [];
+  const activeRuns = new Set<string>();
+  const runConversationById = new Map<string, string>();
+  const runAgentsById = new Map<string, Set<string>>();
+  const cancelledRuns = new Set<string>();
+  let processingQueue = false;
+
+  const subscribeConversation = (
+    conversationId: string,
+    listener: (event: ConversationEvent) => void,
+  ) => {
+    const listeners = conversationSubscribers.get(conversationId) ?? new Set();
+    listeners.add(listener);
+    conversationSubscribers.set(conversationId, listeners);
+    return () => {
+      const current = conversationSubscribers.get(conversationId);
+      if (!current) return;
+      current.delete(listener);
+      if (current.size === 0) conversationSubscribers.delete(conversationId);
+    };
+  };
+
+  const appendConversationEvent = async (
+    conversationId: string,
+    runId: string,
+    event: ConversationEvent,
+  ) => {
+    await logConversationEvent(conversationId, runId, event);
+    const listeners = conversationSubscribers.get(conversationId);
+    if (!listeners) return;
+    for (const listener of listeners) listener(event);
+  };
+
+  const processRunQueue = async () => {
+    if (processingQueue) return;
+    processingQueue = true;
+    try {
+      while (runQueue.length > 0) {
+        const job = runQueue.shift();
+        if (!job) continue;
+
+        const { conversationId, runId, event } = job;
+        runConversationById.set(runId, conversationId);
+        runAgentsById.set(runId, new Set());
+        const state: ConversationState = (await loadConversationState(conversationId)) ?? {};
+        state.conversationId = conversationId;
+        if (!state.cwd) state.cwd = process.cwd();
+        if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
+
+        const threadId = event.meta?.threadId;
+        activeRuns.add(runId);
+        await appendConversationEvent(conversationId, runId, {
+          type: 'run:started',
+          data: { runId },
+          meta: threadId ? { threadId } : undefined,
+        } as ConversationEvent);
+
+        const iterator = runtime.run(event, { runId, state });
+        try {
+          for await (const chunk of iterator) {
+            if (cancelledRuns.has(runId)) {
+              await iterator.return?.();
+              break;
+            }
+            const agentName = chunk.meta?.agentName;
+            if (typeof agentName === 'string' && agentName) {
+              const activeAgents = runAgentsById.get(runId);
+              activeAgents?.add(agentName);
+            }
+            await appendConversationEvent(conversationId, runId, chunk);
+          }
+
+          await appendConversationEvent(conversationId, runId, {
+            type: cancelledRuns.has(runId) ? 'run:cancelled' : 'run:finished',
+            data: { runId },
+            meta: threadId ? { threadId } : undefined,
+          } as ConversationEvent);
+        } catch (error) {
+          console.error('Background run failed:', error);
+          await appendConversationEvent(conversationId, runId, {
+            type: 'run:failed',
+            data: {
+              runId,
+              message: error instanceof Error ? error.message : String(error),
+            },
+            meta: threadId ? { threadId } : undefined,
+          } as ConversationEvent);
+        } finally {
+          activeRuns.delete(runId);
+          cancelledRuns.delete(runId);
+          runConversationById.delete(runId);
+          runAgentsById.delete(runId);
+          await saveConversationState(conversationId, state);
+        }
+      }
+    } finally {
+      processingQueue = false;
+    }
+  };
 
   const fileExists = async (targetPath: string) =>
     fs
@@ -281,7 +382,8 @@ export async function startServer(options: ServerOptions = {}) {
       message: 'OpenBot API server',
       version: '2.0',
       endpoints: {
-        chat: 'POST /api/chat',
+        runs: 'POST /api/runs',
+        stream: 'GET /api/conversations/:id/stream',
         config: 'GET|POST /api/config',
         conversations: 'GET /api/conversations',
         agents: 'GET|POST /api/agents',
@@ -521,6 +623,24 @@ export async function startServer(options: ServerOptions = {}) {
     res.json(conversations);
   });
 
+  app.get('/api/conversations/activity', async (_req, res) => {
+    const activityByConversation: Record<string, { active: boolean; agents: string[] }> = {};
+    for (const runId of activeRuns) {
+      const conversationId = runConversationById.get(runId);
+      if (!conversationId) continue;
+      const existing = activityByConversation[conversationId] ?? { active: false, agents: [] };
+      existing.active = true;
+      const nextAgents = new Set(existing.agents);
+      const runAgents = runAgentsById.get(runId);
+      if (runAgents) {
+        for (const name of runAgents) nextAgents.add(name);
+      }
+      existing.agents = Array.from(nextAgents);
+      activityByConversation[conversationId] = existing;
+    }
+    res.json({ byConversation: activityByConversation });
+  });
+
   app.post('/api/channels', async (req, res) => {
     const { name } = req.body as { name?: string };
     if (typeof name !== 'string' || !name.trim()) {
@@ -661,7 +781,7 @@ export async function startServer(options: ServerOptions = {}) {
     };
 
     try {
-      await logConversationEvent(conversationId, 'client', event);
+      await appendConversationEvent(conversationId, 'client', event);
       return res.json({ success: true });
     } catch (error) {
       console.error(error);
@@ -1251,9 +1371,9 @@ export async function startServer(options: ServerOptions = {}) {
     res.status(404).send('Avatar not found');
   });
 
-  // ─── Chat SSE endpoint ──────────────────────────────────────────
+  // ─── Runs + conversation stream ─────────────────────────────────
 
-  app.post('/api/chat', async (req, res) => {
+  app.post('/api/runs', async (req, res) => {
     const event = req.body as Partial<ConversationEvent>;
     if (!event || typeof event.type !== 'string') {
       return res.status(400).json({
@@ -1270,9 +1390,30 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     const runIdHeader = req.get('x-openbot-run-id');
-    const runId = typeof runIdHeader === 'string' && runIdHeader.trim()
-      ? runIdHeader.trim()
-      : `run_${generateId()}`;
+    const runId =
+      typeof runIdHeader === 'string' && runIdHeader.trim() ? runIdHeader.trim() : `run_${generateId()}`;
+
+    const normalizedEvent = event as ConversationEvent;
+    await appendConversationEvent(conversationId, runId, normalizedEvent);
+    runQueue.push({ conversationId, runId, event: normalizedEvent });
+    void processRunQueue();
+    res.status(202).json({ runId });
+  });
+
+  app.post('/api/runs/:runId/cancel', async (req, res) => {
+    const runId = req.params.runId?.trim();
+    if (!runId) return res.status(400).json({ error: 'runId is required' });
+    if (!activeRuns.has(runId) && !runQueue.some((job) => job.runId === runId)) {
+      return res.status(404).json({ error: 'Run not found' });
+    }
+    cancelledRuns.add(runId);
+    return res.json({ success: true });
+  });
+
+  app.get('/api/conversations/:id/stream', async (req, res) => {
+    const conversationId = normalizeConversationId(req.params.id);
+    const afterId = typeof req.query.afterId === 'string' ? req.query.afterId.trim() : '';
+    const allEvents = await loadConversationEvents(conversationId);
 
     res.set({
       'Content-Type': 'text/event-stream',
@@ -1280,50 +1421,38 @@ export async function startServer(options: ServerOptions = {}) {
       Connection: 'keep-alive',
     });
     res.flushHeaders?.();
-    const state: ConversationState = (await loadConversationState(conversationId)) ?? {};
-    state.conversationId = conversationId;
-    if (!state.cwd) state.cwd = process.cwd();
-    if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
 
-    const iterator = runtime.run(event as ConversationEvent, {
-      runId,
-      state,
+    let replayEvents = allEvents;
+    if (afterId) {
+      const afterIndex = allEvents.findIndex((item) => item.id === afterId);
+      replayEvents = afterIndex >= 0 ? allEvents.slice(afterIndex + 1) : allEvents;
+    }
+
+    for (const item of replayEvents) {
+      if (res.writableEnded) return;
+      res.write(`data: ${JSON.stringify(item)}\n\n`);
+    }
+
+    const unsubscribe = subscribeConversation(conversationId, (chunk) => {
+      if (res.writableEnded) return;
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
     });
 
-    const stopStreaming = () => {
-      void iterator.return?.();
-    };
+    const keepAlive = setInterval(() => {
+      if (res.writableEnded) return;
+      res.write(': keepalive\n\n');
+    }, 15000);
 
-    res.on('close', stopStreaming);
-
-    try {
-      for await (const chunk of iterator) {
-        if (res.writableEnded) break;
-        await logConversationEvent(conversationId, runId, chunk);
-        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-      }
-      await saveConversationState(conversationId, state);
-    } catch (error) {
-      console.error('Melony stream error:', error);
-      if (!res.writableEnded) {
-        res.write(
-          `event: error\ndata: ${JSON.stringify({
-            message: error instanceof Error ? error.message : String(error),
-          })}\n\n`,
-        );
-      }
-    } finally {
-      res.off('close', stopStreaming);
-      if (!res.writableEnded) {
-        res.write('event: done\ndata: {}\n\n');
-        res.end();
-      }
-    }
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      unsubscribe();
+      if (!res.writableEnded) res.end();
+    });
   });
 
   app.listen(PORT, () => {
     console.log(`OpenBot server listening at http://localhost:${PORT}`);
-    console.log(`  - Chat endpoint: POST /api/chat`);
+    console.log(`  - Runs endpoint: POST /api/runs`);
     console.log(`  - REST endpoints: /api/config, /api/conversations, /api/agents`);
     if (options.openaiApiKey) console.log('  - Using OpenAI API Key from CLI');
     if (options.anthropicApiKey) console.log('  - Using Anthropic API Key from CLI');

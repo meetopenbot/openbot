@@ -3,7 +3,11 @@ import { useMemo } from "react";
 import { WidgetRenderer, type UIBlock } from "./WidgetRenderer";
 
 export function SessionStateSidebar() {
-  const { messages } = useChat();
+  const { messages, streamingMap } = useChat();
+  const isAnyRunActive = useMemo(
+    () => Object.values(streamingMap).some(Boolean),
+    [streamingMap],
+  );
 
   // Aggregate widgets from all messages
   const sidebarWidgets = useMemo(() => {
@@ -41,6 +45,12 @@ export function SessionStateSidebar() {
           <p className="text-xs text-muted-foreground/50 mt-1 px-4">
             Structured results and widgets from agents will appear here.
           </p>
+          {isAnyRunActive && (
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background px-3 py-1.5 text-[11px] text-muted-foreground">
+              <span className="size-2 rounded-full bg-primary animate-pulse" />
+              Agent is working...
+            </div>
+          )}
         </div>
       </aside>
     );
@@ -49,10 +59,18 @@ export function SessionStateSidebar() {
   return (
     <aside className="hidden xl:flex h-full w-[480px] shrink-0 flex-col border-l border-border/50 bg-muted/5 backdrop-blur-sm">
       <div className="border-b border-border/50 px-5 py-4 bg-background/50 backdrop-blur-md sticky top-0 z-10">
-        <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/40 flex items-center gap-2.5">
-          <span className="size-1.5 rounded-full bg-primary/40 animate-pulse" />
-          Session Insights
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/40 flex items-center gap-2.5">
+            <span className="size-1.5 rounded-full bg-primary/40 animate-pulse" />
+            Session Insights
+          </h2>
+          {isAnyRunActive && (
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+              <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+              Working
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-6 space-y-8 scrollbar-hide">
