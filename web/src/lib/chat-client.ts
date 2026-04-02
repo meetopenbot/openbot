@@ -6,7 +6,10 @@ export class ChatClient {
     this.url = url;
   }
 
-  async *send(payload: any, options: { conversationId: string; requestId?: string }) {
+  async *send(
+    payload: any,
+    options: { conversationId: string; runId?: string; requestId?: string },
+  ) {
     const requestId = options.requestId || "default";
     const controller = new AbortController();
     this.abortControllers.set(requestId, controller);
@@ -16,11 +19,10 @@ export class ChatClient {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-openbot-conversation-id": options.conversationId,
+          ...(options.runId ? { "x-openbot-run-id": options.runId } : {}),
         },
-        body: JSON.stringify({
-          event: payload,
-          ...options,
-        }),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
 

@@ -27,7 +27,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import matter from 'gray-matter';
-import type { ConversationState, ConversationEvent, ConversationRequest } from './types.js';
+import type { ConversationState, ConversationEvent } from './types.js';
 import { fetchProviderModels, getModelCatalog } from '../services/model-catalog.js';
 import type { ModelProvider } from '../services/model-catalog.js';
 import { DEFAULT_MODEL_BY_PROVIDER, DEFAULT_MODEL_ID } from '../services/model-defaults.js';
@@ -1254,13 +1254,25 @@ export async function startServer(options: ServerOptions = {}) {
   // ─── Chat SSE endpoint ──────────────────────────────────────────
 
   app.post('/api/chat', async (req, res) => {
-    const body = req.body as Partial<ConversationRequest>;
-
-    if (!body.event || typeof body.event.type !== 'string') {
+    const event = req.body as Partial<ConversationEvent>;
+    if (!event || typeof event.type !== 'string') {
       return res.status(400).json({
-        error: 'The request body must contain an `event` with a string `type`.',
+        error: 'The request body must be an event with a string `type`.',
       });
     }
+
+    const conversationHeader = req.get('x-openbot-conversation-id');
+    const conversationIdRaw =
+      typeof conversationHeader === 'string' ? conversationHeader.trim() : '';
+    const conversationId = normalizeConversationId(conversationIdRaw);
+    if (!conversationId) {
+      return res.status(400).json({ error: 'x-openbot-conversation-id is required' });
+    }
+
+    const runIdHeader = req.get('x-openbot-run-id');
+    const runId = typeof runIdHeader === 'string' && runIdHeader.trim()
+      ? runIdHeader.trim()
+      : `run_${generateId()}`;
 
     res.set({
       'Content-Type': 'text/event-stream',
@@ -1268,20 +1280,12 @@ export async function startServer(options: ServerOptions = {}) {
       Connection: 'keep-alive',
     });
     res.flushHeaders?.();
-
-    const conversationIdRaw =
-      typeof body.conversationId === 'string' ? body.conversationId.trim() : '';
-    const conversationId = normalizeConversationId(conversationIdRaw);
-    if (!conversationId) {
-      return res.status(400).json({ error: 'conversationId is required' });
-    }
-    const runId = body.runId ?? `run_${generateId()}`;
     const state: ConversationState = (await loadConversationState(conversationId)) ?? {};
     state.conversationId = conversationId;
     if (!state.cwd) state.cwd = process.cwd();
     if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
 
-    const iterator = runtime.run(body.event as ConversationEvent, {
+    const iterator = runtime.run(event as ConversationEvent, {
       runId,
       state,
     });

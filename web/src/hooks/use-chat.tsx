@@ -51,12 +51,10 @@ export function ChatProvider({
   children, 
   conversationId, 
   eventHandlers,
-  initialAdditionalBody 
 }: { 
   children: React.ReactNode; 
   conversationId: string; 
   eventHandlers?: Record<string, (chunk: any, context: { client: ChatClient }) => Promise<void>>;
-  initialAdditionalBody?: Record<string, any>;
 }) {
   const [events, setEvents] = useState<any[]>([]);
   const [streamingMap, setStreamingMap] = useState<Record<string, boolean>>({});
@@ -156,7 +154,6 @@ export function ChatProvider({
       const generator = client.send(eventWithId, { 
         conversationId,
         requestId: threadId,
-        ...initialAdditionalBody
       });
 
       for await (const chunk of generator) {
@@ -184,7 +181,7 @@ export function ChatProvider({
         await eventHandlers["stream:done"]({}, { client });
       }
     }
-  }, [client, conversationId, eventHandlers, initialAdditionalBody]);
+  }, [client, conversationId, eventHandlers]);
 
   const stop = useCallback((threadId?: string) => {
     client.stop(threadId || "main");

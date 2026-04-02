@@ -49,8 +49,6 @@ export function App() {
     [queryClient, ensureConversationInUrl, activeConversationId]
   );
 
-  const providerBody = useMemo(() => ({ conversationId: activeConversationId }), [activeConversationId]);
-
   useEffect(() => {
     if (!conversationId && activeConversationId) {
       ensureConversationInUrl(activeConversationId);
@@ -72,7 +70,6 @@ export function App() {
   return (
     <ChatProvider
       conversationId={activeConversationId}
-      initialAdditionalBody={providerBody}
       eventHandlers={eventHandlers}
     >
       <ThemeProvider>

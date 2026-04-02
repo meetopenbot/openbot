@@ -162,8 +162,3 @@ export interface ConversationState {
   [key: string]: any;
 }
 
-export interface ConversationRequest {
-  event: ConversationEvent;
-  runId?: string;
-  conversationId?: string;
-}
