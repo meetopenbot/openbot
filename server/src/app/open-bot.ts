@@ -4,7 +4,7 @@ import { createModel, parseModelString } from "../services/models.js";
 import { DEFAULT_MODEL_ID } from "../services/model-defaults.js";
 import { ConversationEvent, ConversationState } from "./types.js";
 import { setupPluginRegistry } from "../services/plugins.js";
-import { orchestrationToolsPlugin } from "../services/orchestrator.js";
+import { orchestrationToolsPlugin } from "../plugins/orchestrator.js";
 import { runOpenBot } from "./router.js";
 
 /**
@@ -31,7 +31,7 @@ export async function createOpenBot(options?: {
   for (const agent of registry.getAgents()) {
     const builder = melony<ConversationState, ConversationEvent>();
     
-    // Apply the base agent plugin
+    // Apply the agent plugin (runtime + tools)
     if (agent.plugin) {
       builder.use(agent.plugin);
     }

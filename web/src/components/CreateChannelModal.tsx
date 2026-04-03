@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { AgentAvatar } from './AgentAvatar';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 
@@ -21,7 +22,7 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
     queryFn: api.getAgents,
   });
 
-  const selectableAgents = useMemo(() => agents.filter((agent) => !agent.isDefault), [agents]);
+  const selectableAgents = useMemo(() => agents, [agents]);
 
   const createChannelMutation = useMutation({
     mutationFn: async (payload: { channelName: string; manager: string; members: string[] }) => {
@@ -155,9 +156,17 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
                     key={agent.id}
                     className="flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-muted/30 cursor-pointer"
                   >
-                    <div className="min-w-0">
-                      <p className="text-sm text-foreground truncate">{agent.name}</p>
-                      <p className="text-[11px] text-muted-foreground">@{agent.id}</p>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <AgentAvatar
+                        name={agent.isDefault ? 'default' : agent.id}
+                        label={agent.name}
+                        imageUrl={agent.image}
+                        className="size-8 shrink-0 rounded-md border border-border/50 object-cover"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm text-foreground truncate">{agent.name}</p>
+                        <p className="text-[11px] text-muted-foreground">@{agent.id}</p>
+                      </div>
                     </div>
                     <input
                       type="checkbox"

@@ -1,8 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BASE_URL } from "../lib/api";
 
 interface AgentAvatarProps {
+  /** Key for `/api/agents/:name/avatar` (agent id, `default`, or `user`) */
   name: string;
+  /** Display string for initials / hash color when images fail */
+  label?: string;
+  /** Remote image from agent config (tried before server avatar route) */
+  imageUrl?: string | null;
   className?: string;
 }
 
@@ -32,27 +37,51 @@ function getColorForName(name: string) {
   return colors[Math.abs(hash) % colors.length];
 }
 
-export function AgentAvatar({ name, className = "w-6 h-6 rounded-sm" }: AgentAvatarProps) {
-  const [error, setError] = useState(false);
+export function AgentAvatar({
+  name,
+  label,
+  imageUrl,
+  className = "w-6 h-6 rounded-md",
+}: AgentAvatarProps) {
+  const [remoteFailed, setRemoteFailed] = useState(false);
+  const [apiFailed, setApiFailed] = useState(false);
+  const initialSource = label ?? name;
+  const initialChar = initialSource.charAt(0) || "?";
 
-  if (error) {
-    const colorClass = getColorForName(name);
+  useEffect(() => {
+    setRemoteFailed(false);
+    setApiFailed(false);
+  }, [name, imageUrl]);
+
+  if (imageUrl && !remoteFailed) {
     return (
-      <div
-        className={`flex items-center justify-center uppercase font-bold shrink-0 ${colorClass} ${className}`}
-        style={{ fontSize: "0.6em" }}
-      >
-        {name.charAt(0)}
-      </div>
+      <img
+        src={imageUrl}
+        alt={initialSource}
+        className={`object-cover shrink-0 bg-muted/30 ${className}`}
+        onError={() => setRemoteFailed(true)}
+      />
     );
   }
 
+  if (!apiFailed) {
+    return (
+      <img
+        src={`${BASE_URL}/api/agents/${encodeURIComponent(name)}/avatar`}
+        alt={initialSource}
+        className={`object-cover shrink-0 bg-muted/30 ${className}`}
+        onError={() => setApiFailed(true)}
+      />
+    );
+  }
+
+  const colorClass = getColorForName(initialSource);
   return (
-    <img
-      src={`${BASE_URL}/api/agents/${encodeURIComponent(name)}/avatar`}
-      alt={name}
-      className={`object-cover shrink-0 bg-muted/30 ${className}`}
-      onError={() => setError(true)}
-    />
+    <div
+      className={`flex items-center justify-center uppercase font-bold shrink-0 ${colorClass} ${className}`}
+      style={{ fontSize: "0.6em" }}
+    >
+      {initialChar}
+    </div>
   );
 }

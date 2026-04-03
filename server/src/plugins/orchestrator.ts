@@ -5,9 +5,9 @@ import {
   memoryPlugin,
   memoryToolDefinitions,
   createMemoryPromptBuilder,
-} from '../plugins/memory.js';
+} from './memory.js';
 import { topicAgent } from '../agents/topic-agent.js';
-import { llmPlugin } from '../plugins/llm.js';
+import { llmPlugin } from './llm.js';
 import { PluginRegistry } from '../registry/plugin-registry.js';
 import { uiEvent } from '../ui/block.js';
 import { widgets } from '../ui/registry.js';
@@ -490,7 +490,8 @@ export function llmOrchestratorPlugin(options: {
           usageScope: 'manager',
           system: async (context: any) => {
             const baseInstructions = typeof system === 'function' ? await system(context) : system;
-            return buildOrchestratorPrompt(context, baseInstructions);
+            const prompt = await buildOrchestratorPrompt(context, baseInstructions);
+            return prompt;
           },
           toolDefinitions: {
             ...orchestratorToolDefinitions,

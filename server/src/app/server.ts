@@ -824,24 +824,46 @@ export async function startServer(options: ServerOptions = {}) {
         image: cfg.image,
       },
     ];
+    const seenIds = new Set<string>(['default']);
 
     try {
       const allPlugins = await listPlugins(agentsDir);
       const agentPlugins = allPlugins.filter((p: ListedPlugin) => p.type === 'agent');
-      agents.push(
-        ...agentPlugins.map((plugin: ListedPlugin) => {
-          const id = plugin.folder ? path.basename(plugin.folder) : plugin.id;
-          const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(plugin.name);
-          return {
-            ...plugin,
-            id,
-            name: hasUnnamedDisplayName ? toTitleCaseFromSlug(id) : plugin.name,
-          };
-        }),
-      );
+      for (const plugin of agentPlugins) {
+        const id = plugin.folder ? path.basename(plugin.folder) : plugin.id;
+        if (seenIds.has(id)) continue;
+        const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(plugin.name);
+        agents.push({
+          ...plugin,
+          id,
+          name: hasUnnamedDisplayName ? toTitleCaseFromSlug(id) : plugin.name,
+          hasAgentMd: true,
+        });
+        seenIds.add(id);
+      }
     } catch {
       // ignore
     }
+
+    // Agents registered in the runtime (built-ins, ~/.openbot/plugins, etc.) not already listed from agents/
+    const registryAgents = runtime.registry
+      .getAgents()
+      .filter((entry) => !seenIds.has(entry.id))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    for (const entry of registryAgents) {
+      const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(entry.name);
+      agents.push({
+        id: entry.id,
+        name: hasUnnamedDisplayName ? toTitleCaseFromSlug(entry.id) : entry.name,
+        description: entry.description,
+        type: 'agent' as const,
+        folder: entry.folder,
+        isBuiltIn: entry.isBuiltIn === true,
+        hasAgentMd: false,
+      });
+      seenIds.add(entry.id);
+    }
+
     res.json(agents);
   });
 

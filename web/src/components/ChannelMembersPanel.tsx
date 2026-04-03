@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { AgentAvatar } from './AgentAvatar';
 
 interface ChannelMembersPanelProps {
   channelId: string;
@@ -55,9 +56,7 @@ export function ChannelMembersPanel({ channelId, channelName, onClose }: Channel
 
   const availableAgents = useMemo(() => {
     if (!allAgents) return [];
-    return allAgents.filter(
-      (agent) => !members.some((member) => member.id === agent.id) && !agent.isDefault,
-    );
+    return allAgents.filter((agent) => !members.some((member) => member.id === agent.id));
   }, [allAgents, members]);
 
   return (
@@ -99,21 +98,27 @@ export function ChannelMembersPanel({ channelId, channelName, onClose }: Channel
             Current members
           </p>
           <div className="divide-y divide-border/50 rounded-lg border border-border/50">
-            {members.map((member) => (
+            {members.map((member) => {
+              const agentMeta = member.id === 'you' ? undefined : allAgents?.find((a) => a.id === member.id);
+              const avatarName = agentMeta?.isDefault ? 'default' : member.id;
+              return (
               <div
                 key={member.id}
                 className="flex items-center justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-muted/5"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/50 bg-muted">
-                    {member.id === 'you' ? (
+                  {member.id === 'you' ? (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted">
                       <span className="text-xs font-bold text-muted-foreground">Y</span>
-                    ) : (
-                      <span className="text-xs font-bold text-muted-foreground">
-                        {member.name.slice(0, 1).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <AgentAvatar
+                      name={avatarName}
+                      label={member.name}
+                      imageUrl={agentMeta?.image}
+                      className="h-8 w-8 shrink-0 rounded-md border border-border/50 object-cover"
+                    />
+                  )}
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{member.name}</p>
                     <p className="truncate text-[11px] text-muted-foreground">@{member.id}</p>
@@ -156,7 +161,8 @@ export function ChannelMembersPanel({ channelId, channelName, onClose }: Channel
                   )}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
 
@@ -172,19 +178,12 @@ export function ChannelMembersPanel({ channelId, channelName, onClose }: Channel
                   onClick={() => addMemberMutation.mutate({ memberId: agent.id, name: agent.name })}
                   className="flex w-full items-center gap-3 rounded-lg border border-border/50 px-3 py-2 text-left transition-colors hover:bg-muted/50"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/50 bg-muted">
-                    {agent.image ? (
-                      <img
-                        src={agent.image}
-                        alt={agent.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-xs font-bold text-muted-foreground">
-                        {agent.name.slice(0, 1).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
+                  <AgentAvatar
+                    name={agent.isDefault ? 'default' : agent.id}
+                    label={agent.name}
+                    imageUrl={agent.image}
+                    className="h-8 w-8 shrink-0 rounded-md border border-border/50 object-cover"
+                  />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{agent.name}</p>
                     <p className="truncate text-[11px] text-muted-foreground">@{agent.id}</p>

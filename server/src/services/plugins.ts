@@ -4,7 +4,7 @@ import { approvalPlugin } from "../plugins/approval.js";
 import { osAgent } from "../agents/os-agent.js";
 import { agentCreatorAgent } from "../agents/agent-creator.js";
 import { PluginRegistry } from "../registry/plugin-registry.js";
-import { discoverPlugins } from "../registry/plugin-loader.js";
+import { discoverPlugins, registerOpenBotRootDefaultAgent } from "../registry/plugin-loader.js";
 import path from "node:path";
 
 /**
@@ -93,6 +93,7 @@ export async function setupPluginRegistry(
 
   await discoverPlugins(pluginsDir, registry, model, resolvedModelId, resolvedBaseDir, options);
   await discoverPlugins(agentsDir, registry, model, resolvedModelId, resolvedBaseDir, options);
+  await registerOpenBotRootDefaultAgent(registry, resolvedBaseDir, model, resolvedModelId, options);
 
   return registry;
 }

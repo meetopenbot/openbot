@@ -1,14 +1,11 @@
-import { MelonyPlugin } from "melony";
-import path from "node:path";
-import { llmOrchestratorPlugin } from "../services/orchestrator.js";
-import {
-  fileSystemToolDefinitions,
-  fileSystemPlugin,
-} from "../plugins/file-system.js";
-import { DEFAULT_BASE_DIR, resolvePath } from "../app/config.js";
-import { ConversationState, ConversationEvent } from "../app/types.js";
-import { LanguageModel } from "ai";
-import { PluginRegistry } from "../registry/plugin-registry.js";
+import { MelonyPlugin } from 'melony';
+import path from 'node:path';
+import { llmOrchestratorPlugin } from '../plugins/orchestrator.js';
+import { fileSystemToolDefinitions, fileSystemPlugin } from '../plugins/file-system.js';
+import { DEFAULT_BASE_DIR, resolvePath } from '../app/config.js';
+import { ConversationState, ConversationEvent } from '../app/types.js';
+import { LanguageModel } from 'ai';
+import { PluginRegistry } from '../registry/plugin-registry.js';
 
 export interface AgentCreatorOptions {
   model: LanguageModel;
@@ -18,13 +15,11 @@ export interface AgentCreatorOptions {
 }
 
 export const agentCreatorAgent =
-  (
-    options: AgentCreatorOptions,
-  ): MelonyPlugin<ConversationState, ConversationEvent> =>
+  (options: AgentCreatorOptions): MelonyPlugin<ConversationState, ConversationEvent> =>
   (builder) => {
     const { model, resolvedModelId, resolvedBaseDir, registry } = options;
     const baseDir = resolvePath(DEFAULT_BASE_DIR);
-    const agentsDir = path.join(baseDir, "agents");
+    const agentsDir = path.join(baseDir, 'agents');
 
     builder.use(fileSystemPlugin({ baseDir })).use(
       llmOrchestratorPlugin({
@@ -44,6 +39,7 @@ Frontmatter fields (required):
 ---
 name: <slug-name>
 description: <short description>
+runtime: llm # or codex, etc.
 plugins:
   - shell
   - file-system

@@ -34,18 +34,12 @@ export const ExtensionItem = ({
     className="flex items-center gap-3.5 p-3 rounded-[18px] hover:bg-white/5 transition-all group text-left border border-transparent hover:border-white/5"
   >
     <div className="relative shrink-0">
-      {image ? (
-        <img
-          src={image}
-          alt={name}
-          className="w-[48px] h-[48px] rounded-md shadow-sm transition-transform group-hover:scale-[1.05] object-cover"
-        />
-      ) : (
-        <AgentAvatar
-          name={isDefault ? "default" : id}
-          className="w-[48px] h-[48px] rounded-md shadow-sm transition-transform group-hover:scale-[1.05]"
-        />
-      )}
+      <AgentAvatar
+        name={isDefault ? "default" : id}
+        label={name}
+        imageUrl={image}
+        className="w-[48px] h-[48px] rounded-md shadow-sm transition-transform group-hover:scale-[1.05] object-cover"
+      />
       {isDefault && (
         <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-blue-500 border-2 border-background flex items-center justify-center">
           <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />

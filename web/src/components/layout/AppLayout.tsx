@@ -132,8 +132,10 @@ export function AppLayout({
                     className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-muted transition-colors group min-w-0"
                   >
                     <AgentAvatar
-                      name={activeAgent.isDefault ? 'default' : activeAgent.name}
-                      className="size-5 shrink-0 rounded shadow-sm group-hover:scale-105 transition-transform"
+                      name={activeAgent.isDefault ? 'default' : activeAgent.id}
+                      label={activeAgent.name}
+                      imageUrl={activeAgent.image}
+                      className="size-5 shrink-0 rounded-md shadow-sm group-hover:scale-105 transition-transform"
                     />
                     <h1 className="text-sm font-semibold text-foreground/85 truncate max-w-[55vw]">
                       {headerTitle}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { AgentAvatar } from "../AgentAvatar";
+import { useAgentAvatarDisplay } from "../../hooks/use-agent-avatar-display";
 import { WidgetRenderer } from "../WidgetRenderer";
 import { cn } from "../../lib/utils";
 import { ThreadStreamEventItem } from "./ThreadStreamEventItem";
@@ -18,6 +19,10 @@ export function ThreadDelegationCard({
   const agentName = startEvent.meta?.agentName || startEvent.data.agent;
   const task = startEvent.data.task;
   const [isExpanded, setIsExpanded] = useState(false);
+  const avatar = useAgentAvatarDisplay(
+    typeof agentName === "string" ? agentName : undefined,
+    false,
+  );
 
   return (
     <div className="flex flex-col w-full items-start my-2 p-2 rounded-lg border border-border/40 bg-muted/5 hover:bg-muted/10 transition-colors group">
@@ -27,12 +32,17 @@ export function ThreadDelegationCard({
       >
         <div className="flex items-center gap-2.5">
           <div className="size-6 rounded bg-primary/10 flex items-center justify-center">
-            <AgentAvatar name={agentName} className="size-4 rounded-sm" />
+            <AgentAvatar
+              name={avatar.name}
+              label={avatar.label}
+              imageUrl={avatar.imageUrl}
+              className="size-4 rounded-md"
+            />
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <span className="text-[12px] font-bold text-foreground/80">
-                {agentName}
+                {avatar.label}
               </span>
               {!isCompleted && (
                 <div className="flex gap-0.5">

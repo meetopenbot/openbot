@@ -12,7 +12,7 @@ export function CreateBotModal({ onClose }: CreateBotModalProps) {
       <DialogContent className="w-[96vw] max-w-[1000px]! h-[90vh] rounded-lg border border-border bg-background p-0 shadow-2xl overflow-hidden flex flex-col">
         <div className="flex shrink-0 items-center justify-between gap-4 px-6 py-4 border-b border-border/50 bg-muted/5">
           <div className="flex min-w-0 items-center gap-3">
-            <AgentAvatar name="default" className="size-10 shrink-0 rounded-xl" />
+            <AgentAvatar name="default" label="OpenBot" className="size-10 shrink-0 rounded-md" />
             <div className="flex min-w-0 flex-col justify-center">
               <DialogTitle className="text-lg font-bold tracking-tight text-foreground leading-none">
                 Create Bot

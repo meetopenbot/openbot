@@ -193,7 +193,7 @@ export function ThreadView({
   }, [visibleMessages, config?.name]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: streaming ? "auto" : "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [renderableEvents, streaming]);
 
   if (renderableEvents.length === 0) {

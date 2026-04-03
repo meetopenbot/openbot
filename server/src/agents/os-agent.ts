@@ -1,5 +1,5 @@
 import { MelonyPlugin } from "melony";
-import { llmOrchestratorPlugin } from "../services/orchestrator.js";
+import { llmOrchestratorPlugin } from "../plugins/orchestrator.js";
 import { shellPlugin, shellToolDefinitions } from "../plugins/shell.js";
 import {
   fileSystemPlugin,

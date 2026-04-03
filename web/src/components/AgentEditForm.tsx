@@ -78,6 +78,7 @@ export function AgentEditForm({
   const [idDirty, setIdDirty] = useState(false);
   const [description, setDescription] = useState('');
   const [model, setModel] = useState('');
+  const [runtime, setRuntime] = useState('llm');
   const [image, setImage] = useState('');
   const [subscribeText, setSubscribeText] = useState('');
   const [pluginRows, setPluginRows] = useState<PluginRow[]>([]);
@@ -130,6 +131,13 @@ export function AgentEditForm({
           setName(config.name || agentName);
           setDescription(config.description || '');
           setModel(config.model || '');
+          setRuntime(
+            typeof config.runtime === 'string'
+              ? config.runtime
+              : typeof config.runtime === 'object' && config.runtime !== null
+              ? (config.runtime as any).name
+              : 'llm',
+          );
           setImage(config.image || '');
           setSubscribeText((config.subscribe || []).join(', '));
           setPluginRows(configToPluginRows(config));
@@ -209,6 +217,7 @@ export function AgentEditForm({
           name: name.trim(),
           description: description.trim(),
           model: model.trim() || undefined,
+          runtime: runtime.trim() || 'llm',
           image: image.trim() || undefined,
           plugins,
           subscribe,
@@ -270,6 +279,7 @@ export function AgentEditForm({
           name: name.trim(),
           description: description.trim(),
           model: model.trim() || undefined,
+          runtime: runtime.trim() || 'llm',
           image: image.trim() || undefined,
           plugins,
           subscribe,
@@ -322,7 +332,12 @@ export function AgentEditForm({
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <AgentAvatar name={agentId} className="w-8 h-8 rounded-sm" />
+              <AgentAvatar
+                name={agentId}
+                label={agentName}
+                imageUrl={image.trim() || undefined}
+                className="w-8 h-8 rounded-md"
+              />
               <h2 className="text-lg font-semibold tracking-tight">{agentName}</h2>
               <span className="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[10px] font-bold uppercase tracking-wider">
                 Code Only
@@ -400,7 +415,12 @@ export function AgentEditForm({
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <AgentAvatar name={isDefault ? 'default' : agentId} className="w-8 h-8 rounded-sm" />
+            <AgentAvatar
+              name={isDefault ? 'default' : agentId}
+              label={agentName}
+              imageUrl={image.trim() || undefined}
+              className="w-8 h-8 rounded-md"
+            />
             <h2 className="text-lg font-semibold tracking-tight">{agentName}</h2>
             {isDefault && (
               <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-bold uppercase tracking-wider">
@@ -490,6 +510,26 @@ export function AgentEditForm({
                 />
               </div>
             )}
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Runtime
+              </label>
+              <select
+                value={runtime}
+                onChange={(e) => setRuntime(e.target.value)}
+                className="rounded-xl border border-border/60 bg-background/50 px-4 py-2.5 text-sm transition-all focus:border-foreground/30 focus:outline-none"
+              >
+                <option value="llm">Default (LLM + Orchestrator)</option>
+                {registryPlugins
+                  .filter((p) => p.name !== 'shell' && p.name !== 'file-system' && p.name !== 'approval')
+                  .map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
 
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">

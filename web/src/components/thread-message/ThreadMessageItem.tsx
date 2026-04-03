@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AgentAvatar } from "../AgentAvatar";
+import { useAgentAvatarDisplay } from "../../hooks/use-agent-avatar-display";
 import { cn } from "../../lib/utils";
 import type { MessageReactionSentiment } from "../../hooks/use-chat";
 import { formatThreadTime } from "./formatTime";
@@ -38,6 +39,9 @@ export function ThreadMessageItem({
 
   const currentReaction = messageReactions[messageId];
   const [copied, setCopied] = useState(false);
+  const rawAgentName =
+    item.event?.meta?.agentName || item.data?.start?.meta?.agentName;
+  const avatar = useAgentAvatarDisplay(rawAgentName, isUser);
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -89,13 +93,9 @@ export function ThreadMessageItem({
         <div className="w-[36px] shrink-0">
           {!isGrouped && (
             <AgentAvatar
-              name={
-                isUser
-                  ? "user"
-                  : item.event?.meta?.agentName ||
-                    item.data?.start?.meta?.agentName ||
-                    "default"
-              }
+              name={avatar.name}
+              label={avatar.label}
+              imageUrl={avatar.imageUrl}
               className="size-9 rounded-md shadow-sm"
             />
           )}

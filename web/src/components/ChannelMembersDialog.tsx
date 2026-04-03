@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { AgentAvatar } from "./AgentAvatar";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "./ui/dialog";
 
 interface ChannelMembersDialogProps {
@@ -56,9 +57,7 @@ export function ChannelMembersDialog({ channelId, channelName, onClose }: Channe
 
   const availableAgents = useMemo(() => {
     if (!allAgents) return [];
-    return allAgents.filter(
-      (agent) => !members.some((m) => m.id === agent.id) && !agent.isDefault
-    );
+    return allAgents.filter((agent) => !members.some((m) => m.id === agent.id));
   }, [allAgents, members]);
 
   return (
@@ -82,55 +81,27 @@ export function ChannelMembersDialog({ channelId, channelName, onClose }: Channe
         </div>
 
         <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-          {availableAgents.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Available Agents</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {availableAgents.map((agent) => (
-                  <button
-                    key={agent.id}
-                    onClick={() => addMemberMutation.mutate({ memberId: agent.id, name: agent.name })}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border/50 hover:bg-muted/50 text-left transition-colors group"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/50">
-                      {agent.image ? (
-                        <img src={agent.image} alt={agent.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-xs font-bold text-muted-foreground">{agent.name.slice(0, 1).toUpperCase()}</span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">{agent.name}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">@{agent.id}</p>
-                    </div>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
-                        <path d="M5 12h14m-7-7 7 7-7 7" />
-                      </svg>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Current Members</p>
             <div className="rounded-lg border border-border/50 divide-y divide-border/50">
-              {members.map((member) => (
+              {members.map((member) => {
+                const agentMeta = member.id === "you" ? undefined : allAgents?.find((a) => a.id === member.id);
+                const avatarName = agentMeta?.isDefault ? "default" : member.id;
+                return (
                 <div key={member.id} className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-muted/5 transition-colors">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/50">
-                      {member.id === "you" ? (
+                    {member.id === "you" ? (
+                      <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/50">
                         <span className="text-xs font-bold text-muted-foreground">Y</span>
-                      ) : (
-                        allAgents?.find(a => a.id === member.id)?.image ? (
-                          <img src={allAgents.find(a => a.id === member.id)?.image} alt={member.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-xs font-bold text-muted-foreground">{member.name.slice(0, 1).toUpperCase()}</span>
-                        )
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <AgentAvatar
+                        name={avatarName}
+                        label={member.name}
+                        imageUrl={agentMeta?.image}
+                        className="w-8 h-8 shrink-0 rounded-md border border-border/50 object-cover"
+                      />
+                    )}
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{member.name}</p>
                       <p className="text-[11px] text-muted-foreground">@{member.id}</p>
@@ -162,9 +133,41 @@ export function ChannelMembersDialog({ channelId, channelName, onClose }: Channe
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
+
+          {availableAgents.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Available Agents</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {availableAgents.map((agent) => (
+                  <button
+                    key={agent.id}
+                    onClick={() => addMemberMutation.mutate({ memberId: agent.id, name: agent.name })}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border/50 hover:bg-muted/50 text-left transition-colors group"
+                  >
+                    <AgentAvatar
+                      name={agent.isDefault ? "default" : agent.id}
+                      label={agent.name}
+                      imageUrl={agent.image}
+                      className="w-8 h-8 shrink-0 rounded-md border border-border/50 object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground truncate">{agent.name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">@{agent.id}</p>
+                    </div>
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+                        <path d="M5 12h14m-7-7 7 7-7 7" />
+                      </svg>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>

@@ -83,6 +83,7 @@ export interface AgentConfig {
   description: string;
   model?: string;
   image?: string;
+  runtime?: string | { name: string; config?: unknown };
   plugins: Array<string | AgentPluginConfig>;
   subscribe?: string[];
 }
@@ -220,7 +221,19 @@ export const api = {
     ),
 
   getAgents: () =>
-    request<{ id: string; name: string; description: string; folder: string; isDefault?: boolean; hasAgentMd?: boolean; image?: string }[]>("/api/agents"),
+    request<
+      {
+        id: string;
+        name: string;
+        description: string;
+        folder?: string;
+        isDefault?: boolean;
+        isBuiltIn?: boolean;
+        hasAgentMd?: boolean;
+        image?: string;
+        type?: string;
+      }[]
+    >("/api/agents"),
 
   createAgent: (data: CreateAgentPayload) =>
     request<{ success: boolean; id: string }>("/api/agents", {
