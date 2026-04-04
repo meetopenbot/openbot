@@ -1,5 +1,6 @@
 import { melony, Runtime } from "melony";
 import { loadConfig, resolvePath, DEFAULT_BASE_DIR } from "./config.js";
+import { applyUserVariablesToProcessEnv } from "../services/user-variables.js";
 import { createModel, parseModelString } from "../services/models.js";
 import { DEFAULT_MODEL_ID } from "../services/model-defaults.js";
 import { ConversationEvent, ConversationState } from "./types.js";
@@ -14,6 +15,7 @@ export async function createOpenBot(options?: {
   openaiApiKey?: string;
   anthropicApiKey?: string;
 }) {
+  applyUserVariablesToProcessEnv();
   const config = loadConfig();
   const baseDir = config.baseDir || DEFAULT_BASE_DIR;
   const resolvedBaseDir = resolvePath(baseDir);

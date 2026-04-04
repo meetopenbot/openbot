@@ -133,6 +133,20 @@ export interface ConversationsActivityResponse {
   byConversation: Record<string, { active: boolean; agents: string[] }>;
 }
 
+/** Send this as `value` for a secret row the user did not change (must match server). */
+export const USER_VARIABLE_SECRET_UNCHANGED = "••••••••••••••••";
+
+export interface UserVariablePublic {
+  key: string;
+  secret: boolean;
+  hasValue: boolean;
+  value?: string;
+}
+
+export interface UserVariablesResponse {
+  variables: UserVariablePublic[];
+}
+
 export const api = {
   getConfig: () => request<AppConfig>("/api/config"),
 
@@ -144,6 +158,14 @@ export const api = {
     openai_api_key?: string;
     anthropic_api_key?: string;
   }) => request<{ success: boolean }>("/api/config", { method: "POST", body: JSON.stringify(data) }),
+
+  getVariables: () => request<UserVariablesResponse>("/api/variables"),
+
+  updateVariables: (variables: Array<{ key: string; secret: boolean; value: string }>) =>
+    request<{ success: boolean }>("/api/variables", {
+      method: "PUT",
+      body: JSON.stringify({ variables }),
+    }),
 
   getConversations: () => request<ConversationInfo[]>("/api/conversations"),
   markConversationRead: (id: string) =>

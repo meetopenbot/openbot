@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTheme } from '../ThemeProvider';
-import { useConfig, useUpdateConfig } from '../../hooks/use-config';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type MarketplaceItem } from '../../lib/api';
+import { useConfig } from '../../hooks/use-config';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, USER_VARIABLE_SECRET_UNCHANGED, type MarketplaceItem } from '../../lib/api';
 import { useSession } from '../../hooks/use-session';
 import { cn } from '../../lib/utils';
 import { AgentsPage } from './AgentsPage';
@@ -10,7 +10,7 @@ import { ExtensionItem } from '../ExtensionItem';
 import { Button } from '../ui/button';
 
 type Theme = 'light' | 'dark' | 'system';
-const MASKED_KEY_VALUE = '**********';
+const VARIABLE_MASK_DISPLAY = '••••••••••••••••';
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: string }[] = [
   { value: 'light', label: 'Light', icon: 'sun' },
@@ -22,37 +22,65 @@ export function SettingsPage({ defaultSection }: { defaultSection?: SettingsSect
   return <SettingsPageWithSections defaultSection={defaultSection} />;
 }
 
-type SettingsSection = 'general' | 'agents' | 'plugins' | 'system';
+type SettingsSection = 'general' | 'variables' | 'agents' | 'plugins' | 'system';
 
 const SETTINGS_SECTIONS: Array<{ id: SettingsSection; label: string }> = [
   { id: 'general', label: 'General' },
+  { id: 'variables', label: 'Variables' },
   { id: 'agents', label: 'Agents' },
   { id: 'plugins', label: 'Plugins' },
   { id: 'system', label: 'System' },
 ];
 
 function resolveSettingsSection(raw: string | null): SettingsSection {
-  if (raw === 'general' || raw === 'agents' || raw === 'plugins' || raw === 'system') {
+  if (
+    raw === 'general' ||
+    raw === 'variables' ||
+    raw === 'agents' ||
+    raw === 'plugins' ||
+    raw === 'system'
+  ) {
     return raw;
   }
   return 'general';
 }
 
+type VariableRowState = {
+  id: string;
+  key: string;
+  secret: boolean;
+  draft: string;
+  /** Loaded secret with a value; user has not edited yet — submit unchanged sentinel if still empty */
+  committedUnchanged: boolean;
+};
+
+function variableRowsFromServer(
+  list: Array<{ key: string; secret: boolean; hasValue: boolean; value?: string }>,
+): VariableRowState[] {
+  return list.map((v) => ({
+    id: crypto.randomUUID(),
+    key: v.key,
+    secret: v.secret,
+    draft: v.secret ? '' : (v.value ?? ''),
+    committedUnchanged: v.secret && v.hasValue,
+  }));
+}
+
 function SettingsPageWithSections({ defaultSection }: { defaultSection?: SettingsSection }) {
   const { path, navigate } = useSession();
   const { data: config } = useConfig();
-  const updateConfig = useUpdateConfig();
   const { theme, setTheme } = useTheme();
   const queryClient = useQueryClient();
 
-  const [openaiKey, setOpenaiKey] = useState('');
-  const [anthropicKey, setAnthropicKey] = useState('');
-  const [openaiEditing, setOpenaiEditing] = useState(false);
-  const [anthropicEditing, setAnthropicEditing] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [reloadAck, setReloadAck] = useState(false);
 
   const [installingPluginId, setInstallingPluginId] = useState<string | null>(null);
   const [installError, setInstallError] = useState<string | null>(null);
+
+  const [varRows, setVarRows] = useState<VariableRowState[]>([]);
+  const [varValueFocusId, setVarValueFocusId] = useState<string | null>(null);
+  const [varsSaved, setVarsSaved] = useState(false);
+  const [variablesSaveError, setVariablesSaveError] = useState<string | null>(null);
 
   const settingsSection = useMemo(() => {
     const params = new URLSearchParams(path);
@@ -70,6 +98,41 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
     }
     navigate(`/?${params.toString()}`);
   };
+
+  const { data: varsData } = useQuery({
+    queryKey: ['variables'],
+    queryFn: api.getVariables,
+    enabled: settingsSection === 'variables',
+  });
+
+  useEffect(() => {
+    if (!varsData?.variables) return;
+    setVarRows(variableRowsFromServer(varsData.variables));
+    setVariablesSaveError(null);
+  }, [varsData]);
+
+  const saveVariablesMutation = useMutation({
+    mutationFn: () =>
+      api.updateVariables(
+        varRows.map((r) => ({
+          key: r.key.trim(),
+          secret: r.secret,
+          value:
+            r.secret && r.committedUnchanged && r.draft === ''
+              ? USER_VARIABLE_SECRET_UNCHANGED
+              : r.draft,
+        })),
+      ),
+    onSuccess: async () => {
+      setVariablesSaveError(null);
+      setVarsSaved(true);
+      setTimeout(() => setVarsSaved(false), 2000);
+      await queryClient.invalidateQueries({ queryKey: ['variables'] });
+    },
+    onError: (err: Error) => {
+      setVariablesSaveError(err.message || 'Failed to save variables');
+    },
+  });
 
   const { data: plugins = [], isLoading: loadingPlugins } = useQuery({
     queryKey: ['plugins'],
@@ -118,22 +181,6 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
     );
   }, [marketplacePlugins, installedPluginKeys]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateConfig.mutate(
-      {
-        openai_api_key: openaiKey || undefined,
-        anthropic_api_key: anthropicKey || undefined,
-      },
-      {
-        onSuccess: () => {
-          setSaved(true);
-          setTimeout(() => setSaved(false), 2000);
-        },
-      },
-    );
-  };
-
   if (!config) return null;
 
   return (
@@ -172,7 +219,7 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                     <div className="flex flex-col gap-1">
                       <h2 className="text-lg font-semibold tracking-tight">General</h2>
                       <p className="text-[13px] text-muted-foreground/70">
-                        Appearance and local API key configuration.
+                        Appearance and theme preferences.
                       </p>
                     </div>
                     <section className="flex flex-col gap-4">
@@ -200,74 +247,182 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                         ))}
                       </div>
                     </section>
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-8">
-                      <section className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-0.5">
-                          <h3 className="text-[13px] font-medium">API Keys</h3>
-                          <p className="text-xs text-muted-foreground/60">
-                            Your keys are stored locally and never shared
+                    <p className="text-xs text-muted-foreground/60">
+                      Provider API keys: use{' '}
+                      <button
+                        type="button"
+                        onClick={() => setSettingsSection('variables')}
+                        className="font-medium text-foreground/80 underline decoration-border/60 underline-offset-2 hover:text-foreground"
+                      >
+                        Variables
+                      </button>{' '}
+                      to set <code className="text-[11px]">OPENAI_API_KEY</code> and{' '}
+                      <code className="text-[11px]">ANTHROPIC_API_KEY</code>.
+                    </p>
+                  </>
+                )}
+                {settingsSection === 'variables' && (
+                  <section className="flex flex-col gap-4 pb-20">
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-lg font-semibold tracking-tight">Variables</h2>
+                      <p className="text-[13px] text-muted-foreground/70">
+                        Environment variables stored in{' '}
+                        <code className="rounded bg-muted/50 px-1 py-0.5 text-[11px]">variables.json</code>{' '}
+                        (not in <code className="rounded bg-muted/50 px-1 py-0.5 text-[11px]">config.json</code>
+                        ). Applied to the server process on save and reload.
+                      </p>
+                    </div>
+
+                    {variablesSaveError && (
+                      <p className="rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs text-red-600 dark:text-red-300">
+                        {variablesSaveError}
+                      </p>
+                    )}
+
+                    <div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setVarRows((prev) => [
+                            {
+                              id: crypto.randomUUID(),
+                              key: '',
+                              secret: true,
+                              draft: '',
+                              committedUnchanged: false,
+                            },
+                            ...prev,
+                          ])
+                        }
+                      >
+                        Add variable
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      {varRows.length > 0 && (
+                        <div className="hidden sm:flex items-center gap-2 px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
+                          <span className="w-44">Name</span>
+                          <span className="flex-1">Value</span>
+                          <span className="w-16 text-center">Secret</span>
+                          <span className="w-10"></span>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-2">
+                        {varRows.length === 0 ? (
+                          <p className="py-8 text-center text-xs text-muted-foreground bg-muted/5 rounded-xl border border-dashed border-border/50">
+                            No variables yet.
                           </p>
-                        </div>
-                        <div className="flex flex-col gap-3">
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-muted-foreground/70">
-                              OpenAI
-                            </label>
-                            <input
-                              type="password"
-                              value={
-                                openaiEditing
-                                  ? openaiKey
-                                  : openaiKey || (config.hasOpenAIKey ? MASKED_KEY_VALUE : '')
-                              }
-                              onChange={(e) => setOpenaiKey(e.target.value)}
-                              onFocus={() => {
-                                if (!openaiEditing && !openaiKey && config.hasOpenAIKey) {
-                                  setOpenaiKey('');
-                                }
-                                setOpenaiEditing(true);
-                              }}
-                              onBlur={() => {
-                                if (!openaiKey) setOpenaiEditing(false);
-                              }}
-                              placeholder="sk-..."
-                              className="w-full rounded-xl border border-border/60 bg-transparent px-4 py-2.5 text-[13px] placeholder:text-muted-foreground/40 transition-colors focus:border-foreground/20 focus:outline-none"
-                            />
-                          </div>
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-muted-foreground/70">
-                              Anthropic
-                            </label>
-                            <input
-                              type="password"
-                              value={
-                                anthropicEditing
-                                  ? anthropicKey
-                                  : anthropicKey || (config.hasAnthropicKey ? MASKED_KEY_VALUE : '')
-                              }
-                              onChange={(e) => setAnthropicKey(e.target.value)}
-                              onFocus={() => {
-                                if (!anthropicEditing && !anthropicKey && config.hasAnthropicKey) {
-                                  setAnthropicKey('');
-                                }
-                                setAnthropicEditing(true);
-                              }}
-                              onBlur={() => {
-                                if (!anthropicKey) setAnthropicEditing(false);
-                              }}
-                              placeholder="sk-ant-..."
-                              className="w-full rounded-xl border border-border/60 bg-transparent px-4 py-2.5 text-[13px] placeholder:text-muted-foreground/40 transition-colors focus:border-foreground/20 focus:outline-none"
-                            />
-                          </div>
-                        </div>
-                      </section>
-                      <div className="flex justify-end">
-                        <Button type="submit" disabled={updateConfig.isPending}>
-                          {saved ? 'Saved' : updateConfig.isPending ? 'Saving...' : 'Save changes'}
+                        ) : (
+                          varRows.map((row) => {
+                            const showMasked =
+                              row.secret && row.committedUnchanged && varValueFocusId !== row.id;
+                            const displayValue = showMasked ? VARIABLE_MASK_DISPLAY : row.draft;
+                            return (
+                              <div
+                                key={row.id}
+                                className="flex flex-col gap-2 rounded-lg border border-border/50 bg-muted/5 p-2 sm:flex-row sm:items-center sm:gap-2"
+                              >
+                                <input
+                                  value={row.key}
+                                  onChange={(e) =>
+                                    setVarRows((prev) =>
+                                      prev.map((r) =>
+                                        r.id === row.id ? { ...r, key: e.target.value } : r,
+                                      ),
+                                    )
+                                  }
+                                  placeholder="NAME"
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                  className="w-full shrink-0 rounded-md border border-border/60 bg-background px-2.5 py-1.5 font-mono text-xs transition-colors focus:border-primary/30 focus:outline-none sm:w-44"
+                                />
+                                <input
+                                  type={row.secret ? 'password' : 'text'}
+                                  value={displayValue}
+                                  onChange={(e) =>
+                                    setVarRows((prev) =>
+                                      prev.map((r) =>
+                                        r.id === row.id
+                                          ? {
+                                              ...r,
+                                              draft: e.target.value,
+                                              committedUnchanged: false,
+                                            }
+                                          : r,
+                                      ),
+                                    )
+                                  }
+                                  onFocus={() => setVarValueFocusId(row.id)}
+                                  onBlur={() =>
+                                    setVarValueFocusId((id) => (id === row.id ? null : id))
+                                  }
+                                  placeholder={row.secret ? '••••••••' : 'value'}
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                  className="flex-1 rounded-md border border-border/60 bg-background px-2.5 py-1.5 font-mono text-xs transition-colors focus:border-primary/30 focus:outline-none"
+                                />
+                                <div className="flex items-center gap-4 shrink-0 px-1 sm:w-28 sm:justify-end sm:gap-4">
+                                  <label className="flex cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
+                                    <input
+                                      type="checkbox"
+                                      checked={row.secret}
+                                      onChange={(e) =>
+                                        setVarRows((prev) =>
+                                          prev.map((r) =>
+                                            r.id === row.id
+                                              ? {
+                                                  ...r,
+                                                  secret: e.target.checked,
+                                                  committedUnchanged: e.target.checked
+                                                    ? r.committedUnchanged
+                                                    : false,
+                                                }
+                                              : r,
+                                          ),
+                                        )
+                                      }
+                                      className="size-3.5 rounded border-border/60"
+                                    />
+                                    <span className="sm:hidden">Secret</span>
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setVarRows((prev) => prev.filter((r) => r.id !== row.id))
+                                    }
+                                    className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                                    title="Remove variable"
+                                  >
+                                    <TrashIcon />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    {varRows.length > 0 && (
+                      <div className="flex justify-start pt-2">
+                        <Button
+                          type="button"
+                          disabled={saveVariablesMutation.isPending}
+                          onClick={() => saveVariablesMutation.mutate()}
+                        >
+                          {varsSaved
+                            ? 'Saved'
+                            : saveVariablesMutation.isPending
+                              ? 'Saving...'
+                              : 'Save variables'}
                         </Button>
                       </div>
-                    </form>
-                  </>
+                    )}
+                  </section>
                 )}
                 {settingsSection === 'plugins' && (
                   <section className="flex flex-col gap-6 pb-20">
@@ -387,15 +542,15 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                         onClick={async () => {
                           try {
                             await api.reload();
-                            setSaved(true);
-                            setTimeout(() => setSaved(false), 2000);
+                            setReloadAck(true);
+                            setTimeout(() => setReloadAck(false), 2000);
                           } catch (err) {
                             console.error('Reload failed', err);
                           }
                         }}
                         className="rounded-xl border border-border/60 px-4 py-2.5 text-[13px] font-medium text-foreground transition-all duration-150 hover:border-border hover:bg-foreground/5"
                       >
-                        Reload Runtime
+                        {reloadAck ? 'Reloaded' : 'Reload Runtime'}
                       </button>
                       <p className="text-[11px] text-muted-foreground/50">
                         Reloads agents and plugins from disk. Use this if you've manually modified
@@ -452,6 +607,25 @@ function ThemeIcon({ type }: { type: string }) {
       <rect width="20" height="14" x="2" y="3" rx="2" />
       <line x1="8" x2="16" y1="21" y2="21" />
       <line x1="12" x2="12" y1="17" y2="21" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
     </svg>
   );
 }

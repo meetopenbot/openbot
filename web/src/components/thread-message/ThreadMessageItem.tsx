@@ -96,7 +96,7 @@ export function ThreadMessageItem({
               name={avatar.name}
               label={avatar.label}
               imageUrl={avatar.imageUrl}
-              className="size-9 rounded-md shadow-sm"
+              className="size-8 rounded-md"
             />
           )}
           {isGrouped && (
@@ -110,7 +110,7 @@ export function ThreadMessageItem({
           {!isGrouped && (
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-foreground cursor-pointer">
-                {meta.agentName}
+                {avatar.label}
               </span>
               <span className="text-xs text-muted-foreground/60">
                 {formatThreadTime(meta.timestamp)}

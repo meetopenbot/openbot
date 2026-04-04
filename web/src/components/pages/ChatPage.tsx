@@ -116,7 +116,7 @@ function ChatPlaceholder() {
             name={activeAgent.isDefault ? "default" : activeAgent.id}
             label={activeAgent.name}
             imageUrl={activeAgent.image}
-            className="size-9 shrink-0 rounded-md border border-border/50 mt-0.5"
+            className="size-9 shrink-0 rounded-md mt-0.5"
           />
         ) : (
           <div className="size-9 shrink-0 rounded-lg bg-foreground/4 border border-border/50 flex items-center justify-center mt-0.5">

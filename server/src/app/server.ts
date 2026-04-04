@@ -44,6 +44,11 @@ import {
   installMarketplacePlugin,
 } from '../services/marketplace.js';
 import { getVersionStatus } from './version.js';
+import {
+  listUserVariablesPublic,
+  normalizeAndSaveVariables,
+  type IncomingVariableRow,
+} from '../services/user-variables.js';
 
 export interface ServerOptions {
   port?: string | number;
@@ -616,6 +621,28 @@ export async function startServer(options: ServerOptions = {}) {
       scheduleReload();
     }
 
+    res.json({ success: true });
+  });
+
+  app.get('/api/variables', async (_req, res) => {
+    res.json({ variables: listUserVariablesPublic() });
+  });
+
+  app.put('/api/variables', async (req, res) => {
+    const raw = req.body?.variables;
+    if (!Array.isArray(raw)) {
+      return res.status(400).json({ error: 'Expected { variables: [...] }' });
+    }
+    const rows: IncomingVariableRow[] = raw.map((row: IncomingVariableRow) => ({
+      key: typeof row?.key === 'string' ? row.key : '',
+      secret: !!row?.secret,
+      value: typeof row?.value === 'string' ? row.value : '',
+    }));
+    const result = normalizeAndSaveVariables(rows);
+    if (!result.ok) {
+      return res.status(400).json({ error: result.error });
+    }
+    scheduleReload();
     res.json({ success: true });
   });
 

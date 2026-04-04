@@ -19,7 +19,7 @@ function AutomationModal({
   onClose,
 }: {
   automation: AutomationItem | null;
-  agents: Array<{ name: string; description: string; folder: string }>;
+  agents: Array<{ name: string; description: string; folder?: string }>;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
