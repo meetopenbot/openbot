@@ -10,7 +10,6 @@ export interface SimpleMessage {
 type ChatEventBase<T extends string, D> = { type: T } & D & {
   type: T;
   meta?: {
-    delegationId?: string;
     agentName?: string;
     threadId?: string;
     [key: string]: any;
@@ -68,19 +67,6 @@ export type ExecutionStateEvent = ChatEventBase<"execution:state", {
   planSteps?: number;
 }>;
 
-export type AgentSubInputEvent = ChatEventBase<"agent:sub-input", any>;
-export type AgentSubActionEvent = ChatEventBase<"agent:sub-action", any>;
-export type AgentSubActionResultEvent = ChatEventBase<"agent:sub-action-result", any>;
-export type AgentSubUsageEvent = ChatEventBase<"agent:sub-usage", any>;
-
-export type DelegationStartEvent = ChatEventBase<"delegation:start", {
-  agent: string;
-  task: string;
-}>;
-export type DelegationEndEvent = ChatEventBase<"delegation:end", {
-  agent: string;
-  result: any;
-}>;
 export type SuspendEvent = ChatEventBase<"suspend", {
   reason?: string;
   id?: string;
@@ -103,17 +89,10 @@ export type ConversationEvent = (
   | BrowserStateUpdateEvent
   | UsageUpdateEvent
   | ExecutionStateEvent
-  | AgentSubInputEvent
-  | AgentSubActionEvent
-  | AgentSubActionResultEvent
-  | AgentSubUsageEvent
-  | DelegationStartEvent
-  | DelegationEndEvent
   | SuspendEvent
   | MessageReactionEvent
 ) & {
   meta?: {
-    delegationId?: string;
     agentName?: string;
     [key: string]: any;
   };
@@ -154,13 +133,6 @@ export interface ConversationState {
     outputTokens: number;
     totalTokens: number;
   };
-  pendingAgentTasks?: Record<string, {
-    toolCallId: string;
-    agentName: string;
-    delegatorAgentId?: string;
-    delegationId: string;
-    stateKey?: string;
-  }>;
   /** Isolated state per agent, keyed by agent name */
   agentStates?: Record<string, AgentState>;
 

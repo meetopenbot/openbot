@@ -12,21 +12,21 @@ interface AgentAvatarProps {
 }
 
 const colors = [
-  "bg-red-500/10 text-red-500",
-  "bg-orange-500/10 text-orange-500",
-  "bg-amber-500/10 text-amber-500",
-  "bg-green-500/10 text-green-500",
-  "bg-emerald-500/10 text-emerald-500",
-  "bg-teal-500/10 text-teal-500",
-  "bg-cyan-500/10 text-cyan-500",
-  "bg-sky-500/10 text-sky-500",
-  "bg-blue-500/10 text-blue-500",
-  "bg-indigo-500/10 text-indigo-500",
-  "bg-violet-500/10 text-violet-500",
-  "bg-purple-500/10 text-purple-500",
-  "bg-fuchsia-500/10 text-fuchsia-500",
-  "bg-pink-500/10 text-pink-500",
-  "bg-rose-500/10 text-rose-500",
+  "bg-red-500/20 text-red-500",
+  "bg-orange-500/20 text-orange-500",
+  "bg-amber-500/20 text-amber-500",
+  "bg-green-500/20 text-green-500",
+  "bg-emerald-500/20 text-emerald-500",
+  "bg-teal-500/20 text-teal-500",
+  "bg-cyan-500/20 text-cyan-500",
+  "bg-sky-500/20 text-sky-500",
+  "bg-blue-500/20 text-blue-500",
+  "bg-indigo-500/20 text-indigo-500",
+  "bg-violet-500/20 text-violet-500",
+  "bg-purple-500/20 text-purple-500",
+  "bg-fuchsia-500/20 text-fuchsia-500",
+  "bg-pink-500/20 text-pink-500",
+  "bg-rose-500/20 text-rose-500",
 ];
 
 function getColorForName(name: string) {

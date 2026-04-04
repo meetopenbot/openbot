@@ -121,6 +121,10 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
               const isActive = conversation.id === conversationId && currentTab === "chat";
               const showChannelSpinner = !!conversationsActivity?.byConversation?.[conversation.id]?.active;
               const showUnreadDot = !isActive && !!conversation.unread;
+              const participatingAgentIds = conversation.participatingAgents ?? [];
+              const participatingAgentsMeta = participatingAgentIds
+                .map((id) => allAgents.find((a) => a.id === id))
+                .filter(Boolean) as typeof allAgents;
 
             return (
               <div
@@ -153,13 +157,31 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
                     {conversation.title || conversation.id}
                   </span>
                 </button>
+                {participatingAgentsMeta.length > 0 && (
+                  <div className="flex -space-x-1.5 shrink-0 group-hover:hidden">
+                    {participatingAgentsMeta.slice(0, 3).map((agent) => (
+                      <AgentAvatar
+                        key={agent.id}
+                        name={agent.isDefault ? "default" : agent.id}
+                        label={agent.name}
+                        imageUrl={agent.image}
+                        className="size-4 rounded-full ring-1 ring-background"
+                      />
+                    ))}
+                    {participatingAgentsMeta.length > 3 && (
+                      <div className="flex items-center justify-center size-4 rounded-full ring-1 ring-background bg-muted text-[8px] font-bold text-muted-foreground">
+                        +{participatingAgentsMeta.length - 3}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation();
                     void handleDeleteChannel(conversation.id);
                   }}
-                  className="opacity-0 group-hover:opacity-100 rounded p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition"
+                  className="hidden group-hover:block rounded p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition"
                   aria-label={`Remove ${conversation.title || conversation.id}`}
                   title="Remove channel"
                 >

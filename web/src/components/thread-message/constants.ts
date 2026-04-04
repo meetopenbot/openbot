@@ -4,8 +4,3 @@ export const TEXT_EVENT_TYPES = new Set([
   "agent:output-delta",
   "agent:input",
 ]);
-
-export const DELEGATION_EVENT_TYPES = new Set([
-  "delegation:start",
-  "delegation:end",
-]);

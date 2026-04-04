@@ -59,10 +59,6 @@ export function ThreadView({
     const events: ThreadRenderableItem[] = [];
 
     visibleMessages.forEach((msg, msgIndex) => {
-      const delegationMap = new Map<
-        string,
-        { start?: any; end?: any; subs: any[] }
-      >();
       const topLevelEvents: any[] = [];
 
       const content = Array.isArray(msg.content)
@@ -76,40 +72,6 @@ export function ThreadView({
           ];
 
       content.forEach((event: any, eventIndex: number) => {
-        const delegationId = event.meta?.delegationId;
-        if (delegationId) {
-          if (!delegationMap.has(delegationId)) {
-            delegationMap.set(delegationId, { subs: [] });
-          }
-          const group = delegationMap.get(delegationId)!;
-
-          if (event.type === "delegation:start") {
-            group.start = event;
-            topLevelEvents.push({ type: "delegation-group", delegationId });
-          } else if (event.type === "delegation:end") {
-            group.end = event;
-          } else {
-            if (event.type === "agent:output-delta") {
-              const hasFinalOutput = content.some(
-                (e: any) =>
-                  e.type === "agent:output" &&
-                  e.meta?.delegationId === delegationId,
-              );
-              if (hasFinalOutput) return;
-              const nextDelta = content
-                .slice(eventIndex + 1)
-                .find(
-                  (e: any) =>
-                    e.type === "agent:output-delta" &&
-                    e.meta?.delegationId === delegationId,
-                );
-              if (nextDelta) return;
-            }
-            group.subs.push(event);
-          }
-          return;
-        }
-
         if (event.type === "agent:output-delta") {
           const hasFinalOutput = content.some(
             (e: any) => e.type === "agent:output",
@@ -128,6 +90,28 @@ export function ThreadView({
               event.data?.placement === "attention")
           )
             return;
+
+          if (TEXT_EVENT_TYPES.has(event.type)) {
+            const rawContent =
+              event.data?.content ??
+              event.data?.result ??
+              event.data?.message;
+            const delta = event.data?.delta;
+            if (
+              !rawContent &&
+              !delta &&
+              event.type !== "agent:input"
+            )
+              return;
+            if (
+              typeof rawContent === "string" &&
+              !rawContent.trim() &&
+              !delta &&
+              event.type !== "agent:input"
+            )
+              return;
+          }
+
           topLevelEvents.push(event);
         }
       });
@@ -140,36 +124,17 @@ export function ThreadView({
             ? "You"
             : item.meta?.agentName || config?.name || "Assistant";
 
-        if (item.type === "delegation-group") {
-          const group = delegationMap.get(item.delegationId);
-          if (group?.start) {
-            events.push({
-              key: `${msgIndex}-delegation-${item.delegationId}`,
-              type: "delegation",
-              data: group,
-              messageId: msg.id,
-              meta: {
-                timestamp: eventTimestamp,
-                agentName,
-                role: msg.role,
-              },
-              isGrouped: false,
-            });
-          }
-        } else {
-          events.push({
-            key: `${msgIndex}-${item.type}-${idx}`,
-            type: "standard",
-            event: item,
-            messageId: msg.id,
-            meta: {
-              timestamp: eventTimestamp,
-              agentName,
-              role: msg.role,
-            },
-            isGrouped: false,
-          });
-        }
+        events.push({
+          key: `${msgIndex}-${item.type}-${idx}`,
+          event: item,
+          messageId: msg.id,
+          meta: {
+            timestamp: eventTimestamp,
+            agentName,
+            role: msg.role,
+          },
+          isGrouped: false,
+        });
       });
     });
 
@@ -179,9 +144,7 @@ export function ThreadView({
       if (
         prev &&
         prev.meta.role === item.meta.role &&
-        prev.meta.agentName === item.meta.agentName &&
-        item.type === "standard" &&
-        prev.type === "standard"
+        prev.meta.agentName === item.meta.agentName
       ) {
         const timeDiff = item.meta.timestamp - prev.meta.timestamp;
         if (timeDiff < 5 * 60 * 1000) {

@@ -1,7 +1,10 @@
+import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { cn } from "../lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../lib/api";
 
 /** Compact prose tuned for Slack-like chat: headings ≈ body size, bold labels not document titles. */
 const chatProseClass =
@@ -23,6 +26,55 @@ const chatProseClass =
   "prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1 " +
   /* Drop extra top gap when a message starts with a heading */
   "[&_h1:first-child]:mt-0 [&_h2:first-child]:mt-0 [&_h3:first-child]:mt-0 [&_h4:first-child]:mt-0";
+
+function MentionText({ children: text }: { children: string }) {
+  const { data: agents = [] } = useQuery({
+    queryKey: ["agents"],
+    queryFn: api.getAgents,
+    staleTime: 60_000,
+  });
+
+  if (!text || agents.length === 0) return <>{text}</>;
+
+  const mentionPattern = /@(\w+)/g;
+  const parts: (string | React.ReactElement)[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = mentionPattern.exec(text)) !== null) {
+    const id = match[1];
+    const agent = agents.find(
+      (a) => a.id.toLowerCase() === id.toLowerCase() || a.name.toLowerCase() === id.toLowerCase(),
+    );
+    if (agent) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      parts.push(
+        <button
+          key={`${match.index}-${id}`}
+          type="button"
+          onClick={() => {
+            const dmId = `dm_${agent.id}`;
+            const params = new URLSearchParams(window.location.search);
+            params.set("conversationId", dmId);
+            params.set("tab", "chat");
+            window.history.pushState({}, "", `?${params.toString()}`);
+            window.dispatchEvent(new PopStateEvent("popstate"));
+          }}
+          className="inline-flex items-center gap-0.5 rounded px-1 py-px text-primary font-semibold bg-primary/8 hover:bg-primary/15 transition-colors cursor-pointer"
+        >
+          @{agent.name}
+        </button>,
+      );
+      lastIndex = match.index + match[0].length;
+    }
+  }
+
+  if (lastIndex === 0) return <>{text}</>;
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return <>{parts}</>;
+}
 
 export function MessageMarkdown({
   className,
@@ -47,6 +99,17 @@ export function MessageMarkdown({
             >
               {linkChildren}
             </a>
+          ),
+          p: ({ children: pChildren }) => (
+            <p>
+              {Array.isArray(pChildren)
+                ? pChildren.map((child, i) =>
+                    typeof child === "string" ? <MentionText key={i}>{child}</MentionText> : child,
+                  )
+                : typeof pChildren === "string"
+                  ? <MentionText>{pChildren}</MentionText>
+                  : pChildren}
+            </p>
           ),
         }}
       >

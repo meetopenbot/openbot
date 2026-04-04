@@ -3,20 +3,26 @@ alwaysApply: true
 ---
 # OpenBot Context & Architecture
 
-OpenBot is an extensible AI assistant ecosystem built on the **Melony** framework. Its **main goal** is to solve agent fragmentation and communication problems. It follows a "Manager-Agent" orchestration pattern to provide a powerful, multi-modal sidekick for developers and power users.
+OpenBot is an extensible AI assistant ecosystem built on the **Melony** framework. Its **main goal** is to solve agent fragmentation and communication problems. It provides a Slack-like workspace where specialized agents are invoked via @mentions and collaborate in threaded conversations.
 
 ## 🧠 Core Philosophy
-- **Delegate by Default**: The central Manager Agent focuses on orchestration and memory, delegating specialized tasks (shell, browser, files) to dedicated agents.
+- **@mention Routing**: Users invoke agents by tagging them with `@agent` in messages. The router resolves the target agent and assigns it to the thread for follow-up messages.
 - **Event-Driven**: All communication happens via an asynchronous event bus (Melony).
 - **Extensible**: New agents can be added via YAML configuration, and new capabilities via Melony plugins.
 
 ## 🏗️ Architecture Overview
 
-### 1. The Manager Agent
-The central entry point. Its primary responsibilities are:
-- **Orchestration**: Analyzing user intent and routing tasks to the correct agent using the `delegateTask` tool.
+### 1. The Router
+The central dispatcher. It resolves which agent handles each message using:
+1. **@mention** in the message text (first match wins, longest prefix)
+2. **Thread assignee** (persisted from previous messages)
+3. **DM context** (direct messages route to the DM target)
+4. **Channel default** (falls back to the `default` agent)
+
+### 2. The Default Agent
+The primary entry point. Its responsibilities are:
+- **General Assistance**: Handles conversations when no specific agent is @mentioned.
 - **Memory**: Using the `memory` plugin to manage long-term memory (`remember`/`recall`).
-- **Summarization**: Providing high-level, concise summaries of sub-agent activities.
 
 ### 2. Specialized Agents
 Agents are workers that handle specific domains.
@@ -35,12 +41,11 @@ Plugins provide the actual tools and logic used by agents.
 
 ## 🔄 Common Workflows
 
-### Task Delegation Flow
-1. **User Input** → `agent:input` event.
-2. **Manager Decides** → Calls `delegateTask(agent, task)`.
-3. **Delegation Handler** → Emits `agent:input` to the sub-agent's runtime.
-4. **Agent Execution** → Agent performs task, emits `agent:output`.
-5. **Manager Bridge** → Manager catches output, reports results to user.
+### @mention Agent Invocation Flow
+1. **User Input** → `agent:input` event with `@agentId` in content.
+2. **Router Parses** → Extracts @mention, strips it from content, resolves target agent.
+3. **Agent Execution** → Target agent's runtime processes the message, streams `agent:output` events.
+4. **Thread Assignment** → Thread is assigned to the agent; subsequent messages auto-route.
 
 ### Memory Workflow
 1. **Action** → Manager calls \`remember(content, tags)\`.
@@ -79,7 +84,7 @@ Agents are specialized personas that use plugins.
 
 ### 3. Using Registry for Discovery
 The `AgentRegistry` and `PluginRegistry` are used to:
-- Dynamically build the Manager's `delegateTask` tool (it automatically lists all registered agents and their capabilities).
+- List all registered agents and their capabilities (used by the router for @mention resolution and by agents for awareness of peers).
 - Resolve plugin names in YAML agent definitions.
 - Auto-wire event subscriptions for agents (e.g., if an agent subscribes to `agent:output`).
 

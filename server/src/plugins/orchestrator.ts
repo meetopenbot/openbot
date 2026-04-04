@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MelonyBuilder, Runtime, generateId, RuntimeContext } from 'melony';
+import { MelonyBuilder, RuntimeContext } from 'melony';
 import { ConversationEvent, ConversationState } from '../app/types.js';
 import {
   memoryPlugin,
@@ -17,33 +17,6 @@ import { widgets } from '../ui/registry.js';
  */
 export const orchestratorToolDefinitions = {
   ...memoryToolDefinitions,
-  delegateTask: {
-    description: `Delegate a task to a specialized expert agent by creating a dedicated Thread.`,
-    inputSchema: z.object({
-      agentId: z.string().describe('The ID of the agent to use'),
-      task: z.string().describe('The task for the agent to perform'),
-      threadTitle: z
-        .string()
-        .optional()
-        .describe("A short title for the new thread (e.g. 'Fix Router Bug')"),
-      stateKey: z
-        .string()
-        .optional()
-        .describe('Optional key to store structured JSON result in the session state'),
-      attachments: z
-        .array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            mimeType: z.string(),
-            size: z.number(),
-            url: z.string(),
-          }),
-        )
-        .optional()
-        .describe('Attachments to pass through to the agent'),
-    }),
-  },
   updateSessionState: {
     description: 'Update a value in the session state using a JSON path.',
     inputSchema: z.object({
@@ -106,15 +79,9 @@ function* maybeEmitWidget(key: string, value: any) {
 }
 
 /**
- * Orchestration Tools Plugin.
- *
- * Only provides the action handlers for delegation and state management.
+ * Orchestration Tools Plugin — session state updates and related actions.
  */
-export function orchestrationToolsPlugin(options: {
-  agentRuntimes: Map<string, Runtime<ConversationState, ConversationEvent>>;
-}) {
-  const { agentRuntimes } = options;
-
+export function orchestrationToolsPlugin() {
   return (builder: MelonyBuilder<ConversationState, ConversationEvent>) => {
     builder.on(
       'action:updateSessionState',
@@ -150,197 +117,6 @@ export function orchestrationToolsPlugin(options: {
         }
       },
     );
-
-    builder.on(
-      'action:delegateTask',
-      async function* (
-        event: ConversationEvent,
-        context: { runId: string; state: ConversationState },
-      ) {
-        const { agentId, toolCallId, task, stateKey, attachments, threadTitle } = event.data;
-        const agentRuntime = agentRuntimes.get(agentId);
-        const delegatorAgentId = (context as any).agentId;
-
-        if (!agentRuntime) {
-          yield {
-            type: 'action:result',
-            data: {
-              action: 'delegateTask',
-              result: `Error: Agent "${agentId}" not found.`,
-              toolCallId,
-            },
-          };
-          return;
-        }
-
-        const delegationId = `del_${generateId()}`;
-        const state = context.state as ConversationState;
-
-        state.threadAssignees ??= {};
-        state.threadAssignees[delegationId] = agentId;
-
-        yield {
-          type: 'delegation:start',
-          meta: { delegationId, agentName: agentId, threadId: delegationId },
-          data: { agent: agentId, task, title: threadTitle || task.slice(0, 50) + '...' },
-        } as ConversationEvent;
-
-        if (!state.agentStates) state.agentStates = {};
-        if (!state.agentStates[agentId]) state.agentStates[agentId] = {};
-        const agentState = state.agentStates[agentId];
-
-        const agentIterator = agentRuntime.run(
-          {
-            type: 'agent:input',
-            data: { content: task, attachments },
-            meta: { threadId: delegationId },
-          } as any,
-          { runId: delegationId, state: agentState as any, agentId } as any,
-        );
-
-        let lastAgentOutput = '';
-        let pendingApprovalId: string | undefined;
-
-        try {
-          for await (const agentEvent of agentIterator) {
-            if (agentEvent.type === 'suspend') {
-              const suspendData = (agentEvent as any).data ?? {};
-              const suspendId = typeof suspendData.id === 'string' ? suspendData.id : undefined;
-              if (suspendId) pendingApprovalId = suspendId;
-              const delegationMeta = {
-                ...agentEvent.meta,
-                delegationId,
-                agentName: agentId,
-                threadId: delegationId,
-              };
-              const nested = suspendData.event;
-              if (nested?.type === 'ui' && nested.data?.placement === 'attention') {
-                yield { ...nested, meta: { ...nested.meta, ...delegationMeta } } as ConversationEvent;
-              }
-              yield {
-                ...agentEvent,
-                meta: delegationMeta,
-              } as ConversationEvent;
-              continue;
-            }
-
-            if (agentEvent.type === 'agent:input') {
-              yield {
-                ...agentEvent,
-                type: 'agent:sub-input',
-                meta: {
-                  ...agentEvent.meta,
-                  delegationId,
-                  agentName: agentId,
-                  threadId: delegationId,
-                },
-              } as ConversationEvent;
-              continue;
-            }
-
-            if (agentEvent.type.startsWith('action:') && agentEvent.type !== 'action:result') {
-              yield {
-                ...agentEvent,
-                type: 'agent:sub-action',
-                meta: {
-                  ...agentEvent.meta,
-                  delegationId,
-                  agentName: agentId,
-                  threadId: delegationId,
-                },
-                data: { ...agentEvent.data, originalType: agentEvent.type },
-              } as ConversationEvent;
-              continue;
-            }
-
-            if (agentEvent.type === 'action:result') {
-              yield {
-                ...agentEvent,
-                type: 'agent:sub-action-result',
-                meta: {
-                  ...agentEvent.meta,
-                  delegationId,
-                  agentName: agentId,
-                  threadId: delegationId,
-                },
-              } as ConversationEvent;
-              continue;
-            }
-
-            if (agentEvent.type === 'usage:update') {
-              yield {
-                ...agentEvent,
-                type: 'agent:sub-usage',
-                meta: {
-                  ...agentEvent.meta,
-                  delegationId,
-                  agentName: agentId,
-                  threadId: delegationId,
-                },
-              } as ConversationEvent;
-              continue;
-            }
-
-            yield {
-              ...agentEvent,
-              meta: {
-                ...agentEvent.meta,
-                delegationId,
-                agentName: agentId,
-                threadId: delegationId,
-              },
-            } as ConversationEvent;
-
-            if (agentEvent.type === 'agent:output') {
-              const agentOutput = agentEvent.data as any;
-              const value =
-                agentOutput?.result ?? agentOutput?.content ?? agentOutput?.message ?? agentOutput;
-              if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                if (stateKey) {
-                  state[stateKey] = value;
-                  yield* maybeEmitWidget(stateKey, value);
-                }
-                if (lastAgentOutput) lastAgentOutput += '\n\n';
-                lastAgentOutput += JSON.stringify(value, null, 2);
-              } else if (typeof value === 'string') {
-                if (lastAgentOutput) lastAgentOutput += '\n\n';
-                lastAgentOutput += value;
-              }
-            }
-          }
-        } catch (error: any) {
-          console.error(`[orchestrator] Error running agent "${agentId}":`, error);
-          lastAgentOutput = `Error executing task: ${error.message}`;
-        }
-
-        if (pendingApprovalId) {
-          state.pendingAgentTasks ??= {};
-          state.pendingAgentTasks[pendingApprovalId] = {
-            toolCallId,
-            agentName: agentId,
-            delegatorAgentId,
-            delegationId,
-            stateKey: typeof stateKey === 'string' ? stateKey : undefined,
-          };
-          return;
-        }
-
-        yield {
-          type: 'delegation:end',
-          meta: { delegationId, agentName: agentId, threadId: delegationId },
-          data: { agent: agentId, result: lastAgentOutput || 'Task completed.' },
-        } as ConversationEvent;
-
-        yield {
-          type: 'action:result',
-          data: {
-            action: 'delegateTask',
-            result: lastAgentOutput || 'Task completed with no output.',
-            toolCallId,
-          },
-        } as ConversationEvent;
-      },
-    );
   };
 }
 
@@ -355,9 +131,9 @@ export function createOrchestratorPromptBuilder(options: {
   const buildMemoryPrompt = createMemoryPromptBuilder(resolvedBaseDir);
   const allAgents = registry.getAgents();
 
-  const getAgentDescriptions = (memberIds?: string[], excludeId?: string) => {
+  const getAgentDescriptions = (excludeId?: string) => {
     return allAgents
-      .filter((a) => (!memberIds || memberIds.includes(a.id)) && a.id !== excludeId)
+      .filter((a) => a.id !== excludeId)
       .map((a) => {
         const tools = a.capabilities
           ? Object.entries(a.capabilities)
@@ -375,41 +151,9 @@ ${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ''}
   return async (context: RuntimeContext, baseInstructions: string = '') => {
     const memoryPrompt = await buildMemoryPrompt(context);
     const state = context.state as ConversationState;
-    const managerId = state.channelManagerId || 'you';
-    const isChannel = !!state.conversationId?.startsWith('channel_');
-    const members = state.channelMembers as Array<{ id: string; name: string }> | undefined;
-    const memberIds = members?.map((m) => m.id);
     const currentAgentId = (context as any).agentId;
-    const isActingAsManager = isChannel && managerId === currentAgentId;
 
-    let orchestratorPrompt = '';
-
-    if (isActingAsManager) {
-      orchestratorPrompt = `
-<orchestrator_mode>
-You are the **Lead Orchestrator** of this channel.
-You have a team of member agents available to you. 
-
-**Directives**:
-1. **Lead**: Take ownership of the conversation. Ensure the user's goal is met.
-2. **Assign**: Use \`delegateTask\` to spin up a new **Thread** for specialized tasks.
-3. **Review**: You are the primary point of contact. Review and summarize findings from thread assignees for the user.
-</orchestrator_mode>
-
-<principles>
-1. **Channels**: As a manager, triage incoming requests. Decide if you should handle them or delegate.
-2. **Threads**: Treat every complex task as a separate **Thread**. Use \`delegateTask\` to assign a thread to an expert.
-3. **Synthesis**: Once an expert finishes their thread, summarize the outcome for the user in the main channel.
-</principles>`;
-    } else if (!isChannel || managerId === 'you') {
-      orchestratorPrompt = `
-<expert_mode>
-You are interacting directly with the user. Focus on solving their request directly using your tools.
-If the task is complex, you can still use \`delegateTask\` to get help from other agents.
-</expert_mode>`;
-    }
-
-    const agentDescriptions = getAgentDescriptions(memberIds, currentAgentId);
+    const agentDescriptions = getAgentDescriptions(currentAgentId);
     const standardKeys = [
       'messages',
       'agentStates',
@@ -418,9 +162,6 @@ If the task is complex, you can still use \`delegateTask\` to get help from othe
       'workspaceRoot',
       'title',
       'conversationId',
-      'pendingAgentTasks',
-      'channelMembers',
-      'channelManagerId',
       'threadAssignees',
     ];
     const customState: Record<string, any> = {};
@@ -433,22 +174,14 @@ If the task is complex, you can still use \`delegateTask\` to get help from othe
         ? `\n\n<session_state>\n${JSON.stringify(customState, null, 2)}\n</session_state>`
         : '';
 
-    const channelContext =
-      isChannel && members
-        ? `\n\n<channel_context>
-This is a shared channel. 
-Members: ${members.map((m) => `${m.name} (@${m.id})`).join(', ')}
-Manager: ${managerId === 'you' ? 'The User' : managerId}
-${(state.messages?.length || 0) <= 1 && isActingAsManager ? '\n**Important**: This is the very first message in this channel. As the manager, you should analyze the request and decide if you should handle it or delegate parts of it to your team members immediately.' : ''}
-</channel_context>`
-        : '';
-
     return `
 ${baseInstructions}
 
-${orchestratorPrompt}
+<expert_mode>
+You are interacting directly with the user. Focus on solving their request directly using your tools.
+Other specialized agents exist in this workspace; users can invoke them via @mentions in messages when they need a different capability.
+</expert_mode>
 ${statePrompt}
-${channelContext}
 
 <agents>
 ${agentDescriptions}

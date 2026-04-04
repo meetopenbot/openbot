@@ -12,7 +12,6 @@ import { SettingsPage } from './components/pages/SettingsPage';
 import { Onboarding } from './components/Onboarding';
 import { ThemeProvider } from './components/ThemeProvider';
 import { ThreadPanel } from './components/ThreadPanel';
-import { ChannelMembersPanel } from '@/components/ChannelMembersPanel';
 import { SessionStateSidebar } from './components/SessionStateSidebar';
 import { Button } from './components/ui/button';
 import { InfoIcon } from 'lucide-react';
@@ -23,12 +22,8 @@ export function App() {
   const { data: conversations = [] } = useConversations();
   const { data: config, isLoading: configLoading } = useConfig();
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [rightPanel, setRightPanel] = useState<'members' | 'session' | null>(null);
+  const [rightPanel, setRightPanel] = useState<'session' | null>(null);
   const activeConversationId = conversationId || conversations[0]?.id || '';
-  const activeConversation = conversations.find(
-    (conversation) => conversation.id === activeConversationId,
-  );
-  const isChannelConversation = activeConversation?.kind === 'channel';
   const markConversationRead = useCallback(
     async (id: string) => {
       if (!id) return;
@@ -105,23 +100,13 @@ export function App() {
             currentTab={tab === 'agents' ? 'settings' : tab}
             onNavigate={navigate}
             rightOpen={Boolean(activeThreadId || rightPanel)}
-            rightWidth={activeThreadId ? 450 : 360}
-            isChannelMembersPanelOpen={rightPanel === 'members'}
-            onOpenChannelMembersPanel={() => {
-              setActiveThreadId(null);
-              setRightPanel((panel) => (panel === 'members' ? null : 'members'));
-            }}
+            rightWidth={360}
+            rightWidthClassName={
+              activeThreadId ? 'w-[450px] xl:w-[600px] 2xl:w-[720px]' : undefined
+            }
             rightSidebar={
               activeThreadId ? (
                 <ThreadPanel threadId={activeThreadId} onClose={() => setActiveThreadId(null)} />
-              ) : rightPanel === 'members' && isChannelConversation ? (
-                <ChannelMembersPanel
-                  channelId={activeConversationId}
-                  channelName={
-                    activeConversation?.title || activeConversationId.replace('channel_', '')
-                  }
-                  onClose={() => setRightPanel(null)}
-                />
               ) : rightPanel === 'session' ? (
                 <SessionStateSidebar onClose={() => setRightPanel(null)} />
               ) : null

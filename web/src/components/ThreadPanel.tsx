@@ -12,10 +12,12 @@ export function ThreadPanel({
   const { messages, threads, streaming, messageReactions, setMessageReaction } =
     useChat(threadId);
 
-  // Find the parent message
   const parentMessage = messages.find(m => m.id === threadId);
-  
-  // Get thread messages
+
+  const parentAgentName = parentMessage?.role === "assistant"
+    ? parentMessage.content?.find((e: any) => e.meta?.agentName)?.meta?.agentName as string | undefined
+    : undefined;
+
   const threadEvents = threads[threadId] || [];
   
   const threadMessages = foldThreadEventsToMessages(threadEvents);
@@ -41,7 +43,7 @@ export function ThreadPanel({
       </div>
 
       {/* Parent Message (Context) */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto px-2">
         <div className="border-b border-border/30 pb-2">
            {parentMessage && (
              <ThreadView 
@@ -67,7 +69,7 @@ export function ThreadPanel({
 
       {/* Composer */}
       <div className="p-4 pt-0">
-        <Composer threadId={threadId} />
+        <Composer threadId={threadId} threadAgentName={parentAgentName} />
       </div>
     </div>
   );

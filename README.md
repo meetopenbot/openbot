@@ -15,24 +15,24 @@
   <a href="https://www.npmjs.com/package/openbot"><img src="https://img.shields.io/npm/dt/openbot" alt="npm downloads" /></a>
 </p>
 
-OpenBot is more than just a chatbot. It's an orchestrator that lives in your terminal and browser, delegating complex tasks to specialized agents. It's designed to be local-first, event-driven, and infinitely extensible.
+OpenBot is more than just a chatbot. It's an AI workspace that lives in your terminal and browser, where specialized agents collaborate via @mentions and threaded conversations. It's designed to be local-first, event-driven, and infinitely extensible.
 
 💬 Join the community on Discord: https://discord.gg/XYYXvN2ebB
 
 ![OpenBot Banner](./screen-j-dilla-2.png)
 
-## 🧠 The "Manager-Agent" Philosophy
+## 🧠 The Multi-Agent Philosophy
 
-OpenBot follows a **Delegate by Default** pattern. 
+OpenBot follows a **Slack-like @mention** pattern for agent collaboration.
 
-- **The Manager Agent**: Your primary interface. It analyzes your intent, manages long-term memory (via the `memory` plugin), and orchestrates specialized workers.
-- **Specialized Agents**: Workers dedicated to specific domains like `os` (shell & files), `browser` (web automation), or any custom agent you define.
+- **@mention Routing**: Tag any agent with `@agent` in a message to invoke it directly. The agent responds in the thread and stays assigned for follow-up messages.
+- **Specialized Agents**: Dedicated to specific domains like `os` (shell & files), `browser` (web automation), or any custom agent you define.
 - **Event Bus**: All communication happens asynchronously via events, allowing for complex multi-agent choreography and real-time UI updates.
 
 ## 🤖 Meet the Agents
 
-### 🧠 Manager Agent (The Orchestrator)
-The central orchestrator of the OpenBot ecosystem. It analyzes user intent, manages long-term memory (via the `memory` plugin), and coordinates other agents using the `delegateTask` tool. It provides you with a concise summary of the results once the specialists finish their work.
+### 🧠 Default Agent
+The primary entry point of the OpenBot ecosystem. It handles general conversations, manages long-term memory (via the `memory` plugin), and is aware of all other agents so it can suggest which ones to @mention for specialized tasks.
 
 ### 🐚 OS Agent (`os`)
 Your specialized terminal and file system companion. It has full access to your local machine (within the boundaries you set). It can execute shell commands, create/read/edit files, manage directories, and handle system-level operations like git commands or script execution.

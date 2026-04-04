@@ -38,8 +38,7 @@ export async function createOpenBot(options?: {
       builder.use(agent.plugin);
     }
 
-    // Always apply orchestration tools so any agent can delegate if it has the tools in its prompt
-    builder.use(orchestrationToolsPlugin({ agentRuntimes }));
+    builder.use(orchestrationToolsPlugin());
     
     agentRuntimes.set(agent.id, builder.build());
   }

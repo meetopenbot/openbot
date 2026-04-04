@@ -1,10 +1,15 @@
 import { useChat } from "../hooks/use-chat";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useSession } from "../hooks/use-session";
+import { useQuery } from "@tanstack/react-query";
 import { api, type AttachmentRef } from "../lib/api";
 import { cn } from "../lib/utils";
+import { AgentMentionDropdown } from "./composer/AgentMentionDropdown";
+import { ImagePreview } from "./composer/ImagePreview";
+import { ActionPopover } from "./composer/ActionPopover";
+import { UsageStats } from "./composer/UsageStats";
 
-export function Composer({ threadId }: { threadId?: string }) {
+export function Composer({ threadId, threadAgentName }: { threadId?: string; threadAgentName?: string }) {
   const { send, streaming, stop, events } = useChat(threadId);
   const { conversationId } = useSession();
   const [content, setContent] = useState("");
@@ -13,9 +18,54 @@ export function Composer({ threadId }: { threadId?: string }) {
   const [showActionPopover, setShowActionPopover] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const actionPopoverRef = useRef<HTMLDivElement>(null);
   const isDm = conversationId.startsWith("dm_");
   const targetAgent = isDm ? conversationId.slice(3) : undefined;
+
+  const { data: agents = [] } = useQuery({
+    queryKey: ["agents"],
+    queryFn: api.getAgents,
+  });
+
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+
+  const filteredAgents = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return agents.filter(
+      (a) => a.id.toLowerCase().includes(q) || a.name.toLowerCase().includes(q),
+    );
+  }, [mentionQuery, agents]);
+
+  const detectMention = useCallback((text: string, cursorPos: number) => {
+    const before = text.slice(0, cursorPos);
+    const match = before.match(/@(\w*)$/);
+    if (match) {
+      setMentionQuery(match[1]);
+      setMentionIndex(0);
+    } else {
+      setMentionQuery(null);
+    }
+  }, []);
+
+  const insertMention = useCallback((agentId: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const cursorPos = textarea.selectionStart;
+    const before = content.slice(0, cursorPos);
+    const after = content.slice(cursorPos);
+    const match = before.match(/@(\w*)$/);
+    if (!match) return;
+    const start = before.length - match[0].length;
+    const newContent = before.slice(0, start) + `@${agentId} ` + after;
+    setContent(newContent);
+    setMentionQuery(null);
+    setTimeout(() => {
+      const newPos = start + agentId.length + 2;
+      textarea.focus();
+      textarea.setSelectionRange(newPos, newPos);
+    }, 0);
+  }, [content]);
 
   const clearPendingImages = () => {
     setPendingImages((current) => {
@@ -76,10 +126,11 @@ export function Composer({ threadId }: { threadId?: string }) {
       }
     }
 
+    const resolvedAgent = targetAgent || threadAgentName;
     send({
       type: "agent:input",
       meta: {
-        ...(targetAgent ? { agentName: targetAgent } : {}),
+        ...(resolvedAgent ? { agentName: resolvedAgent } : {}),
         ...(threadId ? { threadId } : {}),
       },
       data: { content: trimmed, attachments: attachments.length > 0 ? attachments : undefined },
@@ -120,6 +171,28 @@ export function Composer({ threadId }: { threadId?: string }) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (mentionQuery !== null && filteredAgents.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % filteredAgents.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((i) => (i - 1 + filteredAgents.length) % filteredAgents.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        insertMention(filteredAgents[mentionIndex].id);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionQuery(null);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -175,83 +248,27 @@ export function Composer({ threadId }: { threadId?: string }) {
     }
   }, [streaming, conversationId]);
 
-  useEffect(() => {
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!actionPopoverRef.current) return;
-      if (actionPopoverRef.current.contains(event.target as Node)) return;
-      setShowActionPopover(false);
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setShowActionPopover(false);
-    };
-
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("keydown", handleEscape);
-    return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, []);
-
   const canSend = (Boolean(content.trim()) || pendingImages.length > 0) && !streaming && !uploadingImages;
-
-  const usageEvent = useMemo(() => {
-    const eventsList = (events ?? []) as any[];
-    for (let i = eventsList.length - 1; i >= 0; i -= 1) {
-      const event = eventsList[i];
-      if (event?.type === "usage:update" && event?.data?.scope === "manager") return event;
-    }
-    for (let i = eventsList.length - 1; i >= 0; i -= 1) {
-      const event = eventsList[i];
-      if (event?.type === "usage:update") return event;
-    }
-    return null;
-  }, [events]);
-
-  const usageData = usageEvent?.data;
-  const usageModel = usageData?.model as string | undefined;
-  const turnInputTokens = Number(usageData?.turn?.inputTokens ?? 0);
-  const turnOutputTokens = Number(usageData?.turn?.outputTokens ?? 0);
-  const sessionTotalTokens = Number(usageData?.session?.totalTokens ?? 0);
-
-  const formatInt = (value: number) => new Intl.NumberFormat().format(Math.max(0, Math.floor(value)));
 
   return (
     <div className="relative w-full rounded-lg border border-border/60 bg-background shadow-[0_2px_12px_rgba(0,0,0,0.04)] transition-all duration-200 focus-within:border-border focus-within:shadow-[0_2px_20px_rgba(0,0,0,0.06)]">
       <form onSubmit={handleSubmit} className="flex flex-col">
-        {pendingImages.length > 0 && (
-          <div className="px-3 pt-3">
-            <div className="flex flex-wrap gap-2">
-              {pendingImages.map((image) => (
-                <div key={image.id} className="relative group animate-in fade-in scale-in-95">
-                  <img
-                    src={image.previewUrl}
-                    alt={image.file.name}
-                    className="h-16 w-16 rounded-lg border border-border/60 object-cover shadow-sm transition-all duration-200 hover:border-border"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removePendingImage(image.id)}
-                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground shadow-sm transition-all duration-200 hover:text-foreground"
-                    aria-label={`Remove ${image.file.name}`}
-                  >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <ImagePreview pendingImages={pendingImages} onRemove={removePendingImage} />
+
+        <AgentMentionDropdown
+          filteredAgents={filteredAgents}
+          mentionIndex={mentionIndex}
+          onSelect={insertMention}
+        />
 
         <div className="flex items-start px-4 py-3">
           <textarea
             ref={textareaRef}
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => {
+              setContent(e.target.value);
+              detectMention(e.target.value, e.target.selectionStart);
+            }}
             onKeyDown={handleKeyDown}
             placeholder={threadId ? "Reply to thread..." : (isDm && targetAgent ? `Message ${targetAgent}...` : "Message channel...")}
             className="flex-1 min-h-[22px] max-h-[200px] w-full resize-none bg-transparent p-0 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none"
@@ -260,7 +277,7 @@ export function Composer({ threadId }: { threadId?: string }) {
         </div>
         
         <div className="flex items-center justify-between px-2 pb-1.5 rounded-b-lg">
-          <div ref={actionPopoverRef} className="relative flex items-center">
+          <div className="relative flex items-center">
             <input
               ref={fileInputRef}
               type="file"
@@ -269,64 +286,15 @@ export function Composer({ threadId }: { threadId?: string }) {
               onChange={handleFileInputChange}
               className="hidden"
             />
-            <button
-              type="button"
-              onClick={() => setShowActionPopover((prev) => !prev)}
-              className="rounded-md p-1.5 text-muted-foreground/80 transition-colors hover:bg-muted/60 hover:text-foreground"
-              aria-label="Open actions"
-              title="Open actions"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 5v14" />
-                <path d="M5 12h14" />
-              </svg>
-            </button>
-            {showActionPopover && (
-              <div className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-44 overflow-hidden rounded-xl border border-border/60 bg-background p-1.5 shadow-xl animate-in fade-in slide-in-from-bottom-2">
-                <button
-                  type="button"
-                  onClick={handleAttachImageClick}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-muted/50"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <path d="m21 15-5-5L5 21" />
-                  </svg>
-                  <span>Upload image</span>
-                </button>
-              </div>
-            )}
+            <ActionPopover
+              showActionPopover={showActionPopover}
+              setShowActionPopover={setShowActionPopover}
+              onAttachImage={handleAttachImageClick}
+            />
           </div>
 
           <div className="flex items-center gap-2">
-            {usageData && (
-              <div className="group relative">
-                <div
-                  className="rounded-md px-2 py-1 text-[11px] text-muted-foreground/80 transition-colors group-hover:bg-muted/60 group-hover:text-foreground"
-                  aria-label="Token usage"
-                >
-                  {formatInt(turnInputTokens)} in / {formatInt(sessionTotalTokens)} total
-                </div>
-                <div className="pointer-events-none absolute bottom-[calc(100%+8px)] right-0 z-20 hidden w-[160px] rounded-lg border border-border/60 bg-background px-2.5 py-2 text-[11px] shadow-xl group-hover:block">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">Last prompt</span>
-                    <span className="font-medium text-foreground">{formatInt(turnInputTokens)}</span>
-                  </div>
-                  <div className="mt-1 text-muted-foreground">
-                    Output: {formatInt(turnOutputTokens)} tokens
-                  </div>
-                  <div className="mt-1 text-muted-foreground">
-                    Session total: {formatInt(sessionTotalTokens)} tokens
-                  </div>
-                  {usageModel && (
-                    <div className="mt-1 truncate text-muted-foreground/80">
-                      {usageModel}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            <UsageStats events={events} />
 
             {streaming ? (
               <button

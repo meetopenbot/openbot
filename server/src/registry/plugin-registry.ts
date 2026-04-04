@@ -6,7 +6,7 @@ import type { ConversationState, ConversationEvent } from "../app/types.js";
  * Unified plugin registry entry.
  *
  * Every extension in OpenBot is a "plugin". The `type` field determines
- * whether it contributes tools ("tool") or acts as a delegatable agent ("agent").
+ * whether it contributes tools ("tool") or is registered as an agent ("agent").
  */
 export interface PluginRegistryEntry {
   id: string;

@@ -59,7 +59,7 @@ export function ChatPage({ conversationId, onReply }: ChatPageProps) {
           onReply={onReply ? handleReply : undefined}
         />
       </div>
-      <div className="px-5 pb-5 pt-0 shrink-0">
+      <div className="px-4 pb-4 pt-0 shrink-0">
         <AttentionRail />
         <Composer />
       </div>
@@ -81,11 +81,6 @@ function ChatPlaceholder() {
     queryFn: () => api.getPrompts(),
   });
   const isChannelConversation = conversationId.startsWith("channel_");
-  const { data: channelMembers } = useQuery({
-    queryKey: ["channel-members", conversationId],
-    queryFn: () => api.getChannelMembers(conversationId),
-    enabled: isChannelConversation,
-  });
 
   const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
   const dmAgentIdFromRoute = conversationId.startsWith("dm_") ? conversationId.slice(3) : undefined;
@@ -103,9 +98,7 @@ function ChatPlaceholder() {
     ?? (isChannelConversation ? (channelTitle || "New channel") : "What can I help with?");
   const subtitle = activeAgent?.description
     ?? (isChannelConversation
-      ? `${channelMembers?.members.length ?? 1} ${(channelMembers?.members.length ?? 1) === 1 ? "member" : "members"}`
-        + (channelMembers ? `, manager: ${channelMembers.managerId}` : "")
-        + ". Send a message to start the conversation."
+      ? "Send a message to start the conversation."
       : "Your AI sidekick for files, terminal, and more.");
 
   return (

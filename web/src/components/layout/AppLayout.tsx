@@ -7,8 +7,7 @@ import { AppSidebar } from './AppSidebar';
 import { UpdateBadge } from './UpdateBadge';
 import { AgentAvatar } from '../AgentAvatar';
 import { AgentProfileModal } from '../AgentProfileModal';
-import { Button } from '../ui/button';
-import { UsersIcon } from 'lucide-react';
+import { cn } from '../../lib/utils';
 
 const SIDEBAR_WIDTH = 272;
 
@@ -20,9 +19,9 @@ interface AppLayoutProps {
   rightActions?: ReactNode;
   rightSidebar?: ReactNode;
   rightWidth?: number;
+  /** Tailwind width classes when open (e.g. `w-[450px] xl:w-[600px]`). When set, overrides numeric `rightWidth` for the rail. */
+  rightWidthClassName?: string;
   rightOpen?: boolean;
-  onOpenChannelMembersPanel?: () => void;
-  isChannelMembersPanelOpen?: boolean;
 }
 
 export function AppLayoutProvider({ children }: { children: ReactNode }) {
@@ -48,10 +47,10 @@ export function AppLayout({
   rightActions,
   rightSidebar,
   rightWidth = 300,
+  rightWidthClassName,
   rightOpen,
-  onOpenChannelMembersPanel,
-  isChannelMembersPanelOpen = false,
 }: AppLayoutProps) {
+  const rightRailUsesClasses = Boolean(rightWidthClassName);
   const { open, toggle } = useSidebar();
   const { data: conversations = [] } = useConversations();
   const { data: agents = [] } = useQuery({
@@ -64,7 +63,6 @@ export function AppLayout({
   const activeConversation = conversations.find(
     (conversation) => conversation.id === conversationId,
   );
-  const isChannelConversation = activeConversation?.kind === 'channel';
   const dmAgentIdFromRoute = conversationId.startsWith('dm_') ? conversationId.slice(3) : undefined;
   const resolvedDmAgentId =
     activeConversation?.kind === 'dm' && activeConversation.agentId
@@ -73,11 +71,6 @@ export function AppLayout({
   const activeAgent = resolvedDmAgentId
     ? agents.find((a) => a.id === resolvedDmAgentId || a.name === resolvedDmAgentId)
     : null;
-  const { data: channelMembers } = useQuery({
-    queryKey: ['channel-members', conversationId],
-    queryFn: () => api.getChannelMembers(conversationId),
-    enabled: !!isChannelConversation,
-  });
 
   let headerTitle = activeConversation?.title || conversationId;
   if (activeAgent && !activeConversation?.title) {
@@ -165,20 +158,6 @@ export function AppLayout({
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {isChannelConversation && onOpenChannelMembersPanel && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6"
-                onClick={onOpenChannelMembersPanel}
-                aria-pressed={isChannelMembersPanelOpen}
-                title={isChannelMembersPanelOpen ? 'Hide channel members' : 'Show channel members'}
-              >
-                <UsersIcon className="size-3" />
-                <span>{channelMembers?.members.length ?? 1}</span>
-              </Button>
-            )}
             {rightActions}
           </div>
         </div>
@@ -187,10 +166,18 @@ export function AppLayout({
       </div>
 
       <aside
-        className="h-full shrink-0 overflow-hidden hidden lg:block border-l border-border/50 bg-background"
-        style={{ width: rightOpen ? rightWidth : 0 }}
+        className={cn(
+          'h-full shrink-0 overflow-hidden hidden lg:block border-l border-border/50 bg-background transition-[width] duration-300 ease-in-out',
+          rightRailUsesClasses && (rightOpen ? rightWidthClassName : 'w-0'),
+        )}
+        style={
+          rightRailUsesClasses ? undefined : { width: rightOpen ? rightWidth : 0 }
+        }
       >
-        <div className="h-full" style={{ width: rightWidth }}>
+        <div
+          className={cn('h-full', rightRailUsesClasses && 'w-full min-w-0')}
+          style={rightRailUsesClasses ? undefined : { width: rightWidth }}
+        >
           {rightSidebar}
         </div>
       </aside>

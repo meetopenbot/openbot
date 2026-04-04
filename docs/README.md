@@ -1,10 +1,10 @@
 # OpenBot Documentation
 
-OpenBot is a powerful, extensible AI assistant framework built on top of the `melony` orchestration library. It is designed to be a secure and easy-to-use manager agent that can delegate tasks to specialized agents and interact with the operating system.
+OpenBot is a powerful, extensible AI assistant framework built on top of the `melony` orchestration library. It provides a Slack-like workspace where specialized agents are invoked via @mentions and collaborate in threaded conversations.
 
 ## Key Features
 
-- **Agent Orchestration**: Dynamically delegates tasks to specialized agents (e.g., OS, Topic, or custom YAML agents).
+- **Agent Orchestration**: Invoke specialized agents via @mentions in channels and threads (e.g., OS, Topic, or custom YAML agents).
 - **Plugin System**: Easily extend functionality with built-in and community-shared plugins.
 - **CLI Tool**: Simple configuration and management of the OpenBot server and plugins.
 - **Security**: Designed for secure interaction with shell and file system operations.

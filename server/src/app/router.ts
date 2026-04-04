@@ -15,6 +15,58 @@ function summarizeAgentEventValue(event: any): string | undefined {
   return undefined;
 }
 
+/** Avoid treating `@` inside emails/identifiers (e.g. `user@domain.com`) as a mention. */
+function isMentionAtSign(content: string, atIndex: number): boolean {
+  if (atIndex === 0) return true;
+  return !/[a-zA-Z0-9]/.test(content[atIndex - 1]!);
+}
+
+/** True if the character after a matched id/name is a valid mention terminator (not a continuation of the handle). */
+function isAgentMentionBoundary(nextChar: string | undefined): boolean {
+  if (nextChar === undefined) return true;
+  if (/\s/.test(nextChar)) return true;
+  return ",;.:!?)]}'\"`".includes(nextChar);
+}
+
+type ListedAgent = { id: string; name: string };
+
+/**
+ * First `@…` in the string that resolves to a registered agent (longest-prefix wins per position).
+ * Returns slice indices: `start` at `@`, `end` after the matched handle (exclusive).
+ */
+function findFirstAgentMention(
+  content: string,
+  agents: ListedAgent[],
+): { agentId: string; start: number; end: number } | null {
+  for (let i = 0; i < content.length; i++) {
+    if (content[i] !== "@") continue;
+    if (!isMentionAtSign(content, i)) continue;
+    const afterAt = content.slice(i + 1);
+    if (!afterAt) continue;
+
+    let best: { id: string; prefixLength: number } | undefined;
+    for (const agent of agents) {
+      const idMatches = afterAt.toLowerCase().startsWith(agent.id.toLowerCase());
+      const nameMatches = afterAt.toLowerCase().startsWith(agent.name.toLowerCase());
+      if (!idMatches && !nameMatches) continue;
+
+      const matchPrefix = idMatches ? agent.id : agent.name;
+      const prefixLength = matchPrefix.length;
+      const nextChar = afterAt[prefixLength];
+      if (!isAgentMentionBoundary(nextChar)) continue;
+
+      if (!best || prefixLength > best.prefixLength) {
+        best = { id: agent.id, prefixLength };
+      }
+    }
+
+    if (best) {
+      return { agentId: best.id, start: i, end: i + 1 + best.prefixLength };
+    }
+  }
+  return null;
+}
+
 export async function* runOpenBot(
   event: ConversationEvent,
   context: { runId: string; state: ConversationState },
@@ -37,38 +89,15 @@ export async function* runOpenBot(
   if (event.type === "agent:input") {
     const content = (event.data as any).content as string;
 
-    // A. Explicit @mention takes precedence
-    if (content?.trim().startsWith("@")) {
-      const trimmedContent = content.trim();
-      const afterAt = trimmedContent.slice(1);
-      let bestMatch:
-        | { id: string; name: string; prefixLength: number }
-        | undefined;
-
-      for (const agent of allAgents) {
-        const idMatches = afterAt
-          .toLowerCase()
-          .startsWith(agent.id.toLowerCase());
-        const nameMatches = afterAt
-          .toLowerCase()
-          .startsWith(agent.name.toLowerCase());
-        if (idMatches || nameMatches) {
-          const matchPrefix = idMatches ? agent.id : agent.name;
-          const prefixLength = matchPrefix.length;
-          const nextChar = afterAt[prefixLength];
-          if (!nextChar || nextChar === " ") {
-            if (!bestMatch || prefixLength > bestMatch.prefixLength) {
-              bestMatch = { id: agent.id, name: agent.name, prefixLength };
-            }
-          }
-        }
-      }
-
-      if (bestMatch) {
-        targetAgentId = bestMatch.id;
-        // Strip the @mention from the content for the agent
-        const remaining = afterAt.slice(bestMatch.prefixLength).trim();
-        event.data = { ...event.data, content: remaining || "Hello" } as any;
+    // A. First @mention anywhere in the message (single agent; longest-prefix wins at that @)
+    if (typeof content === "string" && content.length > 0) {
+      const mention = findFirstAgentMention(content, allAgents);
+      if (mention) {
+        targetAgentId = mention.agentId;
+        const before = content.slice(0, mention.start);
+        const after = content.slice(mention.end);
+        const stripped = `${before}${after}`.replace(/\s{2,}/g, " ").trim();
+        event.data = { ...event.data, content: stripped || "Hello" } as any;
       }
     }
 
@@ -82,24 +111,18 @@ export async function* runOpenBot(
       targetAgentId = conversationId.slice("dm_".length);
     }
 
-    // D. Channel Manager Context
-    if (
-      !targetAgentId &&
-      conversationId.startsWith("channel_") &&
-      state.channelManagerId
-    ) {
-      if (state.channelManagerId !== "you") {
-        targetAgentId = state.channelManagerId;
-      }
+    // D. Channel fallback — route to the default agent
+    if (!targetAgentId && conversationId.startsWith("channel_")) {
+      targetAgentId = "default";
     }
   }
 
-  // Determine if the target is the "Lead" of the conversation
-  // The lead uses the top-level state instead of isolated agent state.
-  const isTargetingLead =
-    !targetAgentId ||
-    targetAgentId === state.channelManagerId ||
-    targetAgentId === "you";
+  // Persist the thread→agent mapping so subsequent replies auto-route
+  if (threadId && targetAgentId && targetAgentId !== "default" && !state.threadAssignees[threadId]) {
+    state.threadAssignees[threadId] = targetAgentId;
+  }
+
+  const isTargetingLead = !targetAgentId || targetAgentId === "you";
 
   // --- 2. EXECUTION: Run the target agent ---
   const runtime = targetAgentId ? agentRuntimes.get(targetAgentId) : undefined;
@@ -109,10 +132,9 @@ export async function* runOpenBot(
     const explicitRuntime = agentRuntimes.get(event.meta.agentName);
     if (explicitRuntime) {
       const target = event.meta.agentName;
-      const isLead = target === state.channelManagerId || target === "you";
+      const isLead = target === "you";
       const targetState = isLead ? state : (state.agentStates[target] ||= {});
 
-      let resumedOutput = "";
       for await (const agentChunk of explicitRuntime.run(event, {
         runId: context.runId,
         state: targetState as any,
@@ -122,84 +144,10 @@ export async function* runOpenBot(
           ...agentChunk,
           meta: {
             ...(agentChunk as any)?.meta,
-            ...(event.meta?.delegationId
-              ? { delegationId: event.meta.delegationId }
-              : {}),
             ...(threadId ? { threadId } : {}),
             agentName: target,
           },
         } as ConversationEvent;
-
-        if (
-          agentChunk.type === "agent:output" ||
-          agentChunk.type === "action:result"
-        ) {
-          const summary = summarizeAgentEventValue(agentChunk);
-          if (summary) {
-            if (resumedOutput) resumedOutput += "\n\n";
-            resumedOutput += summary;
-          }
-        }
-      }
-
-      // Handle approval/deny resolution for tool-calling agents
-      const maybeApprovalId = (event as any)?.data?.id;
-      if (
-        (event.type === "action:approve" || event.type === "action:deny") &&
-        maybeApprovalId
-      ) {
-        const pending = state.pendingAgentTasks?.[maybeApprovalId];
-        if (pending) {
-          const wasDenied = event.type === "action:deny";
-          const delegateResult = wasDenied
-            ? { error: "Action denied", denied: true }
-            : resumedOutput || "Done";
-          delete state.pendingAgentTasks![maybeApprovalId];
-
-          yield {
-            type: "delegation:end",
-            meta: {
-              delegationId: pending.delegationId,
-              agentName: pending.agentName,
-            },
-            data: {
-              agent: pending.agentName,
-              result: wasDenied ? "Denied" : "Completed",
-            },
-          } as ConversationEvent;
-
-          // Resume the delegator
-          const delegatorId = (pending as any).delegatorAgentId;
-          const delegatorRuntime = delegatorId
-            ? agentRuntimes.get(delegatorId)
-            : undefined;
-
-          if (delegatorRuntime) {
-            const isDelegatorLead =
-              delegatorId === state.channelManagerId || delegatorId === "you";
-            const delegatorState = isDelegatorLead
-              ? state
-              : (state.agentStates[delegatorId] ||= {});
-
-            yield* delegatorRuntime.run(
-              {
-                type: "action:result",
-                data: {
-                  action: "delegateTask",
-                  result: delegateResult,
-                  toolCallId: pending.toolCallId,
-                  success: !wasDenied,
-                  halt: wasDenied,
-                },
-              } as ConversationEvent,
-              {
-                runId: context.runId,
-                state: delegatorState as any,
-                agentId: delegatorId,
-              } as any,
-            );
-          }
-        }
       }
       return;
     }
@@ -248,26 +196,15 @@ export async function* runOpenBot(
       } as ConversationEvent;
     }
 
-    // Auto-generate title if targeting an agent directly and title is missing
     if (!isTargetingLead && !state.title && lastOutput) {
-      // We can use the designated manager (if any) or a default agent to generate the title
-      const titleGeneratorId =
-        state.channelManagerId && state.channelManagerId !== "you"
-          ? state.channelManagerId
-          : targetAgentId;
-      const titleGeneratorRuntime = titleGeneratorId
-        ? agentRuntimes.get(titleGeneratorId)
+      const titleRuntime = targetAgentId
+        ? agentRuntimes.get(targetAgentId)
         : undefined;
 
-      if (titleGeneratorRuntime) {
-        const isGenLead =
-          titleGeneratorId === state.channelManagerId ||
-          titleGeneratorId === "you";
-        const genState = isGenLead
-          ? state
-          : (state.agentStates[titleGeneratorId!] ||= {});
+      if (titleRuntime) {
+        const genState = state.agentStates[targetAgentId!] ||= {};
 
-        for await (const _ of titleGeneratorRuntime.run(
+        for await (const _ of titleRuntime.run(
           {
             type: "agent:output",
             meta: { agentName: targetAgentId },
@@ -276,7 +213,7 @@ export async function* runOpenBot(
           {
             runId: context.runId,
             state: genState as any,
-            agentId: titleGeneratorId,
+            agentId: targetAgentId,
           } as any,
         )) {
           // side-effects only (topic agent)

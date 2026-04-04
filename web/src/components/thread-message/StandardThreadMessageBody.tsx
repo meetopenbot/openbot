@@ -1,6 +1,6 @@
 import { WidgetRenderer } from "../WidgetRenderer";
 
-/** Main-thread body for a single standard (non-delegation) timeline event. */
+/** Body for a single timeline event in the thread. */
 export function StandardThreadMessageBody({ event }: { event: any }) {
   if (event.type === "ui") {
     return (

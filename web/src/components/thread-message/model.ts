@@ -1,21 +1,10 @@
-import { DELEGATION_EVENT_TYPES, TEXT_EVENT_TYPES } from "./constants";
+import { TEXT_EVENT_TYPES } from "./constants";
 import type { ThreadRenderableItem } from "./types";
 
-/** Plain text for clipboard from one timeline row (standard event or delegation card). */
+/** Plain text for clipboard from one timeline row. */
 export function getCopyableTextForItem(
-  item: Pick<ThreadRenderableItem, "type" | "event" | "data">,
+  item: Pick<ThreadRenderableItem, "event">,
 ): string {
-  if (item.type === "delegation" && item.data?.start) {
-    const task = item.data.start.data?.task ?? "";
-    const end = item.data.end;
-    if (end?.data?.result != null) {
-      const r = end.data.result;
-      const resultText = typeof r === "string" ? r : JSON.stringify(r, null, 2);
-      return task ? `${task}\n\n${resultText}` : resultText;
-    }
-    return typeof task === "string" ? task : "";
-  }
-
   const event = item.event;
   if (!event) return "";
 
@@ -47,12 +36,24 @@ export function hasRenderableContent(message: { content: any }): boolean {
     return message.content.length > 0;
   }
   if (!Array.isArray(message.content)) return false;
-  return message.content.some(
-    (event: any) =>
-      (event.type === "ui" &&
-        event.data?.placement !== "sidebar" &&
-        event.data?.placement !== "attention") ||
-      TEXT_EVENT_TYPES.has(event.type) ||
-      DELEGATION_EVENT_TYPES.has(event.type),
-  );
+  return message.content.some((event: any) => {
+    if (
+      event.type === "ui" &&
+      event.data?.placement !== "sidebar" &&
+      event.data?.placement !== "attention"
+    ) {
+      return true;
+    }
+    if (TEXT_EVENT_TYPES.has(event.type)) {
+      if (event.type === "agent:input") return true;
+      const rawContent =
+        event.data?.content ?? event.data?.result ?? event.data?.message;
+      const delta = event.data?.delta;
+      if (!rawContent && !delta) return false;
+      if (typeof rawContent === "string" && !rawContent.trim() && !delta)
+        return false;
+      return true;
+    }
+    return false;
+  });
 }

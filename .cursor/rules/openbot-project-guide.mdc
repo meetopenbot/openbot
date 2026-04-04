@@ -35,7 +35,7 @@ The project is divided into two main components:
 - **Agents**: Specialized AI personas (bots). They can be DMed or participate in channels.
 - **Channels**: Shared context and multi-agent workspaces. A channel serves as a topic-based workspace.
 - **Threads**: Used to represent a single task or deep-dive into a specific topic within a channel.
-- **Orchestration**: A "Manager Agent" typically analyzes user intent and delegates tasks to specialized workers (e.g., `os`, `browser`, `codex`).
+- **Routing**: Messages are routed to agents via @mentions, thread assignees, and channel defaults.
 
 ## 📂 Key Directories
 - `server/src/plugins/`: Core functionalities (memory, shell, file-system, etc.).

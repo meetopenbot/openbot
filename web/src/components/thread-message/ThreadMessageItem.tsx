@@ -7,7 +7,6 @@ import { formatThreadTime } from "./formatTime";
 import { getCopyableTextForItem } from "./model";
 import type { ThreadRenderableItem } from "./types";
 import { StandardThreadMessageBody } from "./StandardThreadMessageBody";
-import { ThreadDelegationCard } from "./ThreadDelegationCard";
 import { ThreadMessageHoverToolbar } from "./ThreadMessageHoverToolbar";
 import { ThreadReplySummary } from "./ThreadReplySummary";
 
@@ -39,8 +38,7 @@ export function ThreadMessageItem({
 
   const currentReaction = messageReactions[messageId];
   const [copied, setCopied] = useState(false);
-  const rawAgentName =
-    item.event?.meta?.agentName || item.data?.start?.meta?.agentName;
+  const rawAgentName = item.event?.meta?.agentName;
   const avatar = useAgentAvatarDisplay(rawAgentName, isUser);
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -119,15 +117,7 @@ export function ThreadMessageItem({
           )}
 
           <div className="text-[15px] leading-[1.46668] text-foreground/90">
-            {item.type === "delegation" ? (
-              <ThreadDelegationCard
-                startEvent={item.data!.start}
-                endEvent={item.data!.end}
-                subEvents={item.data!.subs}
-              />
-            ) : (
-              <StandardThreadMessageBody event={item.event!} />
-            )}
+            <StandardThreadMessageBody event={item.event!} />
           </div>
 
           {!isThreadPanel && replyCount > 0 && onReply && (
