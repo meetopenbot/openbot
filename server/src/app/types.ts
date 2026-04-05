@@ -110,6 +110,10 @@ export type ConversationEvent = (
 export interface AgentState {
   messages?: any[];
   cwd?: string;
+  /** Current conversation/channel id. */
+  conversationId?: string;
+  /** The id of this agent (e.g. "os", "default"). */
+  agentId?: string;
   /** See ConversationState.openBotExecutingAgentId — set by router during agent runs. */
   openBotExecutingAgentId?: string;
   /** Filled by the server after an awaited delegated run; read by `action:mention` on this agent bucket. Not persisted intentionally. */

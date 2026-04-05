@@ -52,7 +52,8 @@ export function createSystemPromptBuilder(options: SystemPromptOptions) {
     agentInstructions: string = "",
   ): Promise<string> => {
     const state = context.state as ConversationState;
-    const currentAgentId = (context as any).agentId;
+    const conversationId = state.conversationId;
+    const currentAgentId = (state as any).agentId;
     const parts: string[] = [];
 
     // ── Layer 1: Agent Identity ──────────────────────────────────────
@@ -74,7 +75,6 @@ export function createSystemPromptBuilder(options: SystemPromptOptions) {
     // ── Layer 3: Conversation Context ────────────────────────────────
 
     // Channel spec (channels only)
-    const conversationId = state.conversationId;
     if (conversationId?.startsWith("channel_")) {
       const spec = await loadChannelSpec(conversationId);
       if (spec) {
@@ -89,17 +89,18 @@ export function createSystemPromptBuilder(options: SystemPromptOptions) {
       `<environment>\n- Time: ${now.toLocaleString()} (${Intl.DateTimeFormat().resolvedOptions().timeZone})\n- Working Directory: ${currentCwd}\n- OpenBot Home: ${expandedBase}\n</environment>`,
     );
 
+    // TODO: temporarily disabling recent memories as it doesnt give any benefits, opposite - it confuses the model with noise.
     // Recent memories
-    const recentFacts = await memory.getRecentFacts(5);
-    if (recentFacts.length > 0) {
-      const factsList = recentFacts
-        .map(
-          (f) =>
-            `- ${f.content}${f.tags.length > 0 ? ` [${f.tags.join(", ")}]` : ""}`,
-        )
-        .join("\n");
-      parts.push(`<context>\n${factsList}\n</context>`);
-    }
+    // const recentFacts = await memory.getRecentFacts(5);
+    // if (recentFacts.length > 0) {
+    //   const factsList = recentFacts
+    //     .map(
+    //       (f) =>
+    //         `- ${f.content}${f.tags.length > 0 ? ` [${f.tags.join(", ")}]` : ""}`,
+    //     )
+    //     .join("\n");
+    //   parts.push(`<context>\n${factsList}\n</context>`);
+    // }
 
     // Peer agents
     const agentDescriptions = getAgentList(currentAgentId);
@@ -122,6 +123,7 @@ export function createSystemPromptBuilder(options: SystemPromptOptions) {
       "participatingAgents",
       "openBotExecutingAgentId",
       "openBotDelegationToolFeedback",
+      "agentId",
     ]);
     const customState: Record<string, any> = {};
     for (const key of Object.keys(state)) {

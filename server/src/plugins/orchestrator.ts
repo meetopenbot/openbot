@@ -1,14 +1,8 @@
 import { z } from 'zod';
 import { MelonyBuilder, RuntimeContext } from 'melony';
 import { ConversationEvent, ConversationState } from '../app/types.js';
-import {
-  memoryPlugin,
-  memoryToolDefinitions,
-} from './memory.js';
-import {
-  mentionPlugin,
-  mentionToolDefinitions,
-} from './mention.js';
+import { memoryPlugin, memoryToolDefinitions } from './memory.js';
+import { mentionPlugin, mentionToolDefinitions } from './mention.js';
 import { topicAgent } from '../agents/topic-agent.js';
 import { llmPlugin } from './llm.js';
 import { PluginRegistry } from '../registry/plugin-registry.js';
@@ -164,9 +158,12 @@ export function llmOrchestratorPlugin(options: {
           modelId: resolvedModelId,
           usageScope: 'manager',
           system: async (context: any) => {
-            const agentInstructions =
-              typeof system === 'function' ? await system(context) : system;
-            return buildSystemPrompt(context, agentInstructions);
+            const agentInstructions = typeof system === 'function' ? await system(context) : system;
+
+            const systemPrompt = await buildSystemPrompt(context, agentInstructions);
+            console.log('systemPrompt:::::', systemPrompt);
+
+            return systemPrompt;
           },
           toolDefinitions: {
             ...orchestratorToolDefinitions,

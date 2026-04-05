@@ -117,6 +117,8 @@ function stateForPersistence(state: ConversationState): ConversationState {
       if (ag && typeof ag === "object") {
         delete ag.openBotExecutingAgentId;
         delete ag.openBotDelegationToolFeedback;
+        delete (ag as any).conversationId;
+        delete (ag as any).agentId;
       }
     }
   }

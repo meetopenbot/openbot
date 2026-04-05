@@ -132,12 +132,13 @@ export async function* runOpenBot(
 
       const prevExec = targetState.openBotExecutingAgentId;
       targetState.openBotExecutingAgentId = target;
+      (targetState as any).conversationId = state.conversationId;
+      (targetState as any).agentId = target;
       try {
         for await (const agentChunk of explicitRuntime.run(event, {
           runId: context.runId,
           state: targetState as any,
-          agentId: target, // Pass our identity in context
-        } as any)) {
+        })) {
           yield {
             ...agentChunk,
             meta: {
@@ -163,12 +164,13 @@ export async function* runOpenBot(
 
     const prevExec = targetState.openBotExecutingAgentId;
     targetState.openBotExecutingAgentId = targetAgentId;
+    (targetState as any).conversationId = state.conversationId;
+    (targetState as any).agentId = targetAgentId;
     try {
       for await (const chunk of runtime.run(event, {
         runId: context.runId,
         state: targetState as any,
-        agentId: targetAgentId, // Pass our identity in context
-      } as any)) {
+      })) {
         if (
           chunk.type === "agent:output" ||
           chunk.type === "agent:output-delta" ||
@@ -227,21 +229,25 @@ export async function* runOpenBot(
         : undefined;
 
       if (titleRuntime) {
-        const genState = state.agentStates[targetAgentId!] ||= {};
+        const genState = (state.agentStates[targetAgentId!] ||= {});
+        (genState as any).conversationId = state.conversationId;
+        (genState as any).agentId = targetAgentId;
 
-        for await (const _ of titleRuntime.run(
-          {
-            type: "agent:output",
-            meta: { agentName: targetAgentId },
-            data: { content: lastOutput },
-          } as ConversationEvent,
-          {
-            runId: context.runId,
-            state: genState as any,
-            agentId: targetAgentId,
-          } as any,
-        )) {
-          // side-effects only (topic agent)
+        try {
+          for await (const _ of titleRuntime.run(
+            {
+              type: "agent:output",
+              meta: { agentName: targetAgentId },
+              data: { content: lastOutput },
+            } as ConversationEvent,
+            {
+              runId: context.runId,
+              state: genState as any,
+            },
+          )) {
+            // side-effects only (topic agent)
+          }
+        } finally {
         }
       }
     }
