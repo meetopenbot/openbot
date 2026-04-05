@@ -79,13 +79,13 @@ export function WidgetRenderer({
 
 function StatusWidget({ message, severity = 'info' }: { message: string, severity?: string }) {
   const colors = {
-    info: 'bg-blue-500/10 text-blue-600 border-blue-200/50',
-    success: 'bg-emerald-500/10 text-emerald-600 border-emerald-200/50',
-    error: 'bg-rose-500/10 text-rose-600 border-rose-200/50'
+    info: 'text-blue-600',
+    success: 'text-emerald-600',
+    error: 'text-rose-600'
   } as any;
   
   return (
-    <div className={`px-3 py-1.5 rounded-lg border text-xs font-medium animate-fade-in ${colors[severity] || colors.info}`}>
+    <div className={`py-1.5 text-xs font-medium animate-fade-in ${colors[severity] || colors.info}`}>
       {message}
     </div>
   );

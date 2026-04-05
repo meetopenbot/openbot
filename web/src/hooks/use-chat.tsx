@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { hasRenderableContent } from "../components/thread-message/model";
 
 /** Fold raw thread events into user/assistant messages (matches channel transcript rules). */
 export function foldThreadEventsToMessages(events: any[]): any[] {
@@ -7,9 +9,14 @@ export function foldThreadEventsToMessages(events: any[]): any[] {
     if (event.type === "message:reaction") return msgs;
     const currentMsg = msgs[msgs.length - 1];
     if (event.type === "agent:input" || event.type === "user:input") {
+      // Melony echoes synthetic handoff inputs; parent row already shows agent:delegation on the timeline.
+      if (event.type === "agent:input" && event.meta?.delegatedBy) {
+        return msgs;
+      }
+      const delegatedBy = event.meta?.delegatedBy;
       msgs.push({
         id: event.id || `thread-user-${msgs.length}`,
-        role: "user",
+        role: delegatedBy ? "assistant" : "user",
         content: [event],
       });
     } else if (currentMsg?.role === "assistant") {
@@ -71,25 +78,53 @@ export function ChatProvider({
   eventHandlers?: Record<string, ChatEventHandler>;
 }) {
   const [events, setEvents] = useState<any[]>([]);
+  const [eventsHydrated, setEventsHydrated] = useState(false);
   const [submittingByThread, setSubmittingByThread] = useState<Record<string, boolean>>({});
   const latestEventIdRef = useRef<string | null>(null);
 
+  const {
+    data: bootstrappedEvents,
+    isFetched: eventsFetchSettled,
+    isError: eventsQueryError,
+  } = useQuery({
+    queryKey: ["conversation-events", conversationId],
+    queryFn: () => api.getConversationEvents(conversationId),
+    staleTime: Infinity,
+    enabled: Boolean(conversationId),
+  });
+
+  /**
+   * Track concurrent runs per thread with a depth counter (not a single runId).
+   * Overlapping run:started for the same thread (e.g. nested delegation) used to
+   * overwrite the stored runId so a later run:finished could not clear "thinking".
+   */
   const threadRunsMap = useMemo(() => {
-    const active = new Map<string, string>();
+    const depthByThread = new Map<string, number>();
+    const latestRunIdByThread = new Map<string, string>();
     for (const event of events) {
       if (!event || typeof event !== "object") continue;
       const runId = event.data?.runId;
       if (!runId || typeof runId !== "string") continue;
       const threadId = event.meta?.threadId || "main";
-      if (event.type === "run:started") active.set(threadId, runId);
-      if (
+      if (event.type === "run:started") {
+        depthByThread.set(threadId, (depthByThread.get(threadId) ?? 0) + 1);
+        latestRunIdByThread.set(threadId, runId);
+      } else if (
         event.type === "run:finished" ||
         event.type === "run:cancelled" ||
         event.type === "run:failed"
       ) {
-        if (active.get(threadId) === runId) active.delete(threadId);
+        const next = Math.max(0, (depthByThread.get(threadId) ?? 0) - 1);
+        depthByThread.set(threadId, next);
       }
     }
+    const active = new Map<string, string>();
+    depthByThread.forEach((depth, threadId) => {
+      if (depth > 0) {
+        const rid = latestRunIdByThread.get(threadId);
+        if (rid) active.set(threadId, rid);
+      }
+    });
     return active;
   }, [events]);
 
@@ -132,6 +167,18 @@ export function ChatProvider({
         return; // Skip adding to main messages
       }
 
+      // Own timeline row + stable id for Slack-style thread routing
+      if (event.type === "agent:delegation") {
+        currentMsg = {
+          id: event.id || `asst_${Math.random().toString(36).slice(2, 9)}`,
+          runId: event.runId || event.meta?.runId,
+          role: "assistant",
+          content: [event],
+        };
+        msgs.push(currentMsg);
+        return;
+      }
+
       if (event.type === "agent:input" || event.type === "user:input") {
         currentMsg = {
           id: event.id || Math.random().toString(36).substring(7),
@@ -160,7 +207,8 @@ export function ChatProvider({
   const threadReplyCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const [id, evts] of Object.entries(threads)) {
-      counts[id] = foldThreadEventsToMessages(evts).length;
+      const folded = foldThreadEventsToMessages(evts);
+      counts[id] = folded.filter((m) => hasRenderableContent(m)).length;
     }
     return counts;
   }, [threads]);
@@ -243,9 +291,33 @@ export function ChatProvider({
     latestEventIdRef.current = null;
     setSubmittingByThread({});
     setEvents([]);
+    setEventsHydrated(false);
   }, [conversationId]);
 
   useEffect(() => {
+    if (!conversationId) return;
+    if (!eventsFetchSettled) return;
+    if (eventsQueryError) {
+      reset([]);
+      latestEventIdRef.current = null;
+    } else {
+      const list = Array.isArray(bootstrappedEvents) ? bootstrappedEvents : [];
+      reset(list);
+      const last = list[list.length - 1];
+      latestEventIdRef.current =
+        last?.id && typeof last.id === "string" ? last.id : null;
+    }
+    setEventsHydrated(true);
+  }, [
+    conversationId,
+    eventsFetchSettled,
+    eventsQueryError,
+    bootstrappedEvents,
+    reset,
+  ]);
+
+  useEffect(() => {
+    if (!eventsHydrated || !conversationId) return;
     let isClosed = false;
     let reconnectTimer: number | undefined;
     let source: EventSource | undefined;
@@ -290,7 +362,7 @@ export function ChatProvider({
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       source?.close();
     };
-  }, [conversationId, eventHandlers]);
+  }, [conversationId, eventHandlers, eventsHydrated]);
 
   useEffect(() => {
     const last = events[events.length - 1];

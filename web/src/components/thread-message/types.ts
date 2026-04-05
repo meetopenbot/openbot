@@ -8,4 +8,6 @@ export type ThreadRenderableItem = {
     role: string;
   };
   isGrouped: boolean;
+  /** When false, hide "N replies" on this row (same messageId can have multiple event rows). */
+  showReplySummary?: boolean;
 };

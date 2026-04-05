@@ -172,10 +172,18 @@ function insertToolResult(messages: SimpleMessage[], toolResultMsg: SimpleMessag
     }
 
     if (toolMsgIdx !== -1) {
-      // Merge into existing tool message
+      // Merge into existing tool message (replace same toolCallId — avoids duplicate rows after unblock + real result)
       const toolMsg = messages[toolMsgIdx];
       if (Array.isArray(toolMsg.content)) {
-        toolMsg.content.push(...toolResultMsg.content);
+        for (const part of toolResultMsg.content) {
+          const id = (part as { toolCallId?: string }).toolCallId;
+          if (!id) continue;
+          const existingIdx = toolMsg.content.findIndex(
+            (c: { toolCallId?: string }) => c.toolCallId === id,
+          );
+          if (existingIdx !== -1) toolMsg.content[existingIdx] = part as any;
+          else toolMsg.content.push(part as any);
+        }
       }
     } else {
       // Insert new tool message after assistant

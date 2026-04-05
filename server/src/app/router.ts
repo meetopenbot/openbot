@@ -2,8 +2,15 @@ import { Runtime } from "melony";
 import { ConversationEvent, ConversationState } from "./types.js";
 import { PluginRegistry } from "../registry/plugin-registry.js";
 
-function summarizeAgentEventValue(event: any): string | undefined {
+export function summarizeAgentEventValue(event: any): string | undefined {
   if (!event) return undefined;
+
+  // For suspensions, provide a more descriptive summary so delegation feedback isn't empty.
+  if (event.type === 'suspend') {
+    const reason = event.data?.reason ?? 'waiting for action';
+    return `The agent is suspended (${reason}) and needs your approval. Please check for the approval buttons in the chat or sidebar to continue.`;
+  }
+
   const value =
     event?.data?.result ??
     event?.data?.content ??
@@ -117,8 +124,18 @@ export async function* runOpenBot(
     }
   }
 
-  // Persist the thread→agent mapping so subsequent replies auto-route
-  if (threadId && targetAgentId && targetAgentId !== "default" && !state.threadAssignees[threadId]) {
+  // Persist the thread→agent mapping so subsequent replies auto-route.
+  // Do not capture assignee for tool-driven handoffs (`delegatedBy`): the coordinator should
+  // keep owning the thread so it can run further steps (e.g. second `mention`) and so the
+  // user's next message still reaches the default/channel lead unless they @ someone.
+  const isDelegatedHandoff = Boolean((event.meta as { delegatedBy?: string } | undefined)?.delegatedBy);
+  if (
+    threadId &&
+    targetAgentId &&
+    targetAgentId !== "default" &&
+    !state.threadAssignees[threadId] &&
+    !isDelegatedHandoff
+  ) {
     state.threadAssignees[threadId] = targetAgentId;
   }
 
@@ -135,19 +152,26 @@ export async function* runOpenBot(
       const isLead = target === "you";
       const targetState = isLead ? state : (state.agentStates[target] ||= {});
 
-      for await (const agentChunk of explicitRuntime.run(event, {
-        runId: context.runId,
-        state: targetState as any,
-        agentId: target, // Pass our identity in context
-      } as any)) {
-        yield {
-          ...agentChunk,
-          meta: {
-            ...(agentChunk as any)?.meta,
-            ...(threadId ? { threadId } : {}),
-            agentName: target,
-          },
-        } as ConversationEvent;
+      const prevExec = targetState.openBotExecutingAgentId;
+      targetState.openBotExecutingAgentId = target;
+      try {
+        for await (const agentChunk of explicitRuntime.run(event, {
+          runId: context.runId,
+          state: targetState as any,
+          agentId: target, // Pass our identity in context
+        } as any)) {
+          yield {
+            ...agentChunk,
+            meta: {
+              ...(agentChunk as any)?.meta,
+              ...(threadId ? { threadId } : {}),
+              agentName: target,
+            },
+          } as ConversationEvent;
+        }
+      } finally {
+        if (prevExec !== undefined) targetState.openBotExecutingAgentId = prevExec;
+        else delete targetState.openBotExecutingAgentId;
       }
       return;
     }
@@ -160,40 +184,79 @@ export async function* runOpenBot(
       : (state.agentStates[targetAgentId!] ||= {});
     let lastOutput = "";
 
-    for await (const chunk of runtime.run(event, {
-      runId: context.runId,
-      state: targetState as any,
-      agentId: targetAgentId, // Pass our identity in context
-    } as any)) {
-      if (
-        chunk.type === "agent:output" ||
-        chunk.type === "agent:output-delta"
-      ) {
-        const summary = summarizeAgentEventValue(chunk);
-        if (summary) lastOutput = summary;
-      }
+    const prevExec = targetState.openBotExecutingAgentId;
+    targetState.openBotExecutingAgentId = targetAgentId;
+    try {
+      for await (const chunk of runtime.run(event, {
+        runId: context.runId,
+        state: targetState as any,
+        agentId: targetAgentId, // Pass our identity in context
+      } as any)) {
+        if (
+          chunk.type === "agent:output" ||
+          chunk.type === "agent:output-delta" ||
+          chunk.type === "suspend"
+        ) {
+          const summary = summarizeAgentEventValue(chunk);
+          if (summary) lastOutput = summary;
+        }
 
-      const outMeta = {
-        ...chunk.meta,
-        ...(threadId ? { threadId } : {}),
-        // Always attach the resolved runtime identity when available.
-        // This keeps channel-manager responses labeled with the actual manager
-        // instead of falling back to the default app name in the UI.
-        ...(targetAgentId ? { agentName: targetAgentId } : {}),
-      };
+        const delegatedBy = (chunk as any).meta?.delegatedBy;
+        const outMeta = {
+          ...chunk.meta,
+          ...(threadId ? { threadId } : {}),
+          ...(targetAgentId
+            ? {
+                agentName:
+                  chunk.type === "agent:input" && delegatedBy
+                    ? String(delegatedBy)
+                    : targetAgentId,
+              }
+            : {}),
+        };
 
       // Suspend still carries nested UI for Melony; emit the same block as a top-level `ui` so SDUI consumers (e.g. AttentionRail) stay consistent.
       if (chunk.type === "suspend") {
         const nested = (chunk as any).data?.event;
-        if (nested?.type === "ui" && nested.data?.placement === "attention") {
-          yield { ...nested, meta: { ...nested.meta, ...outMeta } } as ConversationEvent;
+        if (nested?.type === "ui") {
+          const originalPlacement = nested.data?.placement;
+
+          // 1. Always yield the attention version for the rail.
+          // We force placement: "attention" here.
+          yield { 
+            ...nested, 
+            data: { ...nested.data, placement: "attention" },
+            meta: { ...nested.meta, ...outMeta } 
+          } as ConversationEvent;
+          
+          // 2. Always yield an inline version for the current thread/channel.
+          // We force placement: "thread" here.
+          yield { 
+            ...nested, 
+            data: { ...nested.data, placement: "thread" },
+            meta: { ...nested.meta, ...outMeta } 
+          } as ConversationEvent;
+
+          // 3. If we're in a side-thread, also mirror an inline version to the main channel 
+          // so the user sees the blocking action without having to open the thread.
+          if (threadId) {
+            yield { 
+              ...nested, 
+              data: { ...nested.data, placement: "thread" },
+              meta: { ...nested.meta, ...outMeta, threadId: undefined } 
+            } as ConversationEvent;
+          }
         }
       }
 
-      yield {
-        ...chunk,
-        meta: outMeta,
-      } as ConversationEvent;
+        yield {
+          ...chunk,
+          meta: outMeta,
+        } as ConversationEvent;
+      }
+    } finally {
+      if (prevExec !== undefined) targetState.openBotExecutingAgentId = prevExec;
+      else delete targetState.openBotExecutingAgentId;
     }
 
     if (!isTargetingLead && !state.title && lastOutput) {

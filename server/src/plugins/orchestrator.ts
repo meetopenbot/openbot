@@ -6,6 +6,10 @@ import {
   memoryToolDefinitions,
   createMemoryPromptBuilder,
 } from './memory.js';
+import {
+  mentionPlugin,
+  mentionToolDefinitions,
+} from './mention.js';
 import { topicAgent } from '../agents/topic-agent.js';
 import { llmPlugin } from './llm.js';
 import { PluginRegistry } from '../registry/plugin-registry.js';
@@ -17,6 +21,7 @@ import { widgets } from '../ui/registry.js';
  */
 export const orchestratorToolDefinitions = {
   ...memoryToolDefinitions,
+  ...mentionToolDefinitions,
   updateSessionState: {
     description: 'Update a value in the session state using a JSON path.',
     inputSchema: z.object({
@@ -83,6 +88,7 @@ function* maybeEmitWidget(key: string, value: any) {
  */
 export function orchestrationToolsPlugin() {
   return (builder: MelonyBuilder<ConversationState, ConversationEvent>) => {
+    builder.use(mentionPlugin());
     builder.on(
       'action:updateSessionState',
       async function* (
@@ -179,7 +185,8 @@ ${baseInstructions}
 
 <expert_mode>
 You are interacting directly with the user. Focus on solving their request directly using your tools.
-Other specialized agents exist in this workspace; users can invoke them via @mentions in messages when they need a different capability.
+Other specialized agents exist in this workspace; you can collaborate with them by using the "mention" tool. This allows you to ask them a question or give them a task in the same thread.
+When the user asks for multiple delegated steps (e.g. one agent gathers facts, another summarizes), do them strictly in order: one mention call, wait for its tool result, then the next mention if needed—never issue two mention tool calls in the same model step. After the final tool result, reply with the combined outcome.
 </expert_mode>
 ${statePrompt}
 

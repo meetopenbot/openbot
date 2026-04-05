@@ -46,6 +46,11 @@ export function App() {
       'agent:input': async () => {
         ensureConversationInUrl(activeConversationId);
       },
+      'agent:delegation': async (chunk: any) => {
+        if (chunk?.meta?.openThread === true && typeof chunk?.id === 'string') {
+          setActiveThreadId(chunk.id);
+        }
+      },
       'client:invalidate': async (chunk: any) => {
         if (Array.isArray(chunk.data?.tags)) {
           queryClient.invalidateQueries({
@@ -61,7 +66,7 @@ export function App() {
         await markConversationRead(activeConversationId);
       },
     }),
-    [queryClient, ensureConversationInUrl, activeConversationId, markConversationRead],
+    [queryClient, ensureConversationInUrl, activeConversationId, markConversationRead, setActiveThreadId],
   );
 
   useEffect(() => {

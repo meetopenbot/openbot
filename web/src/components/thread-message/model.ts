@@ -45,7 +45,8 @@ export function hasRenderableContent(message: { content: any }): boolean {
       return true;
     }
     if (TEXT_EVENT_TYPES.has(event.type)) {
-      if (event.type === "agent:input") return true;
+      if (event.type === "agent:input" || event.type === "agent:delegation")
+        return true;
       const rawContent =
         event.data?.content ?? event.data?.result ?? event.data?.message;
       const delta = event.data?.delta;

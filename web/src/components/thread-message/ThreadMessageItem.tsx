@@ -6,6 +6,10 @@ import type { MessageReactionSentiment } from "../../hooks/use-chat";
 import { formatThreadTime } from "./formatTime";
 import { getCopyableTextForItem } from "./model";
 import type { ThreadRenderableItem } from "./types";
+
+function shouldShowReplySummary(item: ThreadRenderableItem): boolean {
+  return item.showReplySummary === true;
+}
 import { StandardThreadMessageBody } from "./StandardThreadMessageBody";
 import { ThreadMessageHoverToolbar } from "./ThreadMessageHoverToolbar";
 import { ThreadReplySummary } from "./ThreadReplySummary";
@@ -120,7 +124,10 @@ export function ThreadMessageItem({
             <StandardThreadMessageBody event={item.event!} />
           </div>
 
-          {!isThreadPanel && replyCount > 0 && onReply && (
+          {!isThreadPanel &&
+            shouldShowReplySummary(item) &&
+            replyCount > 0 &&
+            onReply && (
             <ThreadReplySummary
               replyCount={replyCount}
               messageId={messageId}

@@ -1,5 +1,5 @@
 import { useChat } from "../../hooks/use-chat";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Chat } from "../Chat";
 import { Composer } from "../Composer";
@@ -15,9 +15,6 @@ interface ChatPageProps {
 }
 
 export function ChatPage({ conversationId, onReply }: ChatPageProps) {
-  const { reset } = useChat();
-  const [loadedConversations, setLoadedConversations] = useState<Set<string>>(new Set());
-  const prevConversationRef = useRef<string | null>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
 
   const handleReply = useCallback(
@@ -35,24 +32,8 @@ export function ChatPage({ conversationId, onReply }: ChatPageProps) {
     [onReply],
   );
 
-  const { data: events } = useQuery({
-    queryKey: ["conversation-events", conversationId],
-    queryFn: () => api.getConversationEvents(conversationId),
-    staleTime: Infinity,
-  });
-
-  useEffect(() => {
-    if (events === undefined) return;
-    if (prevConversationRef.current === conversationId && loadedConversations.has(conversationId))
-      return;
-
-    prevConversationRef.current = conversationId;
-    reset(events);
-    setLoadedConversations((prev) => new Set(prev).add(conversationId));
-  }, [events, conversationId, reset, loadedConversations]);
-
   return (
-    <div className="flex-1 flex flex-col h-full min-w-0">
+    <div key={conversationId} className="flex-1 flex flex-col h-full min-w-0">
       <div ref={mainScrollRef} className="flex-1 overflow-auto">
         <Chat
           placeholder={<ChatPlaceholder />}

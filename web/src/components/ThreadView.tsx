@@ -116,6 +116,7 @@ export function ThreadView({
         }
       });
 
+      const lastEventIdx = topLevelEvents.length - 1;
       topLevelEvents.forEach((item, idx) => {
         const eventTimestamp =
           item.meta?.timestamp || (msg as any).timestamp || Date.now();
@@ -134,6 +135,7 @@ export function ThreadView({
             role: msg.role,
           },
           isGrouped: false,
+          showReplySummary: idx === lastEventIdx ? true : false,
         });
       });
     });

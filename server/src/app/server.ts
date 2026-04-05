@@ -25,6 +25,7 @@ import fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import matter from 'gray-matter';
 import type { ConversationState, ConversationEvent } from './types.js';
+import { summarizeAgentEventValue } from './router.js';
 import { fetchProviderModels, getModelCatalog } from '../services/model-catalog.js';
 import type { ModelProvider } from '../services/model-catalog.js';
 import { DEFAULT_MODEL_BY_PROVIDER, DEFAULT_MODEL_ID } from '../services/model-defaults.js';
@@ -207,6 +208,168 @@ export async function startServer(options: ServerOptions = {}) {
     for (const listener of listeners) listener(event);
   };
 
+  const DELEGATION_FEEDBACK_MAX = 12_000;
+
+  const truncateDelegationFeedback = (text: string) => {
+    if (text.length <= DELEGATION_FEEDBACK_MAX) return text;
+    return `${text.slice(0, DELEGATION_FEEDBACK_MAX)}\n…(truncated)`;
+  };
+
+  const delegationMentionTarget = (content: string | undefined) => {
+    if (!content?.startsWith('@')) return 'agent';
+    const rest = content.slice(1);
+    const idx = rest.search(/\s/);
+    return idx === -1 ? rest : rest.slice(0, idx);
+  };
+
+  const formatDelegationToolFeedback = (
+    summary: string,
+    inputEvent: ConversationEvent,
+  ) => {
+    const content = (inputEvent.data as { content?: string } | undefined)?.content;
+    const target = delegationMentionTarget(content);
+    if (summary.startsWith('The agent is suspended')) {
+      return `@${target} is suspended: ${summary}`;
+    }
+    return `@${target} replied:\n${summary}`;
+  };
+
+  /** Mention handlers run with `context.state` = `agentStates[delegator]`, not the root conversation object. */
+  const putDelegationToolFeedback = (
+    conversationState: ConversationState,
+    delegatedBy: string | undefined,
+    payload: { toolCallId: string; result: string },
+  ) => {
+    const delegator =
+      typeof delegatedBy === 'string' && delegatedBy.trim().length > 0 ? delegatedBy : 'default';
+    if (delegator === 'you') {
+      conversationState.openBotDelegationToolFeedback = payload;
+      return;
+    }
+    if (!conversationState.agentStates) conversationState.agentStates = {};
+    const bucket = (conversationState.agentStates[delegator] ??= {});
+    bucket.openBotDelegationToolFeedback = payload;
+  };
+
+  /**
+   * Runs a delegated agent:input to completion (including nested mentions), appends all events,
+   * and returns text suitable for the delegator's tool result.
+   */
+  const runDelegatedBranch = async (
+    conversationId: string,
+    branchRunId: string,
+    branchEvent: ConversationEvent,
+    state: ConversationState,
+    cancelRunId: string,
+  ): Promise<string> => {
+    const threadId = branchEvent.meta?.threadId;
+    runConversationById.set(branchRunId, conversationId);
+    runAgentsById.set(branchRunId, new Set());
+    activeRuns.add(branchRunId);
+
+    await appendConversationEvent(conversationId, branchRunId, {
+      type: 'run:started',
+      data: { runId: branchRunId },
+      meta: threadId ? { threadId } : undefined,
+    } as ConversationEvent);
+
+    let lastOutput = '';
+    const iterator = runtime.run(branchEvent, { runId: branchRunId, state });
+    try {
+      for await (const chunk of iterator) {
+        if (cancelledRuns.has(cancelRunId)) {
+          await iterator.return?.();
+          break;
+        }
+
+        if (chunk.type === 'agent:trigger' && (chunk as any).data?.event) {
+          const triggerData = (chunk as any).data;
+          const nestedEvent = triggerData.event as ConversationEvent;
+          const depth = (nestedEvent.meta?.depth as number) || 0;
+          const nestedToolCallId = triggerData.toolCallId as string | undefined;
+
+          await appendConversationEvent(conversationId, branchRunId, chunk);
+
+          if (depth >= 5) {
+            console.warn(
+              `[server] Max agent-to-agent trigger depth reached for conversation ${conversationId}`,
+            );
+            if (nestedToolCallId) {
+              putDelegationToolFeedback(state, nestedEvent.meta?.delegatedBy as string | undefined, {
+                toolCallId: nestedToolCallId,
+                result: 'Max agent-to-agent delegation depth reached.',
+              });
+            }
+          } else {
+            const nestedRunId = `run_trigger_${generateId()}`;
+            const summary = await runDelegatedBranch(
+              conversationId,
+              nestedRunId,
+              nestedEvent,
+              state,
+              cancelRunId,
+            );
+            if (nestedToolCallId) {
+              putDelegationToolFeedback(state, nestedEvent.meta?.delegatedBy as string | undefined, {
+                toolCallId: nestedToolCallId,
+                result: formatDelegationToolFeedback(summary, nestedEvent),
+              });
+            }
+          }
+          continue;
+        }
+
+        const agentName = chunk.meta?.agentName;
+        if (typeof agentName === 'string' && agentName) {
+          const activeAgents = runAgentsById.get(branchRunId);
+          activeAgents?.add(agentName);
+          if (!state.participatingAgents) state.participatingAgents = [];
+          if (!state.participatingAgents.includes(agentName)) {
+            state.participatingAgents.push(agentName);
+          }
+        }
+
+        if (
+          chunk.type === 'agent:output' ||
+          chunk.type === 'agent:output-delta' ||
+          chunk.type === 'suspend'
+        ) {
+          const summary = summarizeAgentEventValue(chunk);
+          if (summary) lastOutput = summary;
+        }
+
+        await appendConversationEvent(conversationId, branchRunId, chunk);
+      }
+
+      await appendConversationEvent(conversationId, branchRunId, {
+        type: cancelledRuns.has(cancelRunId) ? 'run:cancelled' : 'run:finished',
+        data: { runId: branchRunId },
+        meta: threadId ? { threadId } : undefined,
+      } as ConversationEvent);
+    } catch (error) {
+      console.error('Delegated run failed:', error);
+      await appendConversationEvent(conversationId, branchRunId, {
+        type: 'run:failed',
+        data: {
+          runId: branchRunId,
+          message: error instanceof Error ? error.message : String(error),
+        },
+        meta: threadId ? { threadId } : undefined,
+      } as ConversationEvent);
+      lastOutput =
+        lastOutput.trim() ||
+        `Delegation failed: ${error instanceof Error ? error.message : String(error)}`;
+    } finally {
+      activeRuns.delete(branchRunId);
+      runConversationById.delete(branchRunId);
+      runAgentsById.delete(branchRunId);
+    }
+
+    return truncateDelegationFeedback(
+      lastOutput.trim() || '(No text output from the delegated agent.)',
+    );
+  };
+
   const processRunQueue = async () => {
     if (processingQueue) return;
     processingQueue = true;
@@ -238,6 +401,50 @@ export async function startServer(options: ServerOptions = {}) {
               await iterator.return?.();
               break;
             }
+
+            // Agent-to-agent handoff: run delegated branch inline so the delegator's tool result includes the callee's output.
+            if (chunk.type === 'agent:trigger' && (chunk as any).data?.event) {
+              const triggeredEvent = (chunk as any).data.event as ConversationEvent;
+              const depth = (triggeredEvent.meta?.depth as number) || 0;
+              const toolCallId = (chunk as any).data.toolCallId as string | undefined;
+              await appendConversationEvent(conversationId, runId, chunk);
+              if (depth >= 5) {
+                console.warn(
+                  `[server] Max agent-to-agent trigger depth reached for conversation ${conversationId}`,
+                );
+                if (toolCallId) {
+                  putDelegationToolFeedback(
+                    state,
+                    triggeredEvent.meta?.delegatedBy as string | undefined,
+                    {
+                      toolCallId,
+                      result: 'Max agent-to-agent delegation depth reached.',
+                    },
+                  );
+                }
+              } else {
+                const triggeredRunId = `run_trigger_${generateId()}`;
+                const summary = await runDelegatedBranch(
+                  conversationId,
+                  triggeredRunId,
+                  triggeredEvent,
+                  state,
+                  runId,
+                );
+                if (toolCallId) {
+                  putDelegationToolFeedback(
+                    state,
+                    triggeredEvent.meta?.delegatedBy as string | undefined,
+                    {
+                      toolCallId,
+                      result: formatDelegationToolFeedback(summary, triggeredEvent),
+                    },
+                  );
+                }
+              }
+              continue;
+            }
+
             const agentName = chunk.meta?.agentName;
             if (typeof agentName === 'string' && agentName) {
               const activeAgents = runAgentsById.get(runId);

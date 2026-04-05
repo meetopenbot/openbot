@@ -73,6 +73,23 @@ export async function loadConversationState(conversationId: string): Promise<Con
   }
 }
 
+/** Runtime-only fields that must not survive reload (corrupt next runs if persisted). */
+function stateForPersistence(state: ConversationState): ConversationState {
+  const snapshot = JSON.parse(JSON.stringify(state)) as ConversationState;
+  delete snapshot.openBotDelegationToolFeedback;
+  delete snapshot.openBotExecutingAgentId;
+  if (snapshot.agentStates) {
+    for (const key of Object.keys(snapshot.agentStates)) {
+      const ag = snapshot.agentStates[key];
+      if (ag && typeof ag === "object") {
+        delete ag.openBotExecutingAgentId;
+        delete ag.openBotDelegationToolFeedback;
+      }
+    }
+  }
+  return snapshot;
+}
+
 export async function saveConversationState(conversationId: string, state: ConversationState) {
   const normalizedConversationId = normalizeConversationId(conversationId);
   const conversationDir = getConversationDir(normalizedConversationId);
@@ -81,7 +98,7 @@ export async function saveConversationState(conversationId: string, state: Conve
   }
 
   const statePath = path.join(conversationDir, "state.json");
-  fs.writeFileSync(statePath, JSON.stringify(state, null, 2), "utf-8");
+  fs.writeFileSync(statePath, JSON.stringify(stateForPersistence(state), null, 2), "utf-8");
 }
 
 export async function createChannelConversation(name: string): Promise<{

@@ -28,6 +28,12 @@ export type AgentInputEvent = ChatEventBase<"agent:input", {
   content: string;
   attachments?: AttachmentRef[];
 }>;
+
+/** Timeline anchor for agent-to-agent handoff; `id` is the Slack-style thread parent key. */
+export type AgentDelegationEvent = ChatEventBase<
+  "agent:delegation",
+  { targetAgentId: string; content: string }
+>;
 export type AgentOutputEvent = ChatEventBase<"agent:output", { content: string }>;
 export type AgentOutputDeltaEvent = ChatEventBase<"agent:output-delta", { delta: string; content: string }>;
 
@@ -80,6 +86,7 @@ export type MessageReactionEvent = ChatEventBase<"message:reaction", {
 
 export type ConversationEvent = (
   | AgentInputEvent
+  | AgentDelegationEvent
   | AgentOutputEvent
   | AgentOutputDeltaEvent
   | UIEvent
@@ -105,6 +112,10 @@ export type ConversationEvent = (
 export interface AgentState {
   messages?: any[];
   cwd?: string;
+  /** See ConversationState.openBotExecutingAgentId — set by router during agent runs. */
+  openBotExecutingAgentId?: string;
+  /** Filled by the server after an awaited delegated run; read by `action:mention` on this agent bucket. Not persisted intentionally. */
+  openBotDelegationToolFeedback?: { toolCallId: string; result: string };
   pendingApprovals?: Record<string, any>;
   usage?: {
     inputTokens: number;
@@ -138,6 +149,15 @@ export interface ConversationState {
 
   /** Map of threadId to assigned agent name/id */
   threadAssignees?: Record<string, string>;
+
+  /** Set by the router while an agent Melony runtime is executing (tools e.g. mention). Not persisted intentionally. */
+  openBotExecutingAgentId?: string;
+
+  /**
+   * Filled by the server after an awaited delegated run completes so `action:mention` can return real output to the delegator.
+   * Cleared by the mention plugin when emitting `action:result`. Not persisted intentionally.
+   */
+  openBotDelegationToolFeedback?: { toolCallId: string; result: string };
 
   /** Dynamic top-level state for session-wide data (e.g. project_plan, todos) */
   [key: string]: any;
