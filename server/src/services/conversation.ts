@@ -5,9 +5,19 @@ import { generateId } from "melony";
 import { ConversationState, ConversationEvent } from "../app/types.js";
 
 const CONVERSATIONS_DIR = path.join(os.homedir(), ".openbot", "conversations");
+const CHANNELS_DIR = path.join(os.homedir(), ".openbot", "channels");
+const PROJECTS_DIR = path.join(os.homedir(), "Documents", "openbot");
+
+function getChannelProjectDir(conversationId: string): string | null {
+  if (!conversationId.startsWith("channel_")) return null;
+  const slug = slugifyChannelName(conversationId.slice("channel_".length));
+  if (!slug) return null;
+  return path.join(PROJECTS_DIR, slug);
+}
 
 function getConversationDir(conversationId: string): string {
-  return path.join(CONVERSATIONS_DIR, conversationId);
+  const kind = inferConversationKind(conversationId);
+  return path.join(kind === "channel" ? CHANNELS_DIR : CONVERSATIONS_DIR, conversationId);
 }
 
 const MAX_MESSAGES = 1000;
@@ -49,9 +59,32 @@ export async function loadConversationState(conversationId: string): Promise<Con
 
   if (!fs.existsSync(statePath)) return null;
 
+  // Ensure SPEC.md exists for channels
+  if (normalizedConversationId.startsWith("channel_")) {
+    const specPath = path.join(conversationDir, "SPEC.md");
+    if (!fs.existsSync(specPath)) {
+      const channelTitle = getChannelSlugFromConversationId(normalizedConversationId) || "Channel";
+      const initialSpec = `# ${channelTitle}\n\nThis channel is spec-driven. Define the goals and rules for this channel here.`;
+      fs.writeFileSync(specPath, initialSpec, "utf-8");
+    }
+  }
+
   try {
     const data = fs.readFileSync(statePath, "utf-8");
     const state: ConversationState = JSON.parse(data);
+
+    // If it's a channel, ensure it has a project-specific CWD
+    if (normalizedConversationId.startsWith("channel_")) {
+      const projectDir = getChannelProjectDir(normalizedConversationId);
+      if (projectDir) {
+        if (!state.cwd) state.cwd = projectDir;
+        if (!state.openbotRoot) state.openbotRoot = process.cwd();
+
+        if (!fs.existsSync(projectDir)) {
+          fs.mkdirSync(projectDir, { recursive: true });
+        }
+      }
+    }
 
     if (state.messages && state.messages.length > MAX_MESSAGES) {
       const systemMessages = [];
@@ -121,12 +154,48 @@ export async function createChannelConversation(name: string): Promise<{
     throw new Error("Channel already exists");
   }
 
+  const projectDir = getChannelProjectDir(conversationId);
+  if (projectDir && !fs.existsSync(projectDir)) {
+    fs.mkdirSync(projectDir, { recursive: true });
+  }
+
   const state: ConversationState = {
     title: slug,
     conversationId,
+    cwd: projectDir || undefined,
+    openbotRoot: process.cwd(),
   };
   await saveConversationState(conversationId, state);
+
+  // Create initial SPEC.md for the channel
+  const specPath = path.join(conversationDir, "SPEC.md");
+  const initialSpec = `# ${normalizedTitle}\n\nThis channel is spec-driven. Define the goals and rules for this channel here.`;
+  fs.writeFileSync(specPath, initialSpec, "utf-8");
+
   return { id: conversationId, title: slug };
+}
+
+export function getChannelSpecPath(conversationId: string): string | null {
+  const normalizedConversationId = normalizeConversationId(conversationId);
+  if (!normalizedConversationId.startsWith("channel_")) return null;
+  const conversationDir = getConversationDir(normalizedConversationId);
+  return path.join(conversationDir, "SPEC.md");
+}
+
+export async function loadChannelSpec(conversationId: string): Promise<string | null> {
+  const specPath = getChannelSpecPath(conversationId);
+  if (!specPath || !fs.existsSync(specPath)) return null;
+  return fs.readFileSync(specPath, "utf-8");
+}
+
+export async function saveChannelSpec(conversationId: string, content: string) {
+  const specPath = getChannelSpecPath(conversationId);
+  if (!specPath) throw new Error("Invalid channel ID for spec");
+  const conversationDir = path.dirname(specPath);
+  if (!fs.existsSync(conversationDir)) {
+    fs.mkdirSync(conversationDir, { recursive: true });
+  }
+  fs.writeFileSync(specPath, content, "utf-8");
 }
 
 export async function deleteChannelConversation(conversationId: string): Promise<boolean> {
@@ -218,6 +287,21 @@ export async function loadConversationEvents(conversationId: string): Promise<Co
   }
 }
 
+export async function loadConversationEventsRaw(conversationId: string): Promise<string> {
+  const normalizedConversationId = normalizeConversationId(conversationId);
+  const conversationDir = getConversationDir(normalizedConversationId);
+  const logPath = path.join(conversationDir, "events.jsonl");
+
+  if (!fs.existsSync(logPath)) return "";
+
+  try {
+    return fs.readFileSync(logPath, "utf-8");
+  } catch (error) {
+    console.error(`Failed to load raw events for conversation ${normalizedConversationId}:`, error);
+    return "";
+  }
+}
+
 export async function listConversations(userId = "you"): Promise<Array<{
   id: string;
   kind: "dm" | "channel";
@@ -243,44 +327,48 @@ export async function listConversations(userId = "you"): Promise<Array<{
     participatingAgents?: string[];
   }> = [];
 
-  if (fs.existsSync(CONVERSATIONS_DIR)) {
-    try {
-      for (const conversationId of fs.readdirSync(CONVERSATIONS_DIR)) {
-        const conversationDir = path.join(CONVERSATIONS_DIR, conversationId);
-        if (!fs.statSync(conversationDir).isDirectory()) continue;
+  const directories = [CONVERSATIONS_DIR, CHANNELS_DIR];
+  for (const dir of directories) {
+    if (fs.existsSync(dir)) {
+      try {
+        for (const conversationId of fs.readdirSync(dir)) {
+          const conversationDir = path.join(dir, conversationId);
+          if (!fs.statSync(conversationDir).isDirectory()) continue;
 
-        const statePath = path.join(conversationDir, "state.json");
-        if (!fs.existsSync(statePath)) continue;
+          const statePath = path.join(conversationDir, "state.json");
+          if (!fs.existsSync(statePath)) continue;
 
-        const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ConversationState;
-        const readState = state.readByUser?.[userId];
-        const lastReadAt =
-          typeof readState?.lastReadAt === "number" && Number.isFinite(readState.lastReadAt)
-            ? readState.lastReadAt
-            : undefined;
-        const lastEventAt =
-          typeof state.lastEventAt === "number" && Number.isFinite(state.lastEventAt)
-            ? state.lastEventAt
-            : undefined;
-        const kind = inferConversationKind(conversationId);
-        const channelTitle = kind === "channel"
-          ? getChannelSlugFromConversationId(conversationId)
-          : undefined;
-        items.push({
-          id: conversationId,
-          kind,
-          title: channelTitle ?? state.title ?? undefined,
-          agentId: kind === "dm" ? conversationId.slice(3) : undefined,
-          mtime: fs.statSync(statePath).mtime,
-          lastEventId: typeof state.lastEventId === "string" ? state.lastEventId : undefined,
-          lastEventAt,
-          lastReadAt,
-          unread: typeof lastEventAt === "number" && (lastReadAt ?? 0) < lastEventAt,
-          participatingAgents: Array.isArray(state.participatingAgents) ? state.participatingAgents : undefined,
-        });
+          const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ConversationState;
+          const readState = state.readByUser?.[userId];
+          const lastReadAt =
+            typeof readState?.lastReadAt === "number" && Number.isFinite(readState.lastReadAt)
+              ? readState.lastReadAt
+              : undefined;
+          const lastEventAt =
+            typeof state.lastEventAt === "number" && Number.isFinite(state.lastEventAt)
+              ? state.lastEventAt
+              : undefined;
+          const kind = inferConversationKind(conversationId);
+          const channelTitle =
+            kind === "channel" ? getChannelSlugFromConversationId(conversationId) : undefined;
+          items.push({
+            id: conversationId,
+            kind,
+            title: channelTitle ?? state.title ?? undefined,
+            agentId: kind === "dm" ? conversationId.slice(3) : undefined,
+            mtime: fs.statSync(statePath).mtime,
+            lastEventId: typeof state.lastEventId === "string" ? state.lastEventId : undefined,
+            lastEventAt,
+            lastReadAt,
+            unread: typeof lastEventAt === "number" && (lastReadAt ?? 0) < lastEventAt,
+            participatingAgents: Array.isArray(state.participatingAgents)
+              ? state.participatingAgents
+              : undefined,
+          });
+        }
+      } catch (error) {
+        console.error(`Failed to list conversations from ${dir}:`, error);
       }
-    } catch (error) {
-      console.error("Failed to list conversations:", error);
     }
   }
 

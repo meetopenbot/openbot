@@ -14,6 +14,9 @@ import {
   createChannelConversation,
   deleteChannelConversation,
   normalizeConversationId,
+  loadChannelSpec,
+  saveChannelSpec,
+  loadConversationEventsRaw,
 } from '../services/conversation.js';
 import { listPlugins } from '../registry/agent-registry.js';
 import type { ListedPlugin } from '../registry/agent-registry.js';
@@ -122,7 +125,7 @@ export async function startServer(options: ServerOptions = {}) {
 
     state.conversationId = conversationId;
     if (!state.cwd) state.cwd = process.cwd();
-    if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
+    if (!state.openbotRoot) state.openbotRoot = process.cwd();
     if (!state.title) state.title = `Automation: ${automation.name}`;
 
     const content =
@@ -380,7 +383,7 @@ export async function startServer(options: ServerOptions = {}) {
         const state: ConversationState = (await loadConversationState(conversationId)) ?? {};
         state.conversationId = conversationId;
         if (!state.cwd) state.cwd = process.cwd();
-        if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
+        if (!state.openbotRoot) state.openbotRoot = process.cwd();
 
         activeRuns.add(runId);
         await appendConversationEvent(conversationId, runId, {
@@ -824,6 +827,35 @@ export async function startServer(options: ServerOptions = {}) {
     res.json({ success: true });
   });
 
+  // ─── User Profile (USER.md) ──────────────────────────────────────
+
+  app.get('/api/user/profile', async (_req, res) => {
+    const userPath = path.join(resolvedBaseDir, 'USER.md');
+    try {
+      const content = await fs.readFile(userPath, 'utf-8');
+      res.json({ profile: content });
+    } catch {
+      res.json({ profile: '' });
+    }
+  });
+
+  app.put('/api/user/profile', async (req, res) => {
+    const { profile } = req.body as { profile?: string };
+    if (typeof profile !== 'string') {
+      return res.status(400).json({ error: 'profile content is required' });
+    }
+
+    const userPath = path.join(resolvedBaseDir, 'USER.md');
+    try {
+      await fs.mkdir(resolvedBaseDir, { recursive: true });
+      await fs.writeFile(userPath, profile, 'utf-8');
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to save USER.md:', error);
+      res.status(500).json({ error: 'Failed to save user profile' });
+    }
+  });
+
   app.get('/api/variables', async (_req, res) => {
     res.json({ variables: listUserVariablesPublic() });
   });
@@ -915,10 +947,50 @@ export async function startServer(options: ServerOptions = {}) {
     return res.json({ success: true });
   });
 
+  app.get('/api/channels/:id/spec', async (req, res) => {
+    const id = normalizeConversationId(req.params.id);
+    const spec = await loadChannelSpec(id);
+    if (spec === null) {
+      return res.status(404).json({ error: 'Spec not found' });
+    }
+    res.json({ spec });
+  });
+
+  app.put('/api/channels/:id/spec', async (req, res) => {
+    const id = normalizeConversationId(req.params.id);
+    const { spec } = req.body as { spec?: string };
+    if (typeof spec !== 'string') {
+      return res.status(400).json({ error: 'spec content is required' });
+    }
+
+    try {
+      await saveChannelSpec(id, spec);
+      res.json({ success: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to save spec' });
+    }
+  });
+
+  app.get('/api/conversations/:id/state', async (req, res) => {
+    const conversationId = normalizeConversationId(req.params.id);
+    const state = await loadConversationState(conversationId);
+    if (!state) {
+      return res.status(404).json({ error: 'Conversation state not found' });
+    }
+    res.json(state);
+  });
+
   app.get('/api/conversations/:id/events', async (req, res) => {
     const conversationId = normalizeConversationId(req.params.id);
     const events = await loadConversationEvents(conversationId);
     res.json(events);
+  });
+
+  app.get('/api/conversations/:id/events/raw', async (req, res) => {
+    const conversationId = normalizeConversationId(req.params.id);
+    const events = await loadConversationEventsRaw(conversationId);
+    res.send(events);
   });
 
   app.post('/api/conversations/:id/reactions', async (req, res) => {

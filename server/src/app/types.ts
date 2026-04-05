@@ -136,7 +136,7 @@ export interface ConversationState {
   >;
   messages?: SimpleMessage[];
   cwd?: string;
-  workspaceRoot?: string;
+  openbotRoot?: string;
   usage?: {
     inputTokens: number;
     outputTokens: number;

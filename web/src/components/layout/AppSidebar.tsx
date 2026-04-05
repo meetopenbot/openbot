@@ -68,7 +68,7 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
   return (
     <>
       <div className="flex flex-col h-full w-full border-r border-border/50">
-      <div className="flex items-center justify-between gap-2 px-4 py-3">
+      <div className="flex items-center justify-between gap-2 px-4 h-14 border-b border-border/50 shrink-0">
         <button
           onClick={() => onNavigate("/")}
           className="flex items-center gap-2 min-w-0 hover:opacity-70 transition-opacity duration-150"

@@ -4,7 +4,6 @@ import { ConversationEvent, ConversationState } from '../app/types.js';
 import {
   memoryPlugin,
   memoryToolDefinitions,
-  createMemoryPromptBuilder,
 } from './memory.js';
 import {
   mentionPlugin,
@@ -15,6 +14,7 @@ import { llmPlugin } from './llm.js';
 import { PluginRegistry } from '../registry/plugin-registry.js';
 import { uiEvent } from '../ui/block.js';
 import { widgets } from '../ui/registry.js';
+import { createSystemPromptBuilder } from '../services/system-prompt.js';
 
 /**
  * Tool definitions for orchestration.
@@ -127,76 +127,9 @@ export function orchestrationToolsPlugin() {
 }
 
 /**
- * Creates the dynamic system prompt for an orchestrator agent.
- */
-export function createOrchestratorPromptBuilder(options: {
-  resolvedBaseDir: string;
-  registry: PluginRegistry;
-}) {
-  const { resolvedBaseDir, registry } = options;
-  const buildMemoryPrompt = createMemoryPromptBuilder(resolvedBaseDir);
-  const allAgents = registry.getAgents();
-
-  const getAgentDescriptions = (excludeId?: string) => {
-    return allAgents
-      .filter((a) => a.id !== excludeId)
-      .map((a) => {
-        const tools = a.capabilities
-          ? Object.entries(a.capabilities)
-              .map(([name, desc]) => `    - ${name}: ${desc}`)
-              .join('\n')
-          : '';
-        return `<agent id="${a.id}" name="${a.name}">
-  <description>${a.description}</description>
-${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ''}
-</agent>`;
-      })
-      .join('\n\n');
-  };
-
-  return async (context: RuntimeContext, baseInstructions: string = '') => {
-    const memoryPrompt = await buildMemoryPrompt(context);
-    const state = context.state as ConversationState;
-    const currentAgentId = (context as any).agentId;
-
-    const agentDescriptions = getAgentDescriptions(currentAgentId);
-    const standardKeys = [
-      'messages',
-      'agentStates',
-      'usage',
-      'cwd',
-      'workspaceRoot',
-      'title',
-      'conversationId',
-    ];
-    const customState: Record<string, any> = {};
-    for (const key of Object.keys(state)) {
-      if (!standardKeys.includes(key)) customState[key] = state[key];
-    }
-
-    const statePrompt =
-      Object.keys(customState).length > 0
-        ? `\n\n<session_state>\n${JSON.stringify(customState, null, 2)}\n</session_state>`
-        : '';
-
-    return `
-${baseInstructions}
-
-<expert_mode>
-You are interacting directly with the user. Focus on solving their request directly using your tools.
-Other specialized agents exist in this workspace; you can collaborate with them by using the "mention" tool. This allows you to ask them a question or give them a task.
-When the user asks for multiple delegated steps (e.g. one agent gathers facts, another summarizes), do them strictly in order: one mention call, wait for its tool result, then the next mention if needed—never issue two mention tool calls in the same model step. After the final tool result, reply with the combined outcome.
-</expert_mode>
-${statePrompt}
-
-<agents>
-${agentDescriptions}
-</agents>${memoryPrompt}`;
-  };
-}
-
-/**
- * Helper to wrap llmPlugin with orchestration.
+ * Wraps llmPlugin with orchestration: memory, topic agent, and the
+ * unified system prompt builder that assembles agent identity + user
+ * profile + conversation context into a single prompt.
  */
 export function llmOrchestratorPlugin(options: {
   model: any;
@@ -216,7 +149,10 @@ export function llmOrchestratorPlugin(options: {
     toolDefinitions = {},
     outputSchema,
   } = options;
-  const buildOrchestratorPrompt = createOrchestratorPromptBuilder({ resolvedBaseDir, registry });
+  const buildSystemPrompt = createSystemPromptBuilder({
+    baseDir: resolvedBaseDir,
+    registry,
+  });
 
   return (builder: MelonyBuilder<ConversationState, ConversationEvent>) => {
     builder
@@ -228,9 +164,9 @@ export function llmOrchestratorPlugin(options: {
           modelId: resolvedModelId,
           usageScope: 'manager',
           system: async (context: any) => {
-            const baseInstructions = typeof system === 'function' ? await system(context) : system;
-            const prompt = await buildOrchestratorPrompt(context, baseInstructions);
-            return prompt;
+            const agentInstructions =
+              typeof system === 'function' ? await system(context) : system;
+            return buildSystemPrompt(context, agentInstructions);
           },
           toolDefinitions: {
             ...orchestratorToolDefinitions,

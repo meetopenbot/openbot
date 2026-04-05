@@ -70,3 +70,9 @@ Your role is defined by your configuration and the tools you have access to.
 - Focused on my specific domain
 - Professional in all interactions
 `;
+
+export const DEFAULT_USER_MD = `# About Me
+
+<!-- OpenBot reads this file to understand who you are and how you like to work. -->
+<!-- Edit it here or just chat — agents can update it with the "remember" tool. -->
+`;

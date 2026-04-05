@@ -149,6 +149,14 @@ export const api = {
     anthropic_api_key?: string;
   }) => request<{ success: boolean }>("/api/config", { method: "POST", body: JSON.stringify(data) }),
 
+  getUserProfile: () => request<{ profile: string }>("/api/user/profile"),
+
+  updateUserProfile: (profile: string) =>
+    request<{ success: boolean }>("/api/user/profile", {
+      method: "PUT",
+      body: JSON.stringify({ profile }),
+    }),
+
   getVariables: () => request<UserVariablesResponse>("/api/variables"),
 
   updateVariables: (variables: Array<{ key: string; secret: boolean; value: string }>) =>
@@ -177,7 +185,24 @@ export const api = {
       method: "DELETE",
     }),
 
+  getChannelSpec: (id: string) =>
+    request<{ spec: string }>(`/api/channels/${encodeURIComponent(id)}/spec`),
+
+  updateChannelSpec: (id: string, spec: string) =>
+    request<{ success: boolean }>(`/api/channels/${encodeURIComponent(id)}/spec`, {
+      method: "PUT",
+      body: JSON.stringify({ spec }),
+    }),
+
+  getConversationState: (id: string) =>
+    request<any>(`/api/conversations/${encodeURIComponent(id)}/state`),
+
   getConversationEvents: (id: string) => request<any[]>(`/api/conversations/${encodeURIComponent(id)}/events`),
+  getConversationEventsRaw: async (id: string) => {
+    const res = await fetch(`${BASE_URL}/api/conversations/${encodeURIComponent(id)}/events/raw`);
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    return res.text();
+  },
   getConversationStreamUrl: (id: string, afterId?: string) => {
     const base = `${BASE_URL}/api/conversations/${encodeURIComponent(id)}/stream`;
     if (!afterId) return base;

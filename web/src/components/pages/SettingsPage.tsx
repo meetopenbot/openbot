@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTheme } from '../ThemeProvider';
 import { useConfig } from '../../hooks/use-config';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { cn } from '../../lib/utils';
 import { AgentsPage } from './AgentsPage';
 import { ExtensionItem } from '../ExtensionItem';
 import { Button } from '../ui/button';
+import { Textarea } from '../ui/textarea';
 
 type Theme = 'light' | 'dark' | 'system';
 const VARIABLE_MASK_DISPLAY = '••••••••••••••••';
@@ -82,6 +83,10 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
   const [varsSaved, setVarsSaved] = useState(false);
   const [variablesSaveError, setVariablesSaveError] = useState<string | null>(null);
 
+  // User Profile state
+  const [profileDraft, setProfileDraft] = useState('');
+  const [profileSaved, setProfileSaved] = useState(false);
+
   const settingsSection = useMemo(() => {
     const params = new URLSearchParams(path);
     const fromQuery = resolveSettingsSection(params.get('settingsSection'));
@@ -98,6 +103,31 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
     }
     navigate(`/?${params.toString()}`);
   };
+
+  const { data: profileData } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: api.getUserProfile,
+    enabled: settingsSection === 'general',
+  });
+
+  useEffect(() => {
+    if (profileData?.profile != null) {
+      setProfileDraft(profileData.profile);
+    }
+  }, [profileData]);
+
+  const saveProfileMutation = useMutation({
+    mutationFn: () => api.updateUserProfile(profileDraft),
+    onSuccess: async () => {
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2000);
+      await queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+    },
+  });
+
+  const handleProfileSave = useCallback(() => {
+    saveProfileMutation.mutate();
+  }, [saveProfileMutation]);
 
   const { data: varsData } = useQuery({
     queryKey: ['variables'],
@@ -245,6 +275,47 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                             {opt.label}
                           </button>
                         ))}
+                      </div>
+                    </section>
+                    <section className="flex flex-col gap-4">
+                      <div className="flex flex-col gap-0.5">
+                        <h3 className="text-[13px] font-medium">User Profile</h3>
+                        <p className="text-xs text-muted-foreground/60">
+                          Tell OpenBot about yourself. All agents read this to personalize their
+                          responses. Stored locally in{' '}
+                          <code className="rounded bg-muted/50 px-1 py-0.5 text-[11px]">
+                            ~/.openbot/USER.md
+                          </code>
+                        </p>
+                      </div>
+                      <Textarea
+                        value={profileDraft}
+                        onChange={(e) => setProfileDraft(e.target.value)}
+                        placeholder="Tell agents about yourself — your name, preferences, projects, how you like to work..."
+                        rows={8}
+                        className="font-mono text-xs resize-y"
+                      />
+                      <div className="flex items-center gap-3">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={
+                            saveProfileMutation.isPending ||
+                            profileDraft === (profileData?.profile ?? '')
+                          }
+                          onClick={handleProfileSave}
+                        >
+                          {profileSaved
+                            ? 'Saved'
+                            : saveProfileMutation.isPending
+                              ? 'Saving...'
+                              : 'Save profile'}
+                        </Button>
+                        {profileDraft !== (profileData?.profile ?? '') && (
+                          <span className="text-[11px] text-muted-foreground/50">
+                            Unsaved changes
+                          </span>
+                        )}
                       </div>
                     </section>
                     <p className="text-xs text-muted-foreground/60">

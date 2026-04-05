@@ -1,9 +1,10 @@
-import { MelonyPlugin, RuntimeContext } from "melony";
+import { MelonyPlugin } from "melony";
 import { uiEvent } from "../ui/block.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { z } from "zod";
 import { statusWidget } from "../ui/status.js";
+import { DEFAULT_USER_MD } from "../app/config.js";
 
 // --- Types ---
 
@@ -20,10 +21,6 @@ export interface MemoryEntry {
 
 export interface MemoryIndex {
   entries: MemoryEntry[];
-}
-
-export interface MemoryModules {
-  memory: MemoryModule;
 }
 
 export interface MemoryStatusEvent {
@@ -236,57 +233,6 @@ export function createMemoryModule(baseDir: string): MemoryModule {
   };
 }
 
-// --- Prompt Builder ---
-
-export async function buildMemoryPrompt(
-  baseDir: string,
-  modules: MemoryModules,
-  context?: RuntimeContext
-): Promise<string> {
-  const parts: string[] = [];
-
-  const state = context?.state as any;
-  const currentCwd = state?.cwd || process.cwd();
-
-  const now = new Date();
-  parts.push(`<environment>
-- Time: ${now.toLocaleString()} (${Intl.DateTimeFormat().resolvedOptions().timeZone})
-- CWD: ${currentCwd}
-- Bot Home: ${baseDir}
-</environment>`);
-
-  try {
-    const agentPath = path.join(baseDir, "AGENT.md");
-    const agentMd = await fs.readFile(agentPath, "utf-8");
-    if (agentMd.trim()) {
-      parts.push(`<agent_definition>\n${agentMd.trim()}\n</agent_definition>`);
-    }
-  } catch {
-    // Skip if AGENT.md doesn't exist yet
-  }
-
-  const recentFacts = await modules.memory.getRecentFacts(5);
-  if (recentFacts.length > 0) {
-    const factsList = recentFacts
-      .map(
-        (f) =>
-          `- ${f.content}${f.tags.length > 0 ? ` [${f.tags.join(", ")}]` : ""}`
-      )
-      .join("\n");
-    parts.push(`<recent_memories>\n${factsList}\n</recent_memories>`);
-  }
-
-  parts.push(`<memory_tools>
-Use these to manage your persistent state:
-- \`remember(content, tags)\`: Store facts/preferences
-- \`recall(query, tags)\`: Search long-term memory
-- \`forget(memoryId)\`: Remove outdated info
-- \`journal(content)\`: Record session reflections
-</memory_tools>`);
-
-  return `\n${parts.join("\n\n")}\n`;
-}
-
 // --- Helpers ---
 
 function expandPath(p: string): string {
@@ -307,17 +253,6 @@ Your role is to analyze user intent, manage long-term memory, and coordinate spe
 - Focused on providing clear, actionable results
 `;
 
-export function createMemoryPromptBuilder(baseDir: string) {
-  const expandedBase = expandPath(baseDir);
-
-  const modules: MemoryModules = {
-    memory: createMemoryModule(expandedBase),
-  };
-
-  return async (context?: RuntimeContext) =>
-    buildMemoryPrompt(expandedBase, modules, context);
-}
-
 // --- Plugin ---
 
 export const memoryPlugin = (
@@ -335,11 +270,20 @@ export const memoryPlugin = (
 
     await fs.mkdir(expandedBase, { recursive: true, mode: 0o700 });
     
+    // ensure AGENT.md exists
     const agentPath = path.join(expandedBase, "AGENT.md");
     try {
       await fs.access(agentPath);
     } catch {
       await fs.writeFile(agentPath, DEFAULT_AGENT_MD, "utf-8");
+    }
+
+    // ensure USER.md exists
+    const userPath = path.join(expandedBase, "USER.md");
+    try {
+      await fs.access(userPath);
+    } catch {
+      await fs.writeFile(userPath, DEFAULT_USER_MD, "utf-8");
     }
 
     await memory.initialize();

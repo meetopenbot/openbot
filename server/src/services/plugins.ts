@@ -1,5 +1,6 @@
 import { shellPlugin, shellToolDefinitions } from "../plugins/shell.js";
 import { fileSystemPlugin, fileSystemToolDefinitions } from "../plugins/file-system.js";
+import { channelPlugin, channelToolDefinitions } from "../plugins/channel.js";
 import { approvalPlugin } from "../plugins/approval.js";
 import { osAgent } from "../agents/os-agent.js";
 import { agentCreatorAgent } from "../agents/agent-creator.js";
@@ -50,6 +51,16 @@ export async function setupPluginRegistry(
     type: "tool",
     toolDefinitions: {},
     plugin: (opts) => approvalPlugin(opts),
+    isBuiltIn: true,
+  });
+
+  registry.register({
+    id: "channel",
+    name: "channel",
+    description: "Create and manage channels",
+    type: "tool",
+    toolDefinitions: channelToolDefinitions,
+    plugin: () => channelPlugin(),
     isBuiltIn: true,
   });
 

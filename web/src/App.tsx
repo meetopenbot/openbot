@@ -1,6 +1,6 @@
 import { ChatProvider } from './hooks/use-chat';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useSession } from './hooks/use-session';
 import { useConfig } from './hooks/use-config';
 import { useConversations } from './hooks/use-sessions';
@@ -11,7 +11,8 @@ import { AutomationsPage } from './components/pages/AutomationsPage';
 import { SettingsPage } from './components/pages/SettingsPage';
 import { Onboarding } from './components/Onboarding';
 import { ThemeProvider } from './components/ThemeProvider';
-import { SessionStateSidebar } from './components/SessionStateSidebar';
+import { ChannelSpecSidebar } from './components/ChannelSpecSidebar';
+import { AgentProfileSidebar } from './components/AgentProfileSidebar';
 import { Button } from './components/ui/button';
 import { InfoIcon } from 'lucide-react';
 
@@ -20,8 +21,21 @@ export function App() {
   const { conversationId, path, navigate, ensureConversationInUrl } = useSession();
   const { data: conversations = [] } = useConversations();
   const { data: config, isLoading: configLoading } = useConfig();
-  const [rightPanel, setRightPanel] = useState<'session' | null>(null);
+  const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: api.getAgents });
+  const [rightPanel, setRightPanel] = useState<'spec' | 'agent' | null>(null);
   const activeConversationId = conversationId || conversations[0]?.id || '';
+
+  const activeConversation = conversations.find((c) => c.id === activeConversationId);
+  const dmAgentIdFromRoute = activeConversationId.startsWith('dm_')
+    ? activeConversationId.slice(3)
+    : undefined;
+  const resolvedDmAgentId =
+    activeConversation?.kind === 'dm' && activeConversation.agentId
+      ? activeConversation.agentId
+      : dmAgentIdFromRoute;
+  const activeAgent = resolvedDmAgentId
+    ? agents.find((a) => a.id === resolvedDmAgentId || a.name === resolvedDmAgentId)
+    : null;
   const markConversationRead = useCallback(
     async (id: string) => {
       if (!id) return;
@@ -63,6 +77,10 @@ export function App() {
   );
 
   useEffect(() => {
+    setRightPanel(null);
+  }, [activeConversationId]);
+
+  useEffect(() => {
     if (!conversationId && activeConversationId) {
       ensureConversationInUrl(activeConversationId);
     }
@@ -98,30 +116,43 @@ export function App() {
             currentTab={tab === 'agents' ? 'settings' : tab}
             onNavigate={navigate}
             rightOpen={Boolean(rightPanel)}
-            rightWidth={360}
+            rightWidthClassName="w-[640px] 2xl:w-[840px]"
             rightSidebar={
-              rightPanel === 'session' ? (
-                <SessionStateSidebar onClose={() => setRightPanel(null)} />
+              rightPanel === 'spec' ? (
+                <ChannelSpecSidebar
+                  conversationId={activeConversationId}
+                  onClose={() => setRightPanel(null)}
+                />
+              ) : rightPanel === 'agent' && activeAgent ? (
+                <AgentProfileSidebar
+                  agent={activeAgent}
+                  conversationId={activeConversationId}
+                  onClose={() => setRightPanel(null)}
+                />
               ) : null
             }
             rightActions={
               tab === 'chat' ? (
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant={rightPanel ? 'secondary' : 'ghost'}
                   size="sm"
                   onClick={() => {
-                    setRightPanel((panel) => (panel === 'session' ? null : 'session'));
+                    const nextPanel = activeConversationId.startsWith('channel_') ? 'spec' : 'agent';
+                    setRightPanel((panel) => (panel === nextPanel ? null : nextPanel));
                   }}
-                  aria-pressed={rightPanel === 'session'}
-                  title={
-                    rightPanel === 'session' ? 'Hide conversation state' : 'Show conversation state'
-                  }
+                  className="h-8 size-8 p-0"
+                  aria-pressed={Boolean(rightPanel)}
+                  title={rightPanel ? 'Hide info' : 'Show info'}
                 >
-                  <InfoIcon className="size-3" />
+                  <InfoIcon className="size-4" />
                 </Button>
               ) : null
             }
+            onHeaderClick={() => {
+              const nextPanel = activeConversationId.startsWith('channel_') ? 'spec' : 'agent';
+              setRightPanel((panel) => (panel === nextPanel ? null : nextPanel));
+            }}
           >
             {tab === 'chat' && activeConversationId && (
               <ChatPage

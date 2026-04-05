@@ -6,7 +6,6 @@ import { api } from '../../lib/api';
 import { AppSidebar } from './AppSidebar';
 import { UpdateBadge } from './UpdateBadge';
 import { AgentAvatar } from '../AgentAvatar';
-import { AgentProfileModal } from '../AgentProfileModal';
 import { cn } from '../../lib/utils';
 
 const SIDEBAR_WIDTH = 272;
@@ -22,6 +21,7 @@ interface AppLayoutProps {
   /** Tailwind width classes when open (e.g. `w-[450px] xl:w-[600px]`). When set, overrides numeric `rightWidth` for the rail. */
   rightWidthClassName?: string;
   rightOpen?: boolean;
+  onHeaderClick?: () => void;
 }
 
 export function AppLayoutProvider({ children }: { children: ReactNode }) {
@@ -49,6 +49,7 @@ export function AppLayout({
   rightWidth = 300,
   rightWidthClassName,
   rightOpen,
+  onHeaderClick,
 }: AppLayoutProps) {
   const rightRailUsesClasses = Boolean(rightWidthClassName);
   const { open, toggle } = useSidebar();
@@ -57,8 +58,6 @@ export function AppLayout({
     queryKey: ['agents'],
     queryFn: api.getAgents,
   });
-
-  const [showAgentProfile, setShowAgentProfile] = useState(false);
 
   const activeConversation = conversations.find(
     (conversation) => conversation.id === conversationId,
@@ -93,7 +92,7 @@ export function AppLayout({
       </aside>
 
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-background">
-        <div className="flex items-center justify-between px-3 py-2 gap-1 border-b border-border shrink-0">
+        <div className="flex items-center justify-between px-4 h-14 gap-1 border-b border-border/50 shrink-0">
           <div className="flex items-center gap-1 min-w-0">
             <button
               onClick={toggle}
@@ -119,41 +118,35 @@ export function AppLayout({
             </div>
             {currentTab === 'chat' && (
               <div className="flex items-center gap-2 min-w-0">
-                {activeAgent ? (
-                  <button
-                    onClick={() => setShowAgentProfile(true)}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-muted transition-colors group min-w-0"
-                  >
+                <button
+                  onClick={onHeaderClick}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-muted transition-colors group min-w-0 text-left"
+                >
+                  {activeAgent && (
                     <AgentAvatar
                       name={activeAgent.isDefault ? 'default' : activeAgent.id}
                       label={activeAgent.name}
                       imageUrl={activeAgent.image}
                       className="size-5 shrink-0 rounded-md shadow-sm group-hover:scale-105 transition-transform"
                     />
-                    <h1 className="text-sm font-semibold text-foreground/85 truncate max-w-[55vw]">
-                      {headerTitle}
-                    </h1>
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="text-muted-foreground/40 group-hover:text-muted-foreground/80 transition-colors"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                ) : (
-                  <div className="ml-2 flex items-center gap-2 min-w-0">
-                    <h1 className="text-sm font-medium text-foreground/85 truncate max-w-[40vw]">
-                      {headerTitle}
-                    </h1>
-                  </div>
-                )}
+                  )}
+                  <h1 className="text-sm font-semibold text-foreground/85 truncate max-w-[55vw]">
+                    {headerTitle}
+                  </h1>
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-muted-foreground/40 group-hover:text-muted-foreground/80 transition-colors"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
               </div>
             )}
           </div>
@@ -182,9 +175,6 @@ export function AppLayout({
         </div>
       </aside>
 
-      {showAgentProfile && activeAgent && (
-        <AgentProfileModal agent={activeAgent} onClose={() => setShowAgentProfile(false)} />
-      )}
     </div>
   );
 }
