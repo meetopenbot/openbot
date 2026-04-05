@@ -8,7 +8,7 @@ Agents are specialized entities within OpenBot that handle specific types of tas
 The OS agent is responsible for low-level system interactions. It uses the `shell` and `file-system` plugins to execute commands and manage files.
 
 ### Topic Agent (`topic`)
-A background agent that observes completions from the Manager and automatically generates concise titles for chat threads.
+A background agent that observes completions from the Manager and automatically generates concise titles for chat conversations.
 
 ### Codex Agent (`codex`)
 A world-class software engineer and coding assistant powered by OpenAI. It helps with high-level architectural decisions, code refactoring, complex logic implementation, and debugging. It has access to the shell and file system to explore and modify your codebase.

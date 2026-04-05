@@ -21,7 +21,6 @@ OpenBot is a local-first, Slack-like platform for AI agents.
 
 - Agents are participants (bots/personas) that users can DM or include in shared spaces.
 - Channels represent shared context and multi-agent collaboration space.
-- Threads represent focused task execution inside a channel topic.
 - The system is event-stream oriented: server emits events, UI renders evolving state.
 
 ## Architecture Rules
@@ -44,7 +43,7 @@ OpenBot is a local-first, Slack-like platform for AI agents.
 ## Web Guidance (`web/`)
 
 - Use existing shadcn/ui and project component patterns.
-- Preserve Slack-like interaction patterns (threaded flow, clear composer affordances, responsive panes).
+- Preserve Slack-like interaction patterns (chat flow, clear composer affordances, responsive panes).
 - Prefer extending existing hooks/components before creating parallel abstractions.
 - Consume server event streams as source of truth for timeline/state updates.
 - Keep UI changes accessible and visually consistent with existing tokens/styles.
@@ -74,5 +73,5 @@ OpenBot is a local-first, Slack-like platform for AI agents.
 
 - Changes align with local-first + event-driven design.
 - Server and web responsibilities remain cleanly separated.
-- Multi-agent/channel/thread UX model is preserved.
+- Multi-agent/channel UX model is preserved.
 - Any new behavior is documented where appropriate.

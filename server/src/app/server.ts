@@ -262,7 +262,6 @@ export async function startServer(options: ServerOptions = {}) {
     state: ConversationState,
     cancelRunId: string,
   ): Promise<string> => {
-    const threadId = branchEvent.meta?.threadId;
     runConversationById.set(branchRunId, conversationId);
     runAgentsById.set(branchRunId, new Set());
     activeRuns.add(branchRunId);
@@ -270,7 +269,6 @@ export async function startServer(options: ServerOptions = {}) {
     await appendConversationEvent(conversationId, branchRunId, {
       type: 'run:started',
       data: { runId: branchRunId },
-      meta: threadId ? { threadId } : undefined,
     } as ConversationEvent);
 
     let lastOutput = '';
@@ -344,7 +342,6 @@ export async function startServer(options: ServerOptions = {}) {
       await appendConversationEvent(conversationId, branchRunId, {
         type: cancelledRuns.has(cancelRunId) ? 'run:cancelled' : 'run:finished',
         data: { runId: branchRunId },
-        meta: threadId ? { threadId } : undefined,
       } as ConversationEvent);
     } catch (error) {
       console.error('Delegated run failed:', error);
@@ -354,7 +351,6 @@ export async function startServer(options: ServerOptions = {}) {
           runId: branchRunId,
           message: error instanceof Error ? error.message : String(error),
         },
-        meta: threadId ? { threadId } : undefined,
       } as ConversationEvent);
       lastOutput =
         lastOutput.trim() ||
@@ -386,12 +382,10 @@ export async function startServer(options: ServerOptions = {}) {
         if (!state.cwd) state.cwd = process.cwd();
         if (!state.workspaceRoot) state.workspaceRoot = process.cwd();
 
-        const threadId = event.meta?.threadId;
         activeRuns.add(runId);
         await appendConversationEvent(conversationId, runId, {
           type: 'run:started',
           data: { runId },
-          meta: threadId ? { threadId } : undefined,
         } as ConversationEvent);
 
         const iterator = runtime.run(event, { runId, state });
@@ -461,7 +455,6 @@ export async function startServer(options: ServerOptions = {}) {
           await appendConversationEvent(conversationId, runId, {
             type: cancelledRuns.has(runId) ? 'run:cancelled' : 'run:finished',
             data: { runId },
-            meta: threadId ? { threadId } : undefined,
           } as ConversationEvent);
         } catch (error) {
           console.error('Background run failed:', error);
@@ -471,7 +464,6 @@ export async function startServer(options: ServerOptions = {}) {
               runId,
               message: error instanceof Error ? error.message : String(error),
             },
-            meta: threadId ? { threadId } : undefined,
           } as ConversationEvent);
         } finally {
           activeRuns.delete(runId);

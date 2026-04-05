@@ -20,7 +20,6 @@ OpenBot is a local-first, Slack-like platform for AI agents. It allows users to 
 - **Multi-Agent Behavior**: Support for multiple agents in shared contexts (channels).
 - **Structure**:
     - **Channels**: Shared context and multi-agent workspace.
-    - **Threads**: Represents a single task or sub-topic within a channel.
 
 ## AI Agent Instructions
 

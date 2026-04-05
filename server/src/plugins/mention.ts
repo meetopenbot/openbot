@@ -28,48 +28,23 @@ export function mentionPlugin() {
         context: { runId: string; state: ConversationState; agentId?: string },
       ) {
         const { agentId, content, toolCallId } = event.data;
-        const parentThreadId = event.meta?.threadId;
         const delegatorId =
           context.state.openBotExecutingAgentId ??
           (event.meta as { agentName?: string } | undefined)?.agentName ??
           "default";
         const nextDepth = (event.meta?.depth as number) || 0;
 
-        let routedThreadId: string;
-
-        if (parentThreadId) {
-          // Already in a thread: keep handoff in the same thread (Slack-style nested context).
-          yield {
-            type: 'agent:delegation',
-            id: generateId(),
-            data: {
-              targetAgentId: agentId,
-              content: `@${agentId} ${content}`,
-            },
-            meta: {
-              threadId: parentThreadId,
-              agentName: delegatorId,
-              openThread: false,
-            },
-          } as ConversationEvent;
-          routedThreadId = parentThreadId;
-        } else {
-          // Main channel: anchor on timeline; follow-up work goes to a side thread keyed by this id.
-          const delegationRootId = generateId();
-          yield {
-            type: 'agent:delegation',
-            id: delegationRootId,
-            data: {
-              targetAgentId: agentId,
-              content: `@${agentId} ${content}`,
-            },
-            meta: {
-              agentName: delegatorId,
-              openThread: true,
-            },
-          } as ConversationEvent;
-          routedThreadId = delegationRootId;
-        }
+        yield {
+          type: 'agent:delegation',
+          id: generateId(),
+          data: {
+            targetAgentId: agentId,
+            content: `@${agentId} ${content}`,
+          },
+          meta: {
+            agentName: delegatorId,
+          },
+        } as ConversationEvent;
 
         // Yield a special trigger event that the server loop can catch.
         // We use the agent:input type so the router can handle it correctly.
@@ -81,7 +56,6 @@ export function mentionPlugin() {
               type: 'agent:input',
               data: { content: `@${agentId} ${content}` },
               meta: {
-                threadId: routedThreadId,
                 delegatedBy: delegatorId,
                 agentName: delegatorId,
                 depth: nextDepth + 1,

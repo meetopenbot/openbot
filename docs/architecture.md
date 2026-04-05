@@ -8,11 +8,8 @@ OpenBot follows a modular architecture based on the `melony` framework.
 The router is the central dispatcher. It receives user input and determines which agent should handle the message using the following priority:
 
 1. **@mention** — the first `@agentId` in the message text
-2. **Thread assignee** — if the thread is already assigned to an agent
-3. **DM context** — direct messages route to the DM target agent
-4. **Channel default** — falls back to the `default` agent
-
-Once an agent is resolved for a thread, subsequent messages in that thread auto-route to the same agent.
+2. **DM context** — direct messages route to the DM target agent
+3. **Channel default** — falls back to the `default` agent
 
 ### 2. Agent Registry
 Holds all available agents. Agents can be:
@@ -31,4 +28,3 @@ The underlying event-driven orchestration layer that handles communication betwe
 2. Router parses the @mention and resolves the target agent.
 3. The target agent's runtime processes the message.
 4. The agent streams events (`agent:output`, `ui`, etc.) back to the client.
-5. The thread is assigned to the agent for future messages.

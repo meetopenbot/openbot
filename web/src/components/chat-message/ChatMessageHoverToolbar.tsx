@@ -1,7 +1,6 @@
 import {
   Check,
   Copy,
-  MessageSquare,
   ThumbsDown,
   ThumbsUp,
 } from "lucide-react";
@@ -15,14 +14,10 @@ import { cn } from "../../lib/utils";
 import type { MessageReactionSentiment } from "../../hooks/use-chat";
 
 type Props = {
-  isThreadPanel: boolean;
   messageId: string;
-  replyCount: number;
-  showReply: boolean;
   showCopy: boolean;
   showReactions: boolean;
   copied: boolean;
-  onReply?: (messageId: string) => void;
   onCopy: () => void;
   currentReaction?: MessageReactionSentiment;
   onMessageReaction?: (
@@ -31,53 +26,24 @@ type Props = {
   ) => void | Promise<void>;
 };
 
-export function ThreadMessageHoverToolbar({
-  isThreadPanel,
+export function ChatMessageHoverToolbar({
   messageId,
-  replyCount,
-  showReply,
   showCopy,
   showReactions,
   copied,
-  onReply,
   onCopy,
   currentReaction,
   onMessageReaction,
 }: Props) {
-  const visible = showReply || showCopy || showReactions;
+  const visible = showCopy || showReactions;
   if (!visible) return null;
 
   return (
     <div
       className={cn(
-        "absolute top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-background border border-border/50 rounded-lg shadow-sm p-0.5 z-10",
-        isThreadPanel ? "right-3" : "right-5",
+        "absolute top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-background border border-border/50 rounded-lg shadow-sm p-0.5 z-10 right-5",
       )}
     >
-      {showReply && onReply && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onReply(messageId);
-              }}
-              className="text-muted-foreground hover:text-foreground"
-              aria-label={replyCount > 0 ? "View thread" : "Reply in thread"}
-            >
-              <MessageSquare className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {replyCount > 0 ? "View thread" : "Reply in thread"}
-          </TooltipContent>
-        </Tooltip>
-      )}
       {showCopy && (
         <Tooltip>
           <TooltipTrigger asChild>

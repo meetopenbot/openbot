@@ -64,7 +64,7 @@ interface Event {
 ```
 
 ### Multi-Agent Pattern
-Agents are invoked via @mentions in messages. The router resolves the target agent and assigns it to the thread. Each agent operates independently with its own isolated state.
+Agents are invoked via @mentions in messages. The router resolves the target agent for that message. Each agent operates independently with its own isolated state.
 
 ### State Management
 - Use `context.state` within handlers to persist information across events in a single run.

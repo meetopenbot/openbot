@@ -11,7 +11,6 @@ import { AutomationsPage } from './components/pages/AutomationsPage';
 import { SettingsPage } from './components/pages/SettingsPage';
 import { Onboarding } from './components/Onboarding';
 import { ThemeProvider } from './components/ThemeProvider';
-import { ThreadPanel } from './components/ThreadPanel';
 import { SessionStateSidebar } from './components/SessionStateSidebar';
 import { Button } from './components/ui/button';
 import { InfoIcon } from 'lucide-react';
@@ -21,7 +20,6 @@ export function App() {
   const { conversationId, path, navigate, ensureConversationInUrl } = useSession();
   const { data: conversations = [] } = useConversations();
   const { data: config, isLoading: configLoading } = useConfig();
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [rightPanel, setRightPanel] = useState<'session' | null>(null);
   const activeConversationId = conversationId || conversations[0]?.id || '';
   const markConversationRead = useCallback(
@@ -46,11 +44,6 @@ export function App() {
       'agent:input': async () => {
         ensureConversationInUrl(activeConversationId);
       },
-      'agent:delegation': async (chunk: any) => {
-        if (chunk?.meta?.openThread === true && typeof chunk?.id === 'string') {
-          setActiveThreadId(chunk.id);
-        }
-      },
       'client:invalidate': async (chunk: any) => {
         if (Array.isArray(chunk.data?.tags)) {
           queryClient.invalidateQueries({
@@ -66,7 +59,7 @@ export function App() {
         await markConversationRead(activeConversationId);
       },
     }),
-    [queryClient, ensureConversationInUrl, activeConversationId, markConversationRead, setActiveThreadId],
+    [queryClient, ensureConversationInUrl, activeConversationId, markConversationRead],
   );
 
   useEffect(() => {
@@ -104,15 +97,10 @@ export function App() {
             conversationId={activeConversationId}
             currentTab={tab === 'agents' ? 'settings' : tab}
             onNavigate={navigate}
-            rightOpen={Boolean(activeThreadId || rightPanel)}
+            rightOpen={Boolean(rightPanel)}
             rightWidth={360}
-            rightWidthClassName={
-              activeThreadId ? 'w-[450px] xl:w-[600px] 2xl:w-[720px]' : undefined
-            }
             rightSidebar={
-              activeThreadId ? (
-                <ThreadPanel threadId={activeThreadId} onClose={() => setActiveThreadId(null)} />
-              ) : rightPanel === 'session' ? (
+              rightPanel === 'session' ? (
                 <SessionStateSidebar onClose={() => setRightPanel(null)} />
               ) : null
             }
@@ -123,7 +111,6 @@ export function App() {
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    setActiveThreadId(null);
                     setRightPanel((panel) => (panel === 'session' ? null : 'session'));
                   }}
                   aria-pressed={rightPanel === 'session'}
@@ -139,10 +126,6 @@ export function App() {
             {tab === 'chat' && activeConversationId && (
               <ChatPage
                 conversationId={activeConversationId}
-                onReply={(id) => {
-                  setRightPanel(null);
-                  setActiveThreadId(id);
-                }}
               />
             )}
             {tab === 'chat' && !activeConversationId && <NoConversationsPlaceholder />}

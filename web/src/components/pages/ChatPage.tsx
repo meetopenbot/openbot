@@ -1,5 +1,5 @@
 import { useChat } from "../../hooks/use-chat";
-import { useCallback, useRef } from "react";
+import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Chat } from "../Chat";
 import { Composer } from "../Composer";
@@ -11,33 +11,16 @@ import { api } from "../../lib/api";
 
 interface ChatPageProps {
   conversationId: string;
-  onReply?: (id: string) => void;
 }
 
-export function ChatPage({ conversationId, onReply }: ChatPageProps) {
+export function ChatPage({ conversationId }: ChatPageProps) {
   const mainScrollRef = useRef<HTMLDivElement>(null);
-
-  const handleReply = useCallback(
-    (messageId: string) => {
-      const el = mainScrollRef.current;
-      const top = el?.scrollTop ?? 0;
-      onReply?.(messageId);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const pane = mainScrollRef.current;
-          if (pane) pane.scrollTop = top;
-        });
-      });
-    },
-    [onReply],
-  );
 
   return (
     <div key={conversationId} className="flex-1 flex flex-col h-full min-w-0">
       <div ref={mainScrollRef} className="flex-1 overflow-auto">
         <Chat
           placeholder={<ChatPlaceholder />}
-          onReply={onReply ? handleReply : undefined}
         />
       </div>
       <div className="px-4 pb-4 pt-0 shrink-0">

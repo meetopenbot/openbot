@@ -3,10 +3,10 @@ alwaysApply: true
 ---
 # OpenBot Context & Architecture
 
-OpenBot is an extensible AI assistant ecosystem built on the **Melony** framework. Its **main goal** is to solve agent fragmentation and communication problems. It provides a Slack-like workspace where specialized agents are invoked via @mentions and collaborate in threaded conversations.
+OpenBot is an extensible AI assistant ecosystem built on the **Melony** framework. Its **main goal** is to solve agent fragmentation and communication problems. It provides a Slack-like workspace where specialized agents are invoked via @mentions.
 
 ## 🧠 Core Philosophy
-- **@mention Routing**: Users invoke agents by tagging them with `@agent` in messages. The router resolves the target agent and assigns it to the thread for follow-up messages.
+- **@mention Routing**: Users invoke agents by tagging them with `@agent` in messages. The router resolves the target agent for that message.
 - **Event-Driven**: All communication happens via an asynchronous event bus (Melony).
 - **Extensible**: New agents can be added via YAML configuration, and new capabilities via Melony plugins.
 
@@ -15,9 +15,8 @@ OpenBot is an extensible AI assistant ecosystem built on the **Melony** framewor
 ### 1. The Router
 The central dispatcher. It resolves which agent handles each message using:
 1. **@mention** in the message text (first match wins, longest prefix)
-2. **Thread assignee** (persisted from previous messages)
-3. **DM context** (direct messages route to the DM target)
-4. **Channel default** (falls back to the `default` agent)
+2. **DM context** (direct messages route to the DM target)
+3. **Channel default** (falls back to the `default` agent)
 
 ### 2. The Default Agent
 The primary entry point. Its responsibilities are:
@@ -28,7 +27,7 @@ The primary entry point. Its responsibilities are:
 Agents are workers that handle specific domains.
 - **`os` Agent**: Handles shell commands and file system operations.
 - **`browser` Agent**: (If installed) Performs web navigation and interaction.
-- **`topic` Agent**: Background agent that automatically titles chat threads.
+- **`topic` Agent**: Background agent that automatically titles chat conversations.
 - **YAML Agents**: Defined in `~/.openbot/agents/*/AGENT.md`, they allow for custom prompts and tool configurations without code changes.
 
 ### 3. Key Plugins
@@ -45,12 +44,11 @@ Plugins provide the actual tools and logic used by agents.
 1. **User Input** → `agent:input` event with `@agentId` in content.
 2. **Router Parses** → Extracts @mention, strips it from content, resolves target agent.
 3. **Agent Execution** → Target agent's runtime processes the message, streams `agent:output` events.
-4. **Thread Assignment** → Thread is assigned to the agent; subsequent messages auto-route.
 
 ### Memory Workflow
-1. **Action** → Manager calls \`remember(content, tags)\`.
-2. **Storage** → \`memory\` plugin saves to local JSON.
-3. **Retrieval** → Manager calls \`recall(query)\` to inject past context into its prompt.
+1. **Action** → Manager calls `remember(content, tags)`.
+2. **Storage** → `memory` plugin saves to local JSON.
+3. **Retrieval** → Manager calls `recall(query)` to inject past context into its prompt.
 
 ## 📂 Project Structure
 - `/server`: Node.js/TypeScript backend core.

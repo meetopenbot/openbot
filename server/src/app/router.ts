@@ -81,14 +81,12 @@ export async function* runOpenBot(
   registry: PluginRegistry,
 ) {
   const { state } = context;
-  const threadId = event.meta?.threadId;
   const conversationId = state.conversationId || "";
   const allAgents = registry.getAgents();
 
   // Initialize state
   if (!state.messages) state.messages = [];
   if (!state.agentStates) state.agentStates = {};
-  if (!state.threadAssignees) state.threadAssignees = {};
 
   // --- 1. DISPATCHER: Determine the target agent for this message ---
   let targetAgentId: string | undefined = event.meta?.agentName;
@@ -108,35 +106,15 @@ export async function* runOpenBot(
       }
     }
 
-    // B. Thread Assignee
-    if (!targetAgentId && threadId && state.threadAssignees[threadId]) {
-      targetAgentId = state.threadAssignees[threadId];
-    }
-
-    // C. DM Context
+    // B. DM Context
     if (!targetAgentId && conversationId.startsWith("dm_")) {
       targetAgentId = conversationId.slice("dm_".length);
     }
 
-    // D. Channel fallback — route to the default agent
+    // C. Channel fallback — route to the default agent
     if (!targetAgentId && conversationId.startsWith("channel_")) {
       targetAgentId = "default";
     }
-  }
-
-  // Persist the thread→agent mapping so subsequent replies auto-route.
-  // Do not capture assignee for tool-driven handoffs (`delegatedBy`): the coordinator should
-  // keep owning the thread so it can run further steps (e.g. second `mention`) and so the
-  // user's next message still reaches the default/channel lead unless they @ someone.
-  const isDelegatedHandoff = Boolean((event.meta as { delegatedBy?: string } | undefined)?.delegatedBy);
-  if (
-    threadId &&
-    targetAgentId &&
-    targetAgentId !== "default" &&
-    !state.threadAssignees[threadId] &&
-    !isDelegatedHandoff
-  ) {
-    state.threadAssignees[threadId] = targetAgentId;
   }
 
   const isTargetingLead = !targetAgentId || targetAgentId === "you";
@@ -164,7 +142,6 @@ export async function* runOpenBot(
             ...agentChunk,
             meta: {
               ...(agentChunk as any)?.meta,
-              ...(threadId ? { threadId } : {}),
               agentName: target,
             },
           } as ConversationEvent;
@@ -204,7 +181,6 @@ export async function* runOpenBot(
         const delegatedBy = (chunk as any).meta?.delegatedBy;
         const outMeta = {
           ...chunk.meta,
-          ...(threadId ? { threadId } : {}),
           ...(targetAgentId
             ? {
                 agentName:
@@ -215,39 +191,25 @@ export async function* runOpenBot(
             : {}),
         };
 
-      // Suspend still carries nested UI for Melony; emit the same block as a top-level `ui` so SDUI consumers (e.g. AttentionRail) stay consistent.
-      if (chunk.type === "suspend") {
-        const nested = (chunk as any).data?.event;
-        if (nested?.type === "ui") {
-          const originalPlacement = nested.data?.placement;
-
-          // 1. Always yield the attention version for the rail.
-          // We force placement: "attention" here.
-          yield { 
-            ...nested, 
-            data: { ...nested.data, placement: "attention" },
-            meta: { ...nested.meta, ...outMeta } 
-          } as ConversationEvent;
-          
-          // 2. Always yield an inline version for the current thread/channel.
-          // We force placement: "thread" here.
-          yield { 
-            ...nested, 
-            data: { ...nested.data, placement: "thread" },
-            meta: { ...nested.meta, ...outMeta } 
-          } as ConversationEvent;
-
-          // 3. If we're in a side-thread, also mirror an inline version to the main channel 
-          // so the user sees the blocking action without having to open the thread.
-          if (threadId) {
+        // Suspend still carries nested UI for Melony; emit the same block as a top-level `ui` so SDUI consumers (e.g. AttentionRail) stay consistent.
+        if (chunk.type === "suspend") {
+          const nested = (chunk as any).data?.event;
+          if (nested?.type === "ui") {
+            // Always yield the attention version for the rail.
             yield { 
               ...nested, 
-              data: { ...nested.data, placement: "thread" },
-              meta: { ...nested.meta, ...outMeta, threadId: undefined } 
+              data: { ...nested.data, placement: "attention" },
+              meta: { ...nested.meta, ...outMeta } 
+            } as ConversationEvent;
+            
+            // Always yield an inline version for the current channel.
+            yield { 
+              ...nested, 
+              data: { ...nested.data, placement: "inline" }, // We use "inline" as a placement type for chat UI
+              meta: { ...nested.meta, ...outMeta } 
             } as ConversationEvent;
           }
         }
-      }
 
         yield {
           ...chunk,

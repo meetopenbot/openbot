@@ -1,48 +1,15 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { hasRenderableContent } from "../components/thread-message/model";
-
-/** Fold raw thread events into user/assistant messages (matches channel transcript rules). */
-export function foldThreadEventsToMessages(events: any[]): any[] {
-  return events.reduce((msgs: any[], event: any) => {
-    if (event.type === "message:reaction") return msgs;
-    const currentMsg = msgs[msgs.length - 1];
-    if (event.type === "agent:input" || event.type === "user:input") {
-      // Melony echoes synthetic handoff inputs; parent row already shows agent:delegation on the timeline.
-      if (event.type === "agent:input" && event.meta?.delegatedBy) {
-        return msgs;
-      }
-      const delegatedBy = event.meta?.delegatedBy;
-      msgs.push({
-        id: event.id || `thread-user-${msgs.length}`,
-        role: delegatedBy ? "assistant" : "user",
-        content: [event],
-      });
-    } else if (currentMsg?.role === "assistant") {
-      currentMsg.content.push(event);
-    } else {
-      msgs.push({
-        id: event.id || `thread-asst-${msgs.length}`,
-        role: "assistant",
-        content: [event],
-      });
-    }
-    return msgs;
-  }, []);
-}
 
 export type MessageReactionSentiment = "like" | "dislike";
 
 interface ChatContextType {
   send: (payload: any) => Promise<void>;
-  stop: (threadId?: string) => void;
+  stop: () => void;
   streaming: boolean;
-  streamingMap: Record<string, boolean>;
   events: any[];
   messages: any[];
-  threads: Record<string, any[]>;
-  threadReplyCounts: Record<string, number>;
   messageReactions: Record<string, MessageReactionSentiment>;
   setMessageReaction: (
     targetMessageId: string,
@@ -79,7 +46,7 @@ export function ChatProvider({
 }) {
   const [events, setEvents] = useState<any[]>([]);
   const [eventsHydrated, setEventsHydrated] = useState(false);
-  const [submittingByThread, setSubmittingByThread] = useState<Record<string, boolean>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const latestEventIdRef = useRef<string | null>(null);
 
   const {
@@ -93,55 +60,32 @@ export function ChatProvider({
     enabled: Boolean(conversationId),
   });
 
-  /**
-   * Track concurrent runs per thread with a depth counter (not a single runId).
-   * Overlapping run:started for the same thread (e.g. nested delegation) used to
-   * overwrite the stored runId so a later run:finished could not clear "thinking".
-   */
-  const threadRunsMap = useMemo(() => {
-    const depthByThread = new Map<string, number>();
-    const latestRunIdByThread = new Map<string, string>();
+  const activeRunId = useMemo(() => {
+    let depth = 0;
+    let latestRunId: string | null = null;
     for (const event of events) {
       if (!event || typeof event !== "object") continue;
       const runId = event.data?.runId;
       if (!runId || typeof runId !== "string") continue;
-      const threadId = event.meta?.threadId || "main";
       if (event.type === "run:started") {
-        depthByThread.set(threadId, (depthByThread.get(threadId) ?? 0) + 1);
-        latestRunIdByThread.set(threadId, runId);
+        depth++;
+        latestRunId = runId;
       } else if (
         event.type === "run:finished" ||
         event.type === "run:cancelled" ||
         event.type === "run:failed"
       ) {
-        const next = Math.max(0, (depthByThread.get(threadId) ?? 0) - 1);
-        depthByThread.set(threadId, next);
+        depth = Math.max(0, depth - 1);
       }
     }
-    const active = new Map<string, string>();
-    depthByThread.forEach((depth, threadId) => {
-      if (depth > 0) {
-        const rid = latestRunIdByThread.get(threadId);
-        if (rid) active.set(threadId, rid);
-      }
-    });
-    return active;
+    return depth > 0 ? latestRunId : null;
   }, [events]);
 
-  const streamingMap = useMemo(() => {
-    const next: Record<string, boolean> = { ...submittingByThread };
-    threadRunsMap.forEach((_runId, threadId) => {
-      next[threadId] = true;
-    });
-    return next;
-  }, [threadRunsMap, submittingByThread]);
+  const streaming = useMemo(() => isSubmitting || !!activeRunId, [isSubmitting, activeRunId]);
 
-  const streaming = useMemo(() => streamingMap["main"] || false, [streamingMap]);
-
-  // Compute messages, threads, and reaction map from events
-  const { messages, threads, messageReactions } = useMemo(() => {
+  // Compute messages and reaction map from events
+  const { messages, messageReactions } = useMemo(() => {
     const msgs: any[] = [];
-    const threadMap: Record<string, any[]> = {};
     const reactions: Record<string, MessageReactionSentiment> = {};
     let currentMsg: any = null;
     const seenIds = new Set<string>();
@@ -160,14 +104,7 @@ export function ChatProvider({
         return;
       }
 
-      const threadId = event.meta?.threadId;
-      if (threadId) {
-        if (!threadMap[threadId]) threadMap[threadId] = [];
-        threadMap[threadId].push(event);
-        return; // Skip adding to main messages
-      }
-
-      // Own timeline row + stable id for Slack-style thread routing
+      // Own timeline row + stable id for Slack-style routing
       if (event.type === "agent:delegation") {
         currentMsg = {
           id: event.id || `asst_${Math.random().toString(36).slice(2, 9)}`,
@@ -201,26 +138,16 @@ export function ChatProvider({
       }
     });
 
-    return { messages: msgs, threads: threadMap, messageReactions: reactions };
+    return { messages: msgs, messageReactions: reactions };
   }, [events]);
-
-  const threadReplyCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const [id, evts] of Object.entries(threads)) {
-      const folded = foldThreadEventsToMessages(evts);
-      counts[id] = folded.filter((m) => hasRenderableContent(m)).length;
-    }
-    return counts;
-  }, [threads]);
 
   const reset = useCallback((newEvents: any[]) => {
     setEvents(mergeUniqueEvents([], newEvents));
   }, []);
 
   const send = useCallback(async (payload: any) => {
-    const threadId = payload.meta?.threadId || "main";
-    if (streamingMap[threadId]) return;
-    setSubmittingByThread((prev) => ({ ...prev, [threadId]: true }));
+    if (streaming) return;
+    setIsSubmitting(true);
 
     // Ensure we have a stable ID for deduplication
     const eventWithId = {
@@ -240,18 +167,16 @@ export function ChatProvider({
     } catch (error) {
       console.error("Failed to create run:", error);
     } finally {
-      setSubmittingByThread((prev) => ({ ...prev, [threadId]: false }));
+      setIsSubmitting(false);
     }
-  }, [conversationId, eventHandlers, streamingMap]);
+  }, [conversationId, eventHandlers, streaming]);
 
-  const stop = useCallback((threadId?: string) => {
-    const id = threadId || "main";
-    const runId = threadRunsMap.get(id);
-    if (!runId) return;
-    void api.cancelRun(runId).catch((err) => {
+  const stop = useCallback(() => {
+    if (!activeRunId) return;
+    void api.cancelRun(activeRunId).catch((err) => {
       console.error("Failed to cancel run:", err);
     });
-  }, [threadRunsMap]);
+  }, [activeRunId]);
 
   const setMessageReaction = useCallback(
     async (targetMessageId: string, reaction: MessageReactionSentiment | "none") => {
@@ -277,19 +202,16 @@ export function ChatProvider({
     send,
     stop,
     streaming,
-    streamingMap,
     events,
     messages,
-    threads,
-    threadReplyCounts,
     messageReactions,
     setMessageReaction,
     reset
-  }), [send, stop, streaming, streamingMap, events, messages, threads, threadReplyCounts, messageReactions, setMessageReaction, reset]);
+  }), [send, stop, streaming, events, messages, messageReactions, setMessageReaction, reset]);
 
   useEffect(() => {
     latestEventIdRef.current = null;
-    setSubmittingByThread({});
+    setIsSubmitting(false);
     setEvents([]);
     setEventsHydrated(false);
   }, [conversationId]);
@@ -377,18 +299,11 @@ export function ChatProvider({
   );
 }
 
-export function useChat(threadId?: string) {
+export function useChat() {
   const context = useContext(ChatContext);
   if (context === undefined) {
     throw new Error("useChat must be used within a ChatProvider");
   }
 
-  const tid = threadId || "main";
-  const streaming = context.streamingMap[tid] || false;
-
-  return {
-    ...context,
-    streaming,
-    stop: (id?: string) => context.stop(id || threadId)
-  };
+  return context;
 }

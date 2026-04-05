@@ -1,9 +1,9 @@
 import { TEXT_EVENT_TYPES } from "./constants";
-import type { ThreadRenderableItem } from "./types";
+import type { ChatRenderableItem } from "./types";
 
 /** Plain text for clipboard from one timeline row. */
 export function getCopyableTextForItem(
-  item: Pick<ThreadRenderableItem, "event">,
+  item: Pick<ChatRenderableItem, "event">,
 ): string {
   const event = item.event;
   if (!event) return "";

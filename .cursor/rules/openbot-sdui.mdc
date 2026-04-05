@@ -3,7 +3,7 @@ alwaysApply: false
 ---
 # OpenBot Server-Driven UI (SDUI)
 
-In OpenBot, dynamic UI widgets in conversations are powered by **Melony's Server-Driven UI (SDUI)**. This allows the backend to send rich, interactive components directly to the chat thread without requiring frontend-specific code for every new feature.
+In OpenBot, dynamic UI widgets in conversations are powered by **Melony's Server-Driven UI (SDUI)**. This allows the backend to send rich, interactive components directly to the chat without requiring frontend-specific code for every new feature.
 
 ## 🎯 Core Scope
 - **Conversations Only**: SDUI should only be used to generate dynamic widgets *inside* the chat history (e.g., status updates, data summaries, interactive cards).

@@ -1,4 +1,4 @@
-export function formatThreadTime(timestamp?: number) {
+export function formatChatTime(timestamp?: number) {
   if (!timestamp) return "";
   return new Date(timestamp).toLocaleTimeString([], {
     hour: "numeric",

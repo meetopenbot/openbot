@@ -6,7 +6,7 @@ export interface UIBlock {
   type: "ui-block";
   widget: string;
   props: Record<string, any>;
-  placement: "thread" | "sidebar" | "attention";
+  placement: "inline" | "sidebar" | "attention";
   id?: string;
 }
 

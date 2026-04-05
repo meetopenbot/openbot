@@ -15,7 +15,7 @@
   <a href="https://www.npmjs.com/package/openbot"><img src="https://img.shields.io/npm/dt/openbot" alt="npm downloads" /></a>
 </p>
 
-OpenBot is more than just a chatbot. It's an AI workspace that lives in your terminal and browser, where specialized agents collaborate via @mentions and threaded conversations. It's designed to be local-first, event-driven, and infinitely extensible.
+OpenBot is more than just a chatbot. It's an AI workspace that lives in your terminal and browser, where specialized agents collaborate via @mentions. It's designed to be local-first, event-driven, and infinitely extensible.
 
 💬 Join the community on Discord: https://discord.gg/XYYXvN2ebB
 
@@ -25,7 +25,7 @@ OpenBot is more than just a chatbot. It's an AI workspace that lives in your ter
 
 OpenBot follows a **Slack-like @mention** pattern for agent collaboration.
 
-- **@mention Routing**: Tag any agent with `@agent` in a message to invoke it directly. The agent responds in the thread and stays assigned for follow-up messages.
+- **@mention Routing**: Tag any agent with `@agent` in a message to invoke it directly.
 - **Specialized Agents**: Dedicated to specific domains like `os` (shell & files), `browser` (web automation), or any custom agent you define.
 - **Event Bus**: All communication happens asynchronously via events, allowing for complex multi-agent choreography and real-time UI updates.
 
@@ -42,7 +42,7 @@ A powerful web automation specialist based on **[Stagehand](https://github.com/b
 *Note: We also plan to introduce a parallel agent based on **[browser-use](https://github.com/browser-use/browser-use)** for alternative autonomous web navigation strategies.*
 
 ### 🏷️ Topic Agent (`topic`)
-A background utility that works silently to keep your workspace organized. It automatically analyzes the first few messages of a new conversation and generates a concise (3-5 word) title for the thread.
+A background utility that works silently to keep your workspace organized. It automatically analyzes the first few messages of a new conversation and generates a concise (3-5 word) title.
 
 ### 💻 Codex Agent (`codex`)
 A world-class software engineer and coding assistant powered by OpenAI. It helps with high-level architectural decisions, code refactoring, complex logic implementation, and debugging. It has access to the shell and file system to explore and modify your codebase.

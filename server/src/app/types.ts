@@ -4,14 +4,12 @@ export interface SimpleMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string | any[];
   attachments?: AttachmentRef[];
-  threadId?: string;
 }
 
 type ChatEventBase<T extends string, D> = { type: T } & D & {
   type: T;
   meta?: {
     agentName?: string;
-    threadId?: string;
     [key: string]: any;
   };
 };
@@ -29,7 +27,7 @@ export type AgentInputEvent = ChatEventBase<"agent:input", {
   attachments?: AttachmentRef[];
 }>;
 
-/** Timeline anchor for agent-to-agent handoff; `id` is the Slack-style thread parent key. */
+/** Timeline anchor for agent-to-agent handoff. */
 export type AgentDelegationEvent = ChatEventBase<
   "agent:delegation",
   { targetAgentId: string; content: string }
@@ -146,9 +144,6 @@ export interface ConversationState {
   };
   /** Isolated state per agent, keyed by agent name */
   agentStates?: Record<string, AgentState>;
-
-  /** Map of threadId to assigned agent name/id */
-  threadAssignees?: Record<string, string>;
 
   /** Set by the router while an agent Melony runtime is executing (tools e.g. mention). Not persisted intentionally. */
   openBotExecutingAgentId?: string;

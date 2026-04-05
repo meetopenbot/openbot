@@ -1,7 +1,7 @@
 import { WidgetRenderer } from "../WidgetRenderer";
 
-/** Body for a single timeline event in the thread. */
-export function StandardThreadMessageBody({ event }: { event: any }) {
+/** Body for a single timeline event. */
+export function StandardChatMessageBody({ event }: { event: any }) {
   if (event.type === "ui") {
     return (
       <WidgetRenderer block={event.data} eventMeta={event.meta} />
@@ -34,7 +34,7 @@ export function StandardThreadMessageBody({ event }: { event: any }) {
                         ? rawContent
                         : JSON.stringify(rawContent, null, 2),
                   },
-                  placement: "thread",
+                  placement: "inline",
                 } as any
               }
             />

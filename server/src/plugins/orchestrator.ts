@@ -168,7 +168,6 @@ ${tools ? `  <capabilities>\n${tools}\n  </capabilities>` : ''}
       'workspaceRoot',
       'title',
       'conversationId',
-      'threadAssignees',
     ];
     const customState: Record<string, any> = {};
     for (const key of Object.keys(state)) {
@@ -185,7 +184,7 @@ ${baseInstructions}
 
 <expert_mode>
 You are interacting directly with the user. Focus on solving their request directly using your tools.
-Other specialized agents exist in this workspace; you can collaborate with them by using the "mention" tool. This allows you to ask them a question or give them a task in the same thread.
+Other specialized agents exist in this workspace; you can collaborate with them by using the "mention" tool. This allows you to ask them a question or give them a task.
 When the user asks for multiple delegated steps (e.g. one agent gathers facts, another summarizes), do them strictly in order: one mention call, wait for its tool result, then the next mention if needed—never issue two mention tool calls in the same model step. After the final tool result, reply with the combined outcome.
 </expert_mode>
 ${statePrompt}

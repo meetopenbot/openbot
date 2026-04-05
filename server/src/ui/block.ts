@@ -1,5 +1,5 @@
 export interface UIBlockOptions {
-  placement?: "thread" | "sidebar" | "attention";
+  placement?: "inline" | "sidebar" | "attention";
   id?: string;
   meta?: Record<string, any>;
 }
@@ -8,7 +8,7 @@ export interface UIBlock {
   type: "ui-block";
   widget: string;
   props: Record<string, any>;
-  placement: "thread" | "sidebar" | "attention";
+  placement: "inline" | "sidebar" | "attention";
   id?: string;
   meta?: Record<string, any>;
 }
@@ -21,7 +21,7 @@ export const block = (
   type: "ui-block",
   widget,
   props,
-  placement: options.placement ?? "thread",
+  placement: options.placement ?? "inline",
   id: options.id,
   meta: options.meta,
 });

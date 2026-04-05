@@ -9,8 +9,8 @@ import { ImagePreview } from "./composer/ImagePreview";
 import { ActionPopover } from "./composer/ActionPopover";
 import { UsageStats } from "./composer/UsageStats";
 
-export function Composer({ threadId, threadAgentName }: { threadId?: string; threadAgentName?: string }) {
-  const { send, streaming, stop, events } = useChat(threadId);
+export function Composer() {
+  const { send, streaming, stop, events } = useChat();
   const { conversationId } = useSession();
   const [content, setContent] = useState("");
   const [pendingImages, setPendingImages] = useState<Array<{ id: string; file: File; previewUrl: string }>>([]);
@@ -19,7 +19,7 @@ export function Composer({ threadId, threadAgentName }: { threadId?: string; thr
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isDm = conversationId.startsWith("dm_");
-  const targetAgent = isDm ? conversationId.slice(3) : undefined;
+  const targetAgentId = isDm ? conversationId.slice(3) : undefined;
 
   const { data: agents = [] } = useQuery({
     queryKey: ["agents"],
@@ -126,12 +126,10 @@ export function Composer({ threadId, threadAgentName }: { threadId?: string; thr
       }
     }
 
-    const resolvedAgent = targetAgent || threadAgentName;
     send({
       type: "agent:input",
       meta: {
-        ...(resolvedAgent ? { agentName: resolvedAgent } : {}),
-        ...(threadId ? { threadId } : {}),
+        ...(targetAgentId ? { agentName: targetAgentId } : {}),
       },
       data: { content: trimmed, attachments: attachments.length > 0 ? attachments : undefined },
     });
@@ -270,7 +268,7 @@ export function Composer({ threadId, threadAgentName }: { threadId?: string; thr
               detectMention(e.target.value, e.target.selectionStart);
             }}
             onKeyDown={handleKeyDown}
-            placeholder={threadId ? "Reply to thread..." : (isDm && targetAgent ? `Message ${targetAgent}...` : "Message channel...")}
+            placeholder={isDm && targetAgentId ? `Message ${targetAgentId}...` : "Message channel..."}
             className="flex-1 min-h-[22px] max-h-[200px] w-full resize-none bg-transparent p-0 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none"
             rows={1}
           />

@@ -4,11 +4,11 @@ import { WidgetRenderer } from "./WidgetRenderer";
 import { cn } from "../lib/utils";
 import type { MessageReactionSentiment } from "../hooks/use-chat";
 import {
-  ThreadMessageItem,
+  ChatMessageItem,
   hasRenderableContent,
   TEXT_EVENT_TYPES,
-  type ThreadRenderableItem,
-} from "./thread-message";
+  type ChatRenderableItem,
+} from "./chat-message";
 
 function StreamingIndicator() {
   return (
@@ -23,14 +23,11 @@ function StreamingIndicator() {
   );
 }
 
-export function ThreadView({
+export function ChatView({
   messages,
   streaming,
   placeholder,
   placeholderNode,
-  onReply,
-  threadReplyCounts = {},
-  isThreadPanel = false,
   messageReactions = {},
   onMessageReaction,
 }: {
@@ -38,10 +35,6 @@ export function ThreadView({
   streaming?: boolean;
   placeholder?: ReactNode;
   placeholderNode?: any;
-  onReply?: (messageId: string) => void;
-  /** Logical reply count per parent message id (not raw stream event count). */
-  threadReplyCounts?: Record<string, number>;
-  isThreadPanel?: boolean;
   messageReactions?: Record<string, MessageReactionSentiment>;
   onMessageReaction?: (
     messageId: string,
@@ -56,7 +49,7 @@ export function ThreadView({
     .filter(hasRenderableContent);
 
   const renderableEvents = useMemo(() => {
-    const events: ThreadRenderableItem[] = [];
+    const events: ChatRenderableItem[] = [];
 
     visibleMessages.forEach((msg, msgIndex) => {
       const topLevelEvents: any[] = [];
@@ -116,7 +109,6 @@ export function ThreadView({
         }
       });
 
-      const lastEventIdx = topLevelEvents.length - 1;
       topLevelEvents.forEach((item, idx) => {
         const eventTimestamp =
           item.meta?.timestamp || (msg as any).timestamp || Date.now();
@@ -135,7 +127,6 @@ export function ThreadView({
             role: msg.role,
           },
           isGrouped: false,
-          showReplySummary: idx === lastEventIdx ? true : false,
         });
       });
     });
@@ -173,19 +164,11 @@ export function ThreadView({
   }
 
   return (
-    <div
-      className={cn(
-        "flex flex-col flex-1 w-full",
-        isThreadPanel ? "py-2" : "py-4",
-      )}
-    >
+    <div className="flex flex-col flex-1 w-full py-4">
       {renderableEvents.map((item) => (
-        <ThreadMessageItem
+        <ChatMessageItem
           key={item.key}
           item={item}
-          isThreadPanel={isThreadPanel}
-          threadReplyCounts={threadReplyCounts}
-          onReply={onReply}
           messageReactions={messageReactions}
           onMessageReaction={onMessageReaction}
         />

@@ -3,29 +3,18 @@ import { AgentAvatar } from "../AgentAvatar";
 import { useAgentAvatarDisplay } from "../../hooks/use-agent-avatar-display";
 import { cn } from "../../lib/utils";
 import type { MessageReactionSentiment } from "../../hooks/use-chat";
-import { formatThreadTime } from "./formatTime";
+import { formatChatTime } from "./formatTime";
 import { getCopyableTextForItem } from "./model";
-import type { ThreadRenderableItem } from "./types";
+import type { ChatRenderableItem } from "./types";
+import { StandardChatMessageBody } from "./StandardChatMessageBody";
+import { ChatMessageHoverToolbar } from "./ChatMessageHoverToolbar";
 
-function shouldShowReplySummary(item: ThreadRenderableItem): boolean {
-  return item.showReplySummary === true;
-}
-import { StandardThreadMessageBody } from "./StandardThreadMessageBody";
-import { ThreadMessageHoverToolbar } from "./ThreadMessageHoverToolbar";
-import { ThreadReplySummary } from "./ThreadReplySummary";
-
-export function ThreadMessageItem({
+export function ChatMessageItem({
   item,
-  isThreadPanel = false,
-  threadReplyCounts = {},
-  onReply,
   messageReactions = {},
   onMessageReaction,
 }: {
-  item: ThreadRenderableItem;
-  isThreadPanel?: boolean;
-  threadReplyCounts?: Record<string, number>;
-  onReply?: (messageId: string) => void;
+  item: ChatRenderableItem;
   messageReactions?: Record<string, MessageReactionSentiment>;
   onMessageReaction?: (
     messageId: string,
@@ -34,9 +23,7 @@ export function ThreadMessageItem({
 }) {
   const { meta, isGrouped, messageId } = item;
   const isUser = meta.role === "user";
-  const replyCount = threadReplyCounts[messageId] ?? 0;
   const copyText = getCopyableTextForItem(item);
-  const showReplyAction = !isThreadPanel && !!onReply;
   const showCopyAction = copyText.length > 0;
   const showReactionActions = !!onMessageReaction;
 
@@ -72,20 +59,15 @@ export function ThreadMessageItem({
   return (
     <div
       className={cn(
-        "group flex flex-col w-full hover:bg-muted/10 transition-colors duration-75 relative",
-        isThreadPanel ? "px-3" : "px-5",
+        "group flex flex-col w-full hover:bg-muted/10 transition-colors duration-75 relative px-5",
         isGrouped ? "py-0.5" : "py-2 mt-2",
       )}
     >
-      <ThreadMessageHoverToolbar
-        isThreadPanel={isThreadPanel}
+      <ChatMessageHoverToolbar
         messageId={messageId}
-        replyCount={replyCount}
-        showReply={showReplyAction}
         showCopy={showCopyAction}
         showReactions={showReactionActions}
         copied={copied}
-        onReply={onReply}
         onCopy={handleCopy}
         currentReaction={currentReaction}
         onMessageReaction={onMessageReaction}
@@ -103,7 +85,7 @@ export function ThreadMessageItem({
           )}
           {isGrouped && (
             <div className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground/60 text-right mt-1.5 pr-1 font-medium">
-              {formatThreadTime(meta.timestamp).split(" ")[0]}
+              {formatChatTime(meta.timestamp).split(" ")[0]}
             </div>
           )}
         </div>
@@ -115,25 +97,14 @@ export function ThreadMessageItem({
                 {avatar.label}
               </span>
               <span className="text-xs text-muted-foreground/60">
-                {formatThreadTime(meta.timestamp)}
+                {formatChatTime(meta.timestamp)}
               </span>
             </div>
           )}
 
           <div className="text-[15px] leading-[1.46668] text-foreground/90">
-            <StandardThreadMessageBody event={item.event!} />
+            <StandardChatMessageBody event={item.event!} />
           </div>
-
-          {!isThreadPanel &&
-            shouldShowReplySummary(item) &&
-            replyCount > 0 &&
-            onReply && (
-            <ThreadReplySummary
-              replyCount={replyCount}
-              messageId={messageId}
-              onReply={onReply}
-            />
-          )}
         </div>
       </div>
     </div>
