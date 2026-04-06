@@ -1,4 +1,4 @@
-import { installAgentFromSource, installPluginFromSource } from "./installers.js";
+import { installPluginFromSource } from "./installers.js";
 
 type SourceType = "github" | "npm";
 
@@ -18,7 +18,6 @@ export interface MarketplaceItem {
 
 export interface MarketplaceRegistry {
   version: number;
-  agents: MarketplaceItem[];
   plugins: MarketplaceItem[];
 }
 
@@ -66,11 +65,10 @@ function normalizeItem(item: unknown): MarketplaceItem {
 
 function normalizeRegistry(value: unknown): MarketplaceRegistry {
   if (!value || typeof value !== "object") throw new Error("invalid registry");
-  const raw = value as { version?: unknown; agents?: unknown; plugins?: unknown };
+  const raw = value as { version?: unknown; plugins?: unknown };
   if (typeof raw.version !== "number") throw new Error("invalid version");
-  const agents = Array.isArray(raw.agents) ? raw.agents.map(normalizeItem) : [];
   const plugins = Array.isArray(raw.plugins) ? raw.plugins.map(normalizeItem) : [];
-  return { version: raw.version, agents, plugins };
+  return { version: raw.version, plugins };
 }
 
 export async function getMarketplaceRegistry(forceRefresh = false): Promise<MarketplaceRegistry> {
@@ -90,17 +88,6 @@ export async function getMarketplaceRegistry(forceRefresh = false): Promise<Mark
   cachedRegistry = normalized;
   cacheExpiresAt = now + CACHE_TTL_MS;
   return normalized;
-}
-
-export async function installMarketplaceAgent(agentId: string) {
-  const registry = await getMarketplaceRegistry(true);
-  const agent = registry.agents.find((entry) => entry.id === agentId);
-  if (!agent) throw new Error(`Agent "${agentId}" was not found in marketplace`);
-  if (agent.source.type !== "github") {
-    throw new Error(`Marketplace agent "${agentId}" has unsupported source type "${agent.source.type}"`);
-  }
-  const installedName = await installAgentFromSource({ type: "github", value: agent.source.value }, { id: agent.id });
-  return { installedName, agent };
 }
 
 export async function installMarketplacePlugin(pluginId: string) {

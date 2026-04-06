@@ -3,18 +3,15 @@ import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { resolvePath, DEFAULT_BASE_DIR, loadConfig } from "../app/config.js";
-import { readAgentConfig, ensurePluginReady } from "../registry/plugin-loader.js";
-
-export type ExtensionType = "agent" | "plugin";
+import { ensurePluginReady } from "../registry/plugin-loader.js";
+import { readAgentConfig } from "../registry/agent-loader.js";
 
 export type InstallSource =
   | { type: "github"; value: string }
   | { type: "npm"; value: string }
   | { type: "local"; value: string };
 
-// Backward compatibility types
 export type PluginInstallSource = InstallSource;
-export type AgentInstallSource = InstallSource;
 
 interface InstallOptions {
   quiet?: boolean;
@@ -85,14 +82,13 @@ export function parseSource(source: string): InstallSource {
   return { type: "local", value: path.resolve(normalized) };
 }
 
-export async function installExtension(
-  type: ExtensionType,
+export async function installPluginFromSource(
   source: InstallSource,
-  options: InstallOptions = {}
+  options: InstallOptions = {},
 ) {
   const quiet = !!options.quiet;
   const baseDir = getBaseDir();
-  const targetRoot = path.join(baseDir, type === "agent" ? "agents" : "plugins");
+  const targetRoot = path.join(baseDir, "plugins");
   await fs.mkdir(targetRoot, { recursive: true });
 
   // 1. Determine the folder name (the "id") - ALWAYS based on source or explicit id
@@ -111,7 +107,7 @@ export async function installExtension(
   const tempDir = path.join(tmpdir(), `openbot-install-${Date.now()}-${id}`);
 
   try {
-    log(`📦 Installing ${type} "${id}" from ${source.type}...`, quiet);
+    log(`📦 Installing plugin "${id}" from ${source.type}...`, quiet);
 
     if (source.type === "github") {
       const url = `https://github.com/${source.value}.git`;
@@ -139,13 +135,7 @@ export async function installExtension(
 
     // Prepare dependencies and build
     await ensurePluginReady(targetDir);
-
-    // If it's an agent, check for missing plugins
-    if (type === "agent") {
-      await installMissingPluginsFromAgent(targetDir, { quiet });
-    }
-
-    log(`🎉 Successfully installed ${type}: ${id}`, quiet);
+    log(`🎉 Successfully installed plugin: ${id}`, quiet);
     return id;
   } catch (error) {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
@@ -153,11 +143,7 @@ export async function installExtension(
   }
 }
 
-// Backward compatibility aliases
-export const installPluginFromSource = (source: InstallSource, opts: InstallOptions) => installExtension("plugin", source, opts);
-export const installAgentFromSource = (source: InstallSource, opts: InstallOptions) => installExtension("agent", source, opts);
 export const parsePluginInstallSource = parseSource;
-export const parseAgentInstallSource = parseSource;
 
 export async function installMissingPluginsFromAgent(
   agentFolder: string,
@@ -183,13 +169,13 @@ export async function installMissingPluginsFromAgent(
 
     const ghRepo = `meetopenbot/plugin-${pluginName}`;
     if (checkGitHubRepo(ghRepo)) {
-      await installExtension("plugin", { type: "github", value: ghRepo }, { quiet });
+      await installPluginFromSource({ type: "github", value: ghRepo }, { quiet });
       continue;
     }
 
     const npmPkg = `@melony/plugin-${pluginName}`;
     if (checkNpmPackage(npmPkg)) {
-      await installExtension("plugin", { type: "npm", value: npmPkg }, { quiet });
+      await installPluginFromSource({ type: "npm", value: npmPkg }, { quiet });
       continue;
     }
 

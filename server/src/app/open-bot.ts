@@ -4,7 +4,9 @@ import { applyUserVariablesToProcessEnv } from "../services/user-variables.js";
 import { createModel, parseModelString } from "../services/models.js";
 import { DEFAULT_MODEL_ID } from "../services/model-defaults.js";
 import { ConversationEvent, ConversationState } from "./types.js";
-import { setupPluginRegistry } from "../services/plugins.js";
+import { registerPlugins } from "../services/plugins.js";
+import { registerAgents } from "../services/agents.js";
+import { RuntimeRegistry } from "../registry/runtime-registry.js";
 import { orchestrationToolsPlugin } from "../plugins/orchestrator.js";
 import { runOpenBot } from "./router.js";
 
@@ -24,8 +26,10 @@ export async function createOpenBot(options?: {
   const resolvedModelId = `${provider}/${modelId}`;
   const model = createModel(options);
 
-  // 1. Setup unified registry (built-in tools + agents + community plugins)
-  const registry = await setupPluginRegistry(resolvedBaseDir, model as any, resolvedModelId, options);
+  // 1. Setup unified runtime registry by composing services
+  const registry = new RuntimeRegistry();
+  await registerPlugins(registry, resolvedBaseDir);
+  await registerAgents(registry, resolvedBaseDir, model as any, resolvedModelId, options);
 
   // 2. Initialize agent runtimes
   const agentRuntimes = new Map<string, Runtime<ConversationState, ConversationEvent>>();

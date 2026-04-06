@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useSession } from "../../hooks/use-session";
-import { api, type MarketplaceItem } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ExtensionItem } from "../ExtensionItem";
 import { AgentEditForm } from "../AgentEditForm";
 
@@ -11,18 +11,10 @@ const Plus = ({ className }: { className?: string }) => (
 
 export function AgentsPage() {
   const { navigate, path } = useSession();
-  const queryClient = useQueryClient();
-  const [installingAgentId, setInstallingAgentId] = useState<string | null>(null);
-  const [installError, setInstallError] = useState<string | null>(null);
 
   const { data: agents = [], isLoading: loadingAgents } = useQuery({
     queryKey: ["agents"],
     queryFn: api.getAgents,
-  });
-
-  const { data: marketplaceAgents = [], isLoading: loadingMarketplaceAgents } = useQuery({
-    queryKey: ["marketplace", "agents"],
-    queryFn: api.getMarketplaceAgents,
   });
 
   const selectedAgentId = useMemo(() => {
@@ -44,46 +36,6 @@ export function AgentsPage() {
   const handleCreateCustomAgent = () => {
     navigate("/?tab=chat&msg=" + encodeURIComponent("/agent-creator I want to create a new agent. Ask me focused questions, then propose the final AGENT.md for approval before writing it."));
   };
-
-  const installedAgentKeys = useMemo(() => {
-    return new Set(
-      agents.map((agent) => [agent.id, agent.name].map((v) => (v || "").toLowerCase())).flat()
-    );
-  }, [agents]);
-
-  const isAgentInstalled = (item: MarketplaceItem) =>
-    installedAgentKeys.has(item.id.toLowerCase()) || installedAgentKeys.has(item.name.toLowerCase());
-
-  const handleInstallAgent = async (item: MarketplaceItem) => {
-    setInstallError(null);
-    setInstallingAgentId(item.id);
-    try {
-      await api.installMarketplaceAgent(item.id);
-      await queryClient.invalidateQueries({ queryKey: ["agents"] });
-      await queryClient.invalidateQueries({ queryKey: ["marketplace", "agents"] });
-    } catch (err) {
-      console.error(err);
-      setInstallError(`Failed to install agent "${item.name}"`);
-    } finally {
-      setInstallingAgentId(null);
-    }
-  };
-
-  const allMarketplace = useMemo(() => {
-    return marketplaceAgents.map(a => ({ ...a, type: "agent" as const }));
-  }, [marketplaceAgents]);
-
-  const recommendedExtensions = useMemo(() => {
-    return allMarketplace.filter(item =>
-      item.tags?.includes("recommended") && !isAgentInstalled(item)
-    );
-  }, [allMarketplace, installedAgentKeys]);
-
-  const otherMarketplaceExtensions = useMemo(() => {
-    return allMarketplace.filter(item =>
-      !item.tags?.includes("recommended") && !isAgentInstalled(item)
-    );
-  }, [allMarketplace, installedAgentKeys]);
 
   if (selectedAgentId && selectedAgent) {
     return (
@@ -127,13 +79,6 @@ export function AgentsPage() {
           </button>
         </div>
 
-        {installError && (
-          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
-            {installError}
-          </p>
-        )}
-
-
         {/* Sections */}
         <div className="flex flex-col gap-12">
           {/* Installed Section */}
@@ -173,63 +118,6 @@ export function AgentsPage() {
             )}
           </section>
 
-          {/* Recommended Section */}
-          {recommendedExtensions.length > 0 && (
-            <section>
-              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 mb-6 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500/50" />
-                Recommended
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 -mx-3">
-                {recommendedExtensions.map((item) => (
-                  <ExtensionItem
-                    key={item.id}
-                    id={item.id}
-                    name={item.name}
-                    description={item.description}
-                    type={item.type}
-                    image={item.image}
-                    onInstall={() => handleInstallAgent(item)}
-                    isInstalling={installingAgentId === item.id}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Marketplace Section */}
-          <section>
-            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground/50 mb-6 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50" />
-              Marketplace
-            </h2>
-            {loadingMarketplaceAgents ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-20 rounded-2xl bg-muted/10 border border-border/20 animate-pulse" />
-                ))}
-              </div>
-            ) : otherMarketplaceExtensions.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground bg-muted/5 rounded-2xl border border-dashed border-border/50 mx-3">
-                No marketplace items found.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 -mx-3">
-                {otherMarketplaceExtensions.map((item) => (
-                  <ExtensionItem
-                    key={item.id}
-                    id={item.id}
-                    name={item.name}
-                    description={item.description}
-                    type={item.type}
-                    image={item.image}
-                    onInstall={() => handleInstallAgent(item)}
-                    isInstalling={installingAgentId === item.id}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
         </div>
       </div>
     </div>

@@ -325,17 +325,8 @@ export const api = {
       body: JSON.stringify(config),
     }),
 
-  getMarketplaceAgents: () =>
-    request<MarketplaceItem[]>("/api/marketplace/agents"),
-
   getMarketplacePlugins: () =>
     request<MarketplaceItem[]>("/api/marketplace/plugins"),
-
-  installMarketplaceAgent: (id: string) =>
-    request<{ success: boolean; installedName: string; item: MarketplaceItem }>("/api/marketplace/install-agent", {
-      method: "POST",
-      body: JSON.stringify({ id }),
-    }),
 
   installMarketplacePlugin: (id: string) =>
     request<{ success: boolean; installedName: string; item: MarketplaceItem }>("/api/marketplace/install-plugin", {

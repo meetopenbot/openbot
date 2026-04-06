@@ -5,13 +5,13 @@ import { fileSystemToolDefinitions, fileSystemPlugin } from '../plugins/file-sys
 import { DEFAULT_BASE_DIR, resolvePath } from '../app/config.js';
 import { ConversationState, ConversationEvent } from '../app/types.js';
 import { LanguageModel } from 'ai';
-import { PluginRegistry } from '../registry/plugin-registry.js';
+import { RuntimeRegistry } from '../registry/runtime-registry.js';
 
 export interface AgentCreatorOptions {
   model: LanguageModel;
   resolvedModelId: string;
   resolvedBaseDir: string;
-  registry: PluginRegistry;
+  registry: RuntimeRegistry;
 }
 
 export const agentCreatorAgent =

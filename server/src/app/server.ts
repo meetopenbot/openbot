@@ -18,9 +18,9 @@ import {
   saveChannelSpec,
   loadConversationEventsRaw,
 } from '../services/conversation.js';
-import { listPlugins } from '../registry/agent-registry.js';
-import type { ListedPlugin } from '../registry/agent-registry.js';
-import { readAgentConfig } from '../registry/plugin-loader.js';
+import { listAgents, listToolPlugins } from '../registry/agent-registry.js';
+import type { ListedAgent, ListedToolPlugin } from '../registry/agent-registry.js';
+import { readAgentConfig } from '../registry/agent-loader.js';
 import { exec } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,7 +40,6 @@ import {
 import { startAutomationWorker } from '../services/automation-worker.js';
 import {
   getMarketplaceRegistry,
-  installMarketplaceAgent,
   installMarketplacePlugin,
 } from '../services/marketplace.js';
 import { getVersionStatus } from './version.js';
@@ -397,12 +396,11 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     try {
-      const allPlugins = await listPlugins(agentsDir);
-      const match = allPlugins.find(
-        (plugin: ListedPlugin) =>
-          plugin.type === 'agent' &&
-          ((plugin.folder ? path.basename(plugin.folder) : plugin.id) === agentIdOrName ||
-            plugin.name === agentIdOrName),
+      const allAgents = await listAgents(agentsDir);
+      const match = allAgents.find(
+        (agent: ListedAgent) =>
+          (agent.folder ? path.basename(agent.folder) : agent.id) === agentIdOrName ||
+          agent.name === agentIdOrName,
       );
       return match?.folder ?? null;
     } catch {
@@ -936,16 +934,15 @@ export async function startServer(options: ServerOptions = {}) {
     const seenIds = new Set<string>(['default']);
 
     try {
-      const allPlugins = await listPlugins(agentsDir);
-      const agentPlugins = allPlugins.filter((p: ListedPlugin) => p.type === 'agent');
-      for (const plugin of agentPlugins) {
-        const id = plugin.folder ? path.basename(plugin.folder) : plugin.id;
+      const discoveredAgents = await listAgents(agentsDir);
+      for (const agent of discoveredAgents) {
+        const id = agent.folder ? path.basename(agent.folder) : agent.id;
         if (seenIds.has(id)) continue;
-        const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(plugin.name);
+        const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(agent.name);
         agents.push({
-          ...plugin,
+          ...agent,
           id,
-          name: hasUnnamedDisplayName ? toTitleCaseFromSlug(id) : plugin.name,
+          name: hasUnnamedDisplayName ? toTitleCaseFromSlug(id) : agent.name,
           hasAgentMd: true,
         });
         seenIds.add(id);
@@ -1063,10 +1060,9 @@ export async function startServer(options: ServerOptions = {}) {
     const pluginsDir = path.join(resolvedBaseDir, 'plugins');
 
     try {
-      const allPlugins = await listPlugins(pluginsDir);
-      const toolPlugins = allPlugins.filter((plugin: ListedPlugin) => plugin.type === 'tool');
+      const toolPlugins = await listToolPlugins(pluginsDir);
       res.json(
-        toolPlugins.map((plugin: ListedPlugin) => {
+        toolPlugins.map((plugin: ListedToolPlugin) => {
           const id = plugin.folder ? path.basename(plugin.folder) : plugin.id;
           const hasUnnamedDisplayName = /^Unnamed\s+(Plugin|Tool|Agent)$/i.test(plugin.name);
           return {
@@ -1098,16 +1094,6 @@ export async function startServer(options: ServerOptions = {}) {
     }
   });
 
-  app.get('/api/marketplace/agents', async (_req, res) => {
-    try {
-      const registry = await getMarketplaceRegistry();
-      res.json(registry.agents);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to load marketplace agents' });
-    }
-  });
-
   app.get('/api/marketplace/plugins', async (_req, res) => {
     try {
       const registry = await getMarketplaceRegistry();
@@ -1115,27 +1101,6 @@ export async function startServer(options: ServerOptions = {}) {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to load marketplace plugins' });
-    }
-  });
-
-  app.post('/api/marketplace/install-agent', async (req, res) => {
-    const { id } = req.body as { id?: string };
-    if (typeof id !== 'string' || !id.trim()) {
-      return res.status(400).json({ error: 'Marketplace agent id is required' });
-    }
-    try {
-      const result = await installMarketplaceAgent(id.trim());
-      scheduleReload();
-      res.json({
-        success: true,
-        installedName: result.installedName,
-        item: result.agent,
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        error: error instanceof Error ? error.message : 'Failed to install agent',
-      });
     }
   });
 

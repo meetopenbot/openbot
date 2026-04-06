@@ -11,9 +11,7 @@ import {
   checkGitHubRepo,
   checkNpmPackage,
   parsePluginInstallSource,
-  parseAgentInstallSource,
   installPluginFromSource,
-  installAgentFromSource,
 } from "../services/installers.js";
 
 const program = new Command();
@@ -51,17 +49,6 @@ async function installPlugin(source: string, id?: string, quiet = false) {
     if (!quiet) console.error("\n❌ Plugin installation failed:", err instanceof Error ? err.message : String(err));
     if (!quiet) process.exit(1);
     throw err;
-  }
-}
-
-async function installAgent(source: string, id?: string) {
-  try {
-    const parsed = parseAgentInstallSource(source);
-    const name = await installAgentFromSource(parsed, { id });
-    return name;
-  } catch (err) {
-    console.error("\n❌ Agent installation failed:", err instanceof Error ? err.message : String(err));
-    process.exit(1);
   }
 }
 
@@ -188,24 +175,15 @@ program
 
 program
   .command("add <name>")
-  .description("Add an agent or plugin by name (auto-resolves to GitHub/NPM)")
+  .description("Add a plugin by name (auto-resolves to GitHub/NPM)")
   .action(async (name: string) => {
-    // 1. Try as Agent
-    const agentRepo = `meetopenbot/agent-${name}`;
-    if (checkGitHubRepo(agentRepo)) {
-      await installAgent(agentRepo, `agent-${name}`);
-      return;
-    }
-
-    // 2. Try as Plugin
+    // Try as Plugin
     const baseDir = resolvePath(DEFAULT_BASE_DIR);
-    const agentPath = path.join(baseDir, "agents", name);
     const pluginPath = path.join(baseDir, "plugins", name);
-    const agentExists = await fs.access(agentPath).then(() => true).catch(() => false);
     const pluginExists = await fs.access(pluginPath).then(() => true).catch(() => false);
 
-    if (agentExists || pluginExists) {
-      console.log(`✅ Agent or Plugin "${name}" is already installed locally.`);
+    if (pluginExists) {
+      console.log(`✅ Plugin "${name}" is already installed locally.`);
       return;
     }
 
@@ -223,7 +201,7 @@ program
       return;
     }
 
-    console.error(`❌ Could not find agent or plugin named "${name}" in official repositories.`);
+    console.error(`❌ Could not find plugin named "${name}" in official repositories.`);
     process.exit(1);
   });
 
@@ -275,18 +253,11 @@ plugin
     console.log("------------------------------------------\n");
   });
 
-const agent = program.command("agent").description("Manage OpenBot agents");
-
-agent
-  .command("install <source>")
-  .description("Install a custom agent from GitHub (user/repo) or a local path")
-  .action(async (source: string) => {
-    await installAgent(source);
-  });
+const agent = program.command("agent").description("Inspect OpenBot agents");
 
 agent
   .command("list")
-  .description("List all installed custom agents")
+  .description("List all local custom agents from agents/")
   .action(async () => {
     const baseDir = resolvePath(DEFAULT_BASE_DIR);
     const agentsDir = path.join(baseDir, "agents");

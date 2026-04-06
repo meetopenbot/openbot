@@ -1,14 +1,14 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { RuntimeContext } from "melony";
-import { ConversationState } from "../app/types.js";
-import { PluginRegistry } from "../registry/plugin-registry.js";
+import { ConversationState, ConversationEvent } from "../app/types.js";
+import { RuntimeRegistry } from "../registry/runtime-registry.js";
 import { createMemoryModule, type MemoryModule } from "../plugins/memory.js";
-import { loadChannelSpec } from "./conversation.js";
+import { loadChannelSpec, loadConversationEvents } from "./conversation.js";
 
 export interface SystemPromptOptions {
   baseDir: string;
-  registry: PluginRegistry;
+  registry: RuntimeRegistry;
 }
 
 function expandPath(p: string): string {
@@ -16,6 +16,71 @@ function expandPath(p: string): string {
     return path.join(process.env.HOME || "", p.slice(2));
   }
   return p;
+}
+
+const BROADCAST_EVENT_TYPES = new Set([
+  "agent:input",
+  "agent:output",
+  "agent:delegation",
+]);
+
+const MAX_ACTIVITY_EVENTS = 30;
+const MAX_ENTRY_CHARS = 300;
+const MAX_ACTIVITY_TOTAL_CHARS = 4000;
+
+function truncateText(text: string, max: number): string {
+  const cleaned = text.replace(/\n+/g, " ").trim();
+  if (cleaned.length <= max) return cleaned;
+  return cleaned.slice(0, max - 1) + "…";
+}
+
+function formatActivityEntry(event: Record<string, any>): string {
+  const type = event.type;
+  const data = event.data ?? event;
+  const agentName = event.meta?.agentName;
+  const content = data?.content ?? "";
+
+  if (type === "agent:input") {
+    const sender = agentName ? `user → @${agentName}` : "user";
+    return `[${sender}] ${truncateText(content, MAX_ENTRY_CHARS)}`;
+  }
+
+  if (type === "agent:output") {
+    const agent = agentName || "assistant";
+    return `[${agent}] ${truncateText(content, MAX_ENTRY_CHARS)}`;
+  }
+
+  if (type === "agent:delegation") {
+    const from = agentName || "agent";
+    const to = data?.targetAgentId || "agent";
+    return `[${from} → @${to}] ${truncateText(content, MAX_ENTRY_CHARS)}`;
+  }
+
+  return "";
+}
+
+async function buildChannelActivity(conversationId: string): Promise<string> {
+  const events = await loadConversationEvents(conversationId);
+
+  const meaningful = events
+    .filter((e: any) => BROADCAST_EVENT_TYPES.has(e.type))
+    .slice(-MAX_ACTIVITY_EVENTS);
+
+  if (meaningful.length === 0) return "";
+
+  const lines: string[] = [];
+  let totalChars = 0;
+
+  for (const event of meaningful) {
+    const line = formatActivityEntry(event as Record<string, any>);
+    if (!line) continue;
+    if (totalChars + line.length > MAX_ACTIVITY_TOTAL_CHARS) break;
+    lines.push(line);
+    totalChars += line.length;
+  }
+
+  if (lines.length === 0) return "";
+  return lines.join("\n");
 }
 
 /**
@@ -73,11 +138,16 @@ export function createSystemPromptBuilder(options: SystemPromptOptions) {
 
     // ── Layer 3: Conversation Context ────────────────────────────────
 
-    // Channel spec (channels only)
+    // Channel spec + recent activity (channels only)
     if (conversationId?.startsWith("channel_")) {
       const spec = await loadChannelSpec(conversationId);
       if (spec) {
         parts.push(`<channel_spec>\n${spec}\n</channel_spec>`);
+      }
+
+      const activity = await buildChannelActivity(conversationId);
+      if (activity) {
+        parts.push(`<channel_activity>\nRecent activity in this channel:\n\n${activity}\n</channel_activity>`);
       }
     }
 
@@ -133,10 +203,12 @@ export function createSystemPromptBuilder(options: SystemPromptOptions) {
     }
 
     // ── Guidelines ───────────────────────────────────────────────────
+    const isChannel = conversationId?.startsWith("channel_");
     parts.push(`<guidelines>
 You are interacting directly with the user. Focus on solving their request using your tools.
 You can collaborate with other agents using the "delegate" tool to delegate tasks or ask questions.
-When delegating multiple steps, do them strictly in order: one delegate call, wait for its result, then the next.
+When delegating multiple steps, do them strictly in order: one delegate call, wait for its result, then the next.${isChannel ? `
+When working in a channel, review <channel_activity> to understand what other agents have already done. Build on their work instead of repeating it. Reference the <channel_spec> for the shared goals.` : ""}
 Use memory tools to manage persistent knowledge about the user and workspace:
 - \`remember(content, tags)\`: Store important facts, preferences, or context
 - \`recall(query, tags)\`: Search long-term memory before answering questions that might relate to past interactions

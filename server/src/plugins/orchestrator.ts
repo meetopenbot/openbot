@@ -9,7 +9,7 @@ import {
 } from './delegation.js';
 import { topicAgent } from '../agents/topic-agent.js';
 import { llmPlugin } from './llm.js';
-import { PluginRegistry } from '../registry/plugin-registry.js';
+import { RuntimeRegistry } from '../registry/runtime-registry.js';
 import { uiEvent } from '../ui/block.js';
 import { widgets } from '../ui/registry.js';
 import { createSystemPromptBuilder } from '../services/system-prompt.js';
@@ -133,7 +133,7 @@ export function llmOrchestratorPlugin(options: {
   model: any;
   resolvedModelId: string;
   resolvedBaseDir: string;
-  registry: PluginRegistry;
+  registry: RuntimeRegistry;
   system: string | ((context: RuntimeContext) => string | Promise<string>);
   toolDefinitions?: Record<string, any>;
   outputSchema?: z.ZodType<any>;

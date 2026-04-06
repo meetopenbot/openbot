@@ -8,13 +8,13 @@ import {
 import { LanguageModel } from "ai";
 import { ConversationState, ConversationEvent } from "../app/types.js";
 import approvalPlugin from "../plugins/approval.js";
-import { PluginRegistry } from "../registry/plugin-registry.js";
+import { RuntimeRegistry } from "../registry/runtime-registry.js";
 
 export interface OSAgentOptions {
   model: LanguageModel;
   resolvedModelId: string;
   resolvedBaseDir: string;
-  registry: PluginRegistry;
+  registry: RuntimeRegistry;
   cwd?: string;
   systemPrompt?: string;
 }
