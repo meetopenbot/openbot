@@ -265,10 +265,12 @@ export function Composer() {
             value={content}
             onChange={(e) => {
               setContent(e.target.value);
-              detectMention(e.target.value, e.target.selectionStart);
+              detectMention(e.target.value, e.target.selectionStart ?? 0);
             }}
             onKeyDown={handleKeyDown}
-            placeholder={isDm && targetAgentId ? `Message ${targetAgentId}...` : "Message channel..."}
+            placeholder={
+              isDm && targetAgentId ? `Message ${targetAgentId}...` : "Message channel..."
+            }
             className="flex-1 min-h-[22px] max-h-[200px] w-full resize-none bg-transparent p-0 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none"
             rows={1}
           />

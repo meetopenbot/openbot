@@ -79,7 +79,7 @@ export const approvalPlugin = (options: ApprovalPluginOptions): MelonyPlugin<any
             buildApprovalData(event, rule),
             { type: "action:approve", data: { id: approvalId } },
             { type: "action:deny", data: { id: approvalId } },
-            { placement: "attention", id: approvalId }
+            { placement: "inline", id: approvalId }
           )
         ),
       },
@@ -117,7 +117,7 @@ export const approvalPlugin = (options: ApprovalPluginOptions): MelonyPlugin<any
     }
 
     delete state.pendingApprovals[id];
-    yield uiEvent(widgets.status("Action denied", "error", { placement: "attention", id }));
+    yield uiEvent(widgets.status("Action denied", "error", { placement: "inline", id }));
 
     const originalEvent = pending.originalEvent;
     const toolCallId = originalEvent?.data?.toolCallId;

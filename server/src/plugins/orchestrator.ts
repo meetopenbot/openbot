@@ -2,7 +2,11 @@ import { z } from 'zod';
 import { MelonyBuilder, RuntimeContext } from 'melony';
 import { ConversationEvent, ConversationState } from '../app/types.js';
 import { memoryPlugin, memoryToolDefinitions } from './memory.js';
-import { mentionPlugin, mentionToolDefinitions } from './mention.js';
+import {
+  delegationPlugin,
+  delegationToolDefinitions,
+  type DelegationPluginDeps,
+} from './delegation.js';
 import { topicAgent } from '../agents/topic-agent.js';
 import { llmPlugin } from './llm.js';
 import { PluginRegistry } from '../registry/plugin-registry.js';
@@ -15,7 +19,7 @@ import { createSystemPromptBuilder } from '../services/system-prompt.js';
  */
 export const orchestratorToolDefinitions = {
   ...memoryToolDefinitions,
-  ...mentionToolDefinitions,
+  ...delegationToolDefinitions,
   updateSessionState: {
     description: 'Update a value in the session state using a JSON path.',
     inputSchema: z.object({
@@ -80,9 +84,9 @@ function* maybeEmitWidget(key: string, value: any) {
 /**
  * Orchestration Tools Plugin — session state updates and related actions.
  */
-export function orchestrationToolsPlugin() {
+export function orchestrationToolsPlugin(deps: DelegationPluginDeps) {
   return (builder: MelonyBuilder<ConversationState, ConversationEvent>) => {
-    builder.use(mentionPlugin());
+    builder.use(delegationPlugin(deps));
     builder.on(
       'action:updateSessionState',
       async function* (

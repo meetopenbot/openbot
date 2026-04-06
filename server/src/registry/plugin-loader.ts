@@ -224,6 +224,7 @@ export async function readAgentConfig(agentDir: string): Promise<AgentConfig> {
 function composeAgentFromConfig(
   config: AgentConfig,
   toolRegistry: PluginRegistry,
+  mainRegistry: PluginRegistry,
   model: LanguageModel,
   resolvedModelId: string,
   resolvedBaseDir: string,
@@ -267,7 +268,7 @@ function composeAgentFromConfig(
           model,
           resolvedModelId,
           resolvedBaseDir,
-          registry: toolRegistry,
+          registry: mainRegistry,
           system: config.instructions,
           toolDefinitions: allToolDefinitions,
           outputSchema: config.outputSchema ? jsonToZod(config.outputSchema) : undefined,
@@ -286,7 +287,7 @@ function composeAgentFromConfig(
             model,
             resolvedModelId,
             resolvedBaseDir,
-            registry: toolRegistry,
+            registry: mainRegistry,
             system: config.instructions,
             toolDefinitions: allToolDefinitions,
           }),
@@ -407,6 +408,7 @@ export async function discoverPlugins(
         const { plugin, toolDefinitions } = composeAgentFromConfig(
           config,
           scopedRegistry,
+          registry,
           agentModel as LanguageModel,
           resolvedModelId,
           resolvedBaseDir,
@@ -500,6 +502,7 @@ export async function registerOpenBotRootDefaultAgent(
   const { plugin, toolDefinitions } = composeAgentFromConfig(
     config,
     scopedRegistry,
+    registry,
     agentModel as LanguageModel,
     resolvedModelId,
     resolvedBaseDir,

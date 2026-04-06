@@ -15,28 +15,18 @@ export function AttentionRail() {
 
   const attentionWidgets = useMemo(() => {
     const widgets: Record<string, AttentionEntry> = {};
-    const approvedAttentionIds = new Set<string>();
 
-    messages.forEach(msg => {
+    messages.forEach((msg) => {
       const content = Array.isArray(msg.content) ? msg.content : [];
 
       content.forEach((event: any) => {
-        if (event.type === "action:approve" || event.type === "action:deny") {
-          const approvedId = event?.data?.id;
-          if (typeof approvedId === "string") {
-            approvedAttentionIds.add(approvedId);
-            delete widgets[approvedId];
-          }
-          return;
-        }
-
         if (event.type === "ui" && event.data?.placement === "attention") {
           const block = event.data as UIBlock;
+          if (block.widget === "approval-card") return;
           const isSuccessStatus =
             block.widget === "status" && block.props?.severity === "success";
           if (isSuccessStatus) return;
           const key = block.id || block.widget;
-          if (block.widget === "approval-card" && approvedAttentionIds.has(key)) return;
           widgets[key] = { key, block, eventMeta: event.meta };
         }
       });

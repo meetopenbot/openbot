@@ -38,7 +38,7 @@ export async function createOpenBot(options?: {
       builder.use(agent.plugin);
     }
 
-    builder.use(orchestrationToolsPlugin());
+    builder.use(orchestrationToolsPlugin({ getAgentRuntimes: () => agentRuntimes }));
     
     agentRuntimes.set(agent.id, builder.build());
   }
@@ -64,6 +64,6 @@ export async function createOpenBot(options?: {
   return {
     registry,
     run: (event: ConversationEvent, context: { runId: string; state: ConversationState }) =>
-      runOpenBot(event, context, agentRuntimes, registry),
+      runOpenBot(event, context, agentRuntimes),
   };
 }

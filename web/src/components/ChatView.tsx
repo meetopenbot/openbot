@@ -1,7 +1,6 @@
-import { useEffect, useRef, type ReactNode, useMemo } from "react";
+import { useEffect, useRef, useState, type ReactNode, useMemo } from "react";
 import { useConfig } from "../hooks/use-config";
 import { WidgetRenderer } from "./WidgetRenderer";
-import { cn } from "../lib/utils";
 import type { MessageReactionSentiment } from "../hooks/use-chat";
 import {
   ChatMessageItem,
@@ -19,6 +18,30 @@ function StreamingIndicator() {
         <span className="size-1 rounded-full bg-foreground/30 animate-[pulse-dot_1.4s_ease-in-out_0.2s_infinite]" />
         <span className="size-1 rounded-full bg-foreground/30 animate-[pulse-dot_1.4s_ease-in-out_0.4s_infinite]" />
       </div>
+    </div>
+  );
+}
+
+function DelegationBlock({ children }: { children: React.ReactNode }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="ml-10 my-1 border-l-2 border-muted/60">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1.5 px-3 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <svg
+          className={`size-3 transition-transform ${expanded ? "rotate-90" : ""}`}
+          viewBox="0 0 12 12"
+          fill="currentColor"
+        >
+          <path d="M4 2l4 4-4 4" />
+        </svg>
+        {expanded ? "Hide sub-agent details" : "Show sub-agent details"}
+      </button>
+      {expanded && <div>{children}</div>}
     </div>
   );
 }
@@ -117,6 +140,8 @@ export function ChatView({
             ? "You"
             : item.meta?.agentName || config?.name || "Assistant";
 
+        const isDelegated = !!item.meta?.delegationId;
+
         events.push({
           key: `${msgIndex}-${item.type}-${idx}`,
           event: item,
@@ -127,6 +152,7 @@ export function ChatView({
             role: msg.role,
           },
           isGrouped: false,
+          depth: isDelegated ? 1 : 0,
         });
       });
     });
@@ -137,7 +163,8 @@ export function ChatView({
       if (
         prev &&
         prev.meta.role === item.meta.role &&
-        prev.meta.agentName === item.meta.agentName
+        prev.meta.agentName === item.meta.agentName &&
+        prev.depth === item.depth
       ) {
         const timeDiff = item.meta.timestamp - prev.meta.timestamp;
         if (timeDiff < 5 * 60 * 1000) {
@@ -147,6 +174,34 @@ export function ChatView({
       return { ...item, isGrouped };
     });
   }, [visibleMessages, config?.name]);
+
+  // Must run unconditionally (before any early return) — Rules of Hooks.
+  const segments = useMemo(() => {
+    const result: Array<
+      | { kind: "item"; item: ChatRenderableItem }
+      | { kind: "delegation"; items: ChatRenderableItem[] }
+    > = [];
+
+    let currentNested: ChatRenderableItem[] | null = null;
+
+    for (const item of renderableEvents) {
+      if (item.depth && item.depth > 0) {
+        if (!currentNested) currentNested = [];
+        currentNested.push(item);
+      } else {
+        if (currentNested) {
+          result.push({ kind: "delegation", items: currentNested });
+          currentNested = null;
+        }
+        result.push({ kind: "item", item });
+      }
+    }
+    if (currentNested) {
+      result.push({ kind: "delegation", items: currentNested });
+    }
+
+    return result;
+  }, [renderableEvents]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -165,14 +220,30 @@ export function ChatView({
 
   return (
     <div className="flex flex-col flex-1 w-full py-4">
-      {renderableEvents.map((item) => (
-        <ChatMessageItem
-          key={item.key}
-          item={item}
-          messageReactions={messageReactions}
-          onMessageReaction={onMessageReaction}
-        />
-      ))}
+      {segments.map((seg, segIdx) => {
+        if (seg.kind === "item") {
+          return (
+            <ChatMessageItem
+              key={seg.item.key}
+              item={seg.item}
+              messageReactions={messageReactions}
+              onMessageReaction={onMessageReaction}
+            />
+          );
+        }
+        return (
+          <DelegationBlock key={`delegation-${segIdx}`}>
+            {seg.items.map((item) => (
+              <ChatMessageItem
+                key={item.key}
+                item={item}
+                messageReactions={messageReactions}
+                onMessageReaction={onMessageReaction}
+              />
+            ))}
+          </DelegationBlock>
+        );
+      })}
       {streaming && <StreamingIndicator />}
       <div ref={bottomRef} className="h-0" />
     </div>

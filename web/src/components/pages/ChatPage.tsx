@@ -92,7 +92,10 @@ function ChatPlaceholder() {
               onClick={() =>
                 send({
                   type: 'agent:input',
-                  meta: resolvedAgentId ? { agentName: resolvedAgentId } : undefined,
+                  meta:
+                    !isChannelConversation && resolvedAgentId
+                      ? { agentName: resolvedAgentId }
+                      : undefined,
                   data: { content: s.label },
                 })
               }

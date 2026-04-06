@@ -31,10 +31,9 @@ export function createSystemPromptBuilder(options: SystemPromptOptions) {
   const { baseDir, registry } = options;
   const expandedBase = expandPath(baseDir);
   const memory: MemoryModule = createMemoryModule(expandedBase);
-  const allAgents = registry.getAgents();
 
   const getAgentList = (excludeId?: string) => {
-    return allAgents
+    return registry.getAgents()
       .filter((a) => a.id !== excludeId)
       .map((a) => {
         const tools = a.capabilities
@@ -121,8 +120,6 @@ export function createSystemPromptBuilder(options: SystemPromptOptions) {
       "lastEventAt",
       "readByUser",
       "participatingAgents",
-      "openBotExecutingAgentId",
-      "openBotDelegationToolFeedback",
       "agentId",
     ]);
     const customState: Record<string, any> = {};
@@ -138,8 +135,8 @@ export function createSystemPromptBuilder(options: SystemPromptOptions) {
     // ── Guidelines ───────────────────────────────────────────────────
     parts.push(`<guidelines>
 You are interacting directly with the user. Focus on solving their request using your tools.
-You can collaborate with other agents using the "mention" tool to delegate tasks or ask questions.
-When delegating multiple steps, do them strictly in order: one mention, wait for its result, then the next.
+You can collaborate with other agents using the "delegate" tool to delegate tasks or ask questions.
+When delegating multiple steps, do them strictly in order: one delegate call, wait for its result, then the next.
 Use memory tools to manage persistent knowledge about the user and workspace:
 - \`remember(content, tags)\`: Store important facts, preferences, or context
 - \`recall(query, tags)\`: Search long-term memory before answering questions that might relate to past interactions

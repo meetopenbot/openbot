@@ -104,12 +104,14 @@ export function ChatProvider({
         return;
       }
 
-      // Own timeline row + stable id for Slack-style routing
+      // Delegation announcement — always its own block
       if (event.type === "agent:delegation") {
         currentMsg = {
           id: event.id || `asst_${Math.random().toString(36).slice(2, 9)}`,
           runId: event.runId || event.meta?.runId,
           role: "assistant",
+          agentName: event.meta?.agentName,
+          delegationId: event.id,
           content: [event],
         };
         msgs.push(currentMsg);
@@ -125,13 +127,36 @@ export function ChatProvider({
         };
         msgs.push(currentMsg);
       } else if (currentMsg?.role === "assistant") {
-        currentMsg.content.push(event);
+        const eventAgentName = event.meta?.agentName;
+        const eventDelegationId = event.meta?.delegationId;
+
+        // Start a new block when the agent name or delegation context changes
+        const agentChanged = eventAgentName && currentMsg.agentName && eventAgentName !== currentMsg.agentName;
+        const delegationChanged = (eventDelegationId || undefined) !== (currentMsg.delegationId || undefined);
+
+        if (agentChanged || delegationChanged) {
+          currentMsg = {
+            id: event.id || `asst_${Math.random().toString(36).slice(2, 9)}`,
+            runId: event.runId || event.meta?.runId,
+            role: "assistant",
+            agentName: eventAgentName,
+            delegationId: eventDelegationId,
+            content: [event],
+          };
+          msgs.push(currentMsg);
+        } else {
+          if (!currentMsg.agentName && eventAgentName) {
+            currentMsg.agentName = eventAgentName;
+          }
+          currentMsg.content.push(event);
+        }
       } else {
-        // Assistant turn (stream chunks, UI, etc.) — must not merge into the user message
         currentMsg = {
           id: event.id || `asst_${Math.random().toString(36).slice(2, 9)}`,
           runId: event.runId || event.meta?.runId,
           role: "assistant",
+          agentName: event.meta?.agentName,
+          delegationId: event.meta?.delegationId,
           content: [event],
         };
         msgs.push(currentMsg);

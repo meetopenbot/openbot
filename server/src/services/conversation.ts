@@ -109,16 +109,13 @@ export async function loadConversationState(conversationId: string): Promise<Con
 /** Runtime-only fields that must not survive reload (corrupt next runs if persisted). */
 function stateForPersistence(state: ConversationState): ConversationState {
   const snapshot = JSON.parse(JSON.stringify(state)) as ConversationState;
-  delete snapshot.openBotDelegationToolFeedback;
-  delete snapshot.openBotExecutingAgentId;
   if (snapshot.agentStates) {
     for (const key of Object.keys(snapshot.agentStates)) {
       const ag = snapshot.agentStates[key];
       if (ag && typeof ag === "object") {
-        delete ag.openBotExecutingAgentId;
-        delete ag.openBotDelegationToolFeedback;
         delete (ag as any).conversationId;
         delete (ag as any).agentId;
+        delete (ag as any)._delegationDepth;
       }
     }
   }

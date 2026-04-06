@@ -8,4 +8,5 @@ export type ChatRenderableItem = {
     role: string;
   };
   isGrouped: boolean;
+  depth?: number;
 };

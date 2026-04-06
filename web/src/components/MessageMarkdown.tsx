@@ -24,6 +24,9 @@ const chatProseClass =
   "prose-blockquote:border-border prose-blockquote:text-muted-foreground prose-blockquote:my-2 " +
   "prose-hr:border-border prose-hr:my-3 " +
   "prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1 " +
+  /* Inline-ish images: cap size so chat doesn’t get huge embeds */
+  "prose-img:my-2 prose-img:block prose-img:rounded-md prose-img:border prose-img:border-border/20 " +
+  "prose-img:max-h-44 prose-img:max-w-[min(100%,18rem)] prose-img:w-auto prose-img:h-auto prose-img:object-contain " +
   /* Drop extra top gap when a message starts with a heading */
   "[&_h1:first-child]:mt-0 [&_h2:first-child]:mt-0 [&_h3:first-child]:mt-0 [&_h4:first-child]:mt-0";
 
@@ -110,6 +113,15 @@ export function MessageMarkdown({
                   ? <MentionText>{pChildren}</MentionText>
                   : pChildren}
             </p>
+          ),
+          img: ({ src, alt, ...props }) => (
+            <img
+              src={src}
+              alt={alt ?? ""}
+              loading="lazy"
+              decoding="async"
+              {...props}
+            />
           ),
         }}
       >

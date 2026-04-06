@@ -104,8 +104,9 @@ export type ConversationEvent = (
 };
 
 /**
- * Per-agent isolated state. Each agent runtime gets its own instance,
- * stored in `ConversationState.agentStates[agentName]`.
+ * Per-agent isolated state for delegated/DM/specialized agents, stored in
+ * `ConversationState.agentStates[agentName]`. Channel lead (`default`) uses the
+ * root `ConversationState` instead (see `resolveAgentRuntimeState` in router).
  */
 export interface AgentState {
   messages?: any[];
@@ -114,10 +115,6 @@ export interface AgentState {
   conversationId?: string;
   /** The id of this agent (e.g. "os", "default"). */
   agentId?: string;
-  /** See ConversationState.openBotExecutingAgentId — set by router during agent runs. */
-  openBotExecutingAgentId?: string;
-  /** Filled by the server after an awaited delegated run; read by `action:mention` on this agent bucket. Not persisted intentionally. */
-  openBotDelegationToolFeedback?: { toolCallId: string; result: string };
   pendingApprovals?: Record<string, any>;
   usage?: {
     inputTokens: number;
@@ -148,15 +145,6 @@ export interface ConversationState {
   };
   /** Isolated state per agent, keyed by agent name */
   agentStates?: Record<string, AgentState>;
-
-  /** Set by the router while an agent Melony runtime is executing (tools e.g. mention). Not persisted intentionally. */
-  openBotExecutingAgentId?: string;
-
-  /**
-   * Filled by the server after an awaited delegated run completes so `action:mention` can return real output to the delegator.
-   * Cleared by the mention plugin when emitting `action:result`. Not persisted intentionally.
-   */
-  openBotDelegationToolFeedback?: { toolCallId: string; result: string };
 
   /** Dynamic top-level state for session-wide data (e.g. project_plan, todos) */
   [key: string]: any;
