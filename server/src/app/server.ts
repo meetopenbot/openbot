@@ -979,6 +979,7 @@ export async function startServer(options: ServerOptions = {}) {
       name?: string;
       description?: string;
       model?: string;
+      runtime?: string | { name: string; config?: unknown };
       image?: string;
       plugins?: Array<string | { name: string; config?: unknown }>;
       subscribe?: string[];
@@ -1018,6 +1019,20 @@ export async function startServer(options: ServerOptions = {}) {
           .map((item) => item.trim())
           .filter(Boolean)
       : [];
+    const normalizedRuntime =
+      typeof body.runtime === 'string'
+        ? body.runtime.trim() || 'llm'
+        : body.runtime &&
+            typeof body.runtime === 'object' &&
+            typeof body.runtime.name === 'string' &&
+            body.runtime.name.trim()
+          ? {
+              name: body.runtime.name.trim(),
+              ...(typeof body.runtime.config === 'undefined'
+                ? {}
+                : { config: body.runtime.config }),
+            }
+          : 'llm';
 
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
@@ -1035,6 +1050,7 @@ export async function startServer(options: ServerOptions = {}) {
     const frontmatter: Record<string, unknown> = {
       name: normalizedName,
       description: normalizedDescription,
+      runtime: normalizedRuntime,
       plugins: normalizedPlugins,
     };
     if (typeof body.model === 'string' && body.model.trim()) frontmatter.model = body.model.trim();
@@ -1248,6 +1264,14 @@ export async function startServer(options: ServerOptions = {}) {
               ? cfg.image
               : undefined,
         plugins: Array.isArray(parsed.plugins) ? parsed.plugins : [],
+        runtime:
+          typeof parsed.runtime === 'string'
+            ? parsed.runtime
+            : parsed.runtime &&
+                typeof parsed.runtime === 'object' &&
+                typeof (parsed.runtime as Record<string, unknown>).name === 'string'
+              ? parsed.runtime
+              : 'llm',
         subscribe: Array.isArray(parsed.subscribe)
           ? parsed.subscribe.filter((item: unknown) => typeof item === 'string')
           : [],
@@ -1260,6 +1284,7 @@ export async function startServer(options: ServerOptions = {}) {
           description: cfg.description || '',
           model: cfg.model,
           image: cfg.image,
+          runtime: 'llm',
           plugins: [],
           systemPrompt: '',
           subscribe: [],
@@ -1275,6 +1300,7 @@ export async function startServer(options: ServerOptions = {}) {
       name?: string;
       description?: string;
       model?: string;
+      runtime?: string | { name: string; config?: unknown };
       image?: string;
       plugins?: Array<string | { name: string; config?: unknown }>;
       subscribe?: string[];
@@ -1312,6 +1338,20 @@ export async function startServer(options: ServerOptions = {}) {
 
     const normalizedName = body.name.trim();
     const normalizedDescription = body.description.trim();
+    const normalizedRuntime =
+      typeof body.runtime === 'string'
+        ? body.runtime.trim() || 'llm'
+        : body.runtime &&
+            typeof body.runtime === 'object' &&
+            typeof body.runtime.name === 'string' &&
+            body.runtime.name.trim()
+          ? {
+              name: body.runtime.name.trim(),
+              ...(typeof body.runtime.config === 'undefined'
+                ? {}
+                : { config: body.runtime.config }),
+            }
+          : 'llm';
 
     if (!normalizedName || !normalizedDescription) {
       return res.status(400).json({ error: 'name and description are required' });
@@ -1350,6 +1390,7 @@ export async function startServer(options: ServerOptions = {}) {
     const frontmatter: Record<string, unknown> = {
       name: normalizedName,
       description: normalizedDescription,
+      runtime: normalizedRuntime,
       plugins: normalizedPlugins,
     };
 

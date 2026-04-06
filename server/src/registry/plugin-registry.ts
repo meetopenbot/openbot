@@ -26,28 +26,33 @@ export interface ToolPluginRegistryEntry extends PluginRegistryEntry {
  * Holds tool plugins only.
  */
 export class PluginRegistry {
-  private plugins = new Map<string, ToolPluginRegistryEntry>();
+  private pluginsByName = new Map<string, ToolPluginRegistryEntry>();
+  private pluginsById = new Map<string, ToolPluginRegistryEntry>();
 
   register(entry: ToolPluginRegistryEntry): void {
-    if (this.plugins.has(entry.name)) {
+    if (this.pluginsByName.has(entry.name)) {
       console.warn(`Plugin "${entry.name}" is already registered — overwriting`);
     }
-    this.plugins.set(entry.name, entry);
+    if (this.pluginsById.has(entry.id)) {
+      console.warn(`Plugin id "${entry.id}" is already registered — overwriting`);
+    }
+    this.pluginsByName.set(entry.name, entry);
+    this.pluginsById.set(entry.id, entry);
   }
 
-  get(name: string): ToolPluginRegistryEntry | undefined {
-    return this.plugins.get(name);
+  get(nameOrId: string): ToolPluginRegistryEntry | undefined {
+    return this.pluginsByName.get(nameOrId) ?? this.pluginsById.get(nameOrId);
   }
 
-  has(name: string): boolean {
-    return this.plugins.has(name);
+  has(nameOrId: string): boolean {
+    return this.pluginsByName.has(nameOrId) || this.pluginsById.has(nameOrId);
   }
 
   getAll(): ToolPluginRegistryEntry[] {
-    return Array.from(this.plugins.values());
+    return Array.from(this.pluginsById.values());
   }
 
   getNames(): string[] {
-    return Array.from(this.plugins.keys());
+    return Array.from(this.pluginsByName.keys());
   }
 }

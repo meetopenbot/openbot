@@ -165,7 +165,7 @@ export function llmOrchestratorPlugin(options: {
             const agentInstructions = typeof system === 'function' ? await system(context) : system;
 
             const systemPrompt = await buildSystemPrompt(context, agentInstructions);
-            console.log('systemPrompt:::::', systemPrompt);
+            // console.log('systemPrompt:::::', systemPrompt);
 
             return systemPrompt;
           },
