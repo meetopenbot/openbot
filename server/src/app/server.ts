@@ -38,10 +38,7 @@ import {
   type AutomationRecord,
 } from '../services/automations.js';
 import { startAutomationWorker } from '../services/automation-worker.js';
-import {
-  getMarketplaceRegistry,
-  installMarketplacePlugin,
-} from '../services/marketplace.js';
+import { getMarketplaceRegistry, installMarketplacePlugin } from '../services/marketplace.js';
 import { getVersionStatus } from './version.js';
 import { summarizeAgentEventValue } from './router.js';
 import {
@@ -337,9 +334,10 @@ export async function startServer(options: ServerOptions = {}) {
                 data: {
                   action: 'delegate',
                   toolCallId,
-                  result: feedback.length > MAX_FEEDBACK_LEN
-                    ? feedback.slice(0, MAX_FEEDBACK_LEN) + '\n…(truncated)'
-                    : feedback,
+                  result:
+                    feedback.length > MAX_FEEDBACK_LEN
+                      ? feedback.slice(0, MAX_FEEDBACK_LEN) + '\n…(truncated)'
+                      : feedback,
                 },
                 meta: { agentId: leadAgentId },
               } as ConversationEvent,
@@ -1538,7 +1536,9 @@ export async function startServer(options: ServerOptions = {}) {
 
     const runIdHeader = req.get('x-openbot-run-id');
     const runId =
-      typeof runIdHeader === 'string' && runIdHeader.trim() ? runIdHeader.trim() : `run_${generateId()}`;
+      typeof runIdHeader === 'string' && runIdHeader.trim()
+        ? runIdHeader.trim()
+        : `run_${generateId()}`;
 
     const normalizedEvent = event as ConversationEvent;
     await appendConversationEvent(conversationId, runId, normalizedEvent);
@@ -1598,7 +1598,7 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.listen(PORT, () => {
-    console.log(`OpenBot server listening at http://localhost:${PORT}`);
+    console.log(`\x1b[32mOpenBot server listening at http://localhost:${PORT}\x1b[0m`);
     console.log(`  - Runs endpoint: POST /api/runs`);
     console.log(`  - REST endpoints: /api/config, /api/conversations, /api/agents`);
     if (options.openaiApiKey) console.log('  - Using OpenAI API Key from CLI');

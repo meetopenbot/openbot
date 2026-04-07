@@ -59,8 +59,8 @@ export function ChatMessageItem({
   return (
     <div
       className={cn(
-        "group flex flex-col w-full hover:bg-muted/10 transition-colors duration-75 relative px-5",
-        isGrouped ? "py-0.5" : "py-2 mt-2",
+        "group flex flex-col w-full hover:bg-muted/15 transition-colors duration-150 relative px-6",
+        isGrouped ? "py-0.5" : "py-3 mt-1",
       )}
     >
       <ChatMessageHoverToolbar
@@ -73,18 +73,18 @@ export function ChatMessageItem({
         onMessageReaction={onMessageReaction}
       />
 
-      <div className="flex w-full items-start gap-3">
-        <div className="w-[36px] shrink-0">
+      <div className="flex w-full items-start gap-4">
+        <div className="w-[32px] shrink-0">
           {!isGrouped && (
             <AgentAvatar
               name={avatar.name}
               label={avatar.label}
               imageUrl={avatar.imageUrl}
-              className="size-8 rounded-md"
+              className="size-8 rounded-md shadow-sm"
             />
           )}
           {isGrouped && (
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground/60 text-right mt-1.5 pr-1 font-medium">
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-muted-foreground/40 text-right mt-1.5 pr-1 font-medium">
               {formatChatTime(meta.timestamp).split(" ")[0]}
             </div>
           )}
@@ -92,17 +92,17 @@ export function ChatMessageItem({
 
         <div className="flex-1 min-w-0">
           {!isGrouped && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-foreground cursor-pointer">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-[13px] font-semibold text-foreground/90 cursor-pointer hover:text-foreground transition-colors">
                 {avatar.label}
               </span>
-              <span className="text-xs text-muted-foreground/60">
+              <span className="text-[11px] text-muted-foreground/40 font-medium">
                 {formatChatTime(meta.timestamp)}
               </span>
             </div>
           )}
 
-          <div className="text-[15px] leading-[1.46668] text-foreground/90">
+          <div className="text-[14px] leading-[1.6] text-foreground/85 selection:bg-primary/10">
             <StandardChatMessageBody event={item.event!} />
           </div>
         </div>

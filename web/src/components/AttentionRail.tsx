@@ -50,7 +50,7 @@ export function AttentionRail() {
   if (attentionWidgets.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-2 w-full bg-background p-2 rounded-xl border border-border/40 animate-fade-in mb-2 max-h-[50vh] overflow-y-auto pr-1 scrollbar-thin">
+    <div className="flex flex-col gap-2 w-full bg-background/40 backdrop-blur-sm p-2 rounded-xl border border-border/30 animate-fade-in mb-3 max-h-[50vh] overflow-y-auto pr-1 scrollbar-thin shadow-sm">
       {attentionWidgets.map((entry, idx) => {
         const id = entry.key || `idx-${idx}`;
         const isExpanded = expandedIds.has(id);

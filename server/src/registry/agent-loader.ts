@@ -328,7 +328,7 @@ export async function discoverAgents(
         folder: agentDir,
       });
       console.log(
-        `[agents] Loaded agent: ${id} (${resolvedName}) — ${resolvedDescription}${config.model ? ` (model: ${config.model})` : ''}`,
+        `[agents] Loaded agent: ${id} (${resolvedName}) — ${resolvedDescription.slice(0, 20)}${config.model ? ` (model: ${config.model})` : ''}`,
       );
     } catch (err: any) {
       if (err.code !== 'ENOENT') {

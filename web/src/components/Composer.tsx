@@ -249,7 +249,7 @@ export function Composer() {
   const canSend = (Boolean(content.trim()) || pendingImages.length > 0) && !streaming && !uploadingImages;
 
   return (
-    <div className="relative w-full rounded-lg border border-border/60 bg-background shadow-[0_2px_12px_rgba(0,0,0,0.04)] transition-all duration-200 focus-within:border-border focus-within:shadow-[0_2px_20px_rgba(0,0,0,0.06)]">
+    <div className="relative w-full rounded-xl border border-border/40 bg-background/50 backdrop-blur-sm shadow-[0_2px_12px_rgba(0,0,0,0.02)] transition-all duration-200 focus-within:border-border/80 focus-within:shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
       <form onSubmit={handleSubmit} className="flex flex-col">
         <ImagePreview pendingImages={pendingImages} onRemove={removePendingImage} />
 
@@ -259,7 +259,7 @@ export function Composer() {
           onSelect={insertMention}
         />
 
-        <div className="flex items-start px-4 py-3">
+        <div className="flex items-start px-4 py-3.5">
           <textarea
             ref={textareaRef}
             value={content}
@@ -271,13 +271,13 @@ export function Composer() {
             placeholder={
               isDm && targetAgentId ? `Message ${targetAgentId}...` : "Message channel..."
             }
-            className="flex-1 min-h-[22px] max-h-[200px] w-full resize-none bg-transparent p-0 text-[13px] leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none"
+            className="flex-1 min-h-[22px] max-h-[200px] w-full resize-none bg-transparent p-0 text-[13px] leading-relaxed placeholder:text-muted-foreground/30 focus:outline-none"
             rows={1}
           />
         </div>
         
-        <div className="flex items-center justify-between px-2 pb-1.5 rounded-b-lg">
-          <div className="relative flex items-center">
+        <div className="flex items-center justify-between px-3 pb-2 rounded-b-xl">
+          <div className="relative flex items-center gap-1">
             <input
               ref={fileInputRef}
               type="file"
@@ -293,18 +293,18 @@ export function Composer() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <UsageStats events={events} />
 
             {streaming ? (
               <button
                 type="button"
                 onClick={handleStop}
-                className="rounded-lg bg-foreground p-1.5 text-background transition-all duration-150 hover:opacity-80"
+                className="rounded-md bg-foreground p-1.5 text-background transition-all duration-150 hover:opacity-90 active:scale-95"
                 aria-label="Stop generation"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <rect x="7" y="7" width="10" height="10" rx="1.5" />
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="7" y="7" width="10" height="10" rx="1" />
                 </svg>
               </button>
             ) : (
@@ -312,14 +312,14 @@ export function Composer() {
                 type="submit"
                 disabled={!canSend}
                 className={cn(
-                  "rounded-lg p-1.5 transition-all duration-150",
+                  "rounded-md p-1.5 transition-all duration-150 active:scale-95",
                   canSend
-                    ? "bg-foreground text-background hover:opacity-80"
-                    : "cursor-not-allowed text-muted-foreground/30"
+                    ? "bg-foreground text-background hover:opacity-90"
+                    : "cursor-not-allowed text-muted-foreground/20"
                 )}
                 aria-label={uploadingImages ? "Uploading images" : "Send message"}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M5 12h14" />
                   <path d="m12 5 7 7-7 7" />
                 </svg>

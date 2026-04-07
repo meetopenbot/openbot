@@ -11,12 +11,12 @@ import {
 
 function StreamingIndicator() {
   return (
-    <div className="flex items-start w-full px-5 py-2 animate-fade-in">
+    <div className="flex items-start w-full px-5 py-3 animate-fade-in">
       <div className="w-[36px] mr-3 shrink-0" />
-      <div className="flex items-center gap-1.5 py-1">
-        <span className="size-1 rounded-full bg-foreground/30 animate-[pulse-dot_1.4s_ease-in-out_infinite]" />
-        <span className="size-1 rounded-full bg-foreground/30 animate-[pulse-dot_1.4s_ease-in-out_0.2s_infinite]" />
-        <span className="size-1 rounded-full bg-foreground/30 animate-[pulse-dot_1.4s_ease-in-out_0.4s_infinite]" />
+      <div className="flex items-center gap-1.5 py-1 px-2.5 bg-muted/30 rounded-full border border-border/20">
+        <span className="size-1 rounded-full bg-foreground/40 animate-[pulse-dot_1.4s_ease-in-out_infinite]" />
+        <span className="size-1 rounded-full bg-foreground/40 animate-[pulse-dot_1.4s_ease-in-out_0.2s_infinite]" />
+        <span className="size-1 rounded-full bg-foreground/40 animate-[pulse-dot_1.4s_ease-in-out_0.4s_infinite]" />
       </div>
     </div>
   );
