@@ -19,7 +19,7 @@ OpenBot is more than just a chatbot. It's an AI workspace that lives in your ter
 
 💬 Join the community on Discord: https://discord.gg/XYYXvN2ebB
 
-![OpenBot Banner](./screen-j-dilla-2.png)
+![OpenBot Banner](./screen-slack-like.png)
 
 ## 🧠 The Multi-Agent Philosophy
 
