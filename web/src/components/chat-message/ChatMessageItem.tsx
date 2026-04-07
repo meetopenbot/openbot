@@ -29,8 +29,8 @@ export function ChatMessageItem({
 
   const currentReaction = messageReactions[messageId];
   const [copied, setCopied] = useState(false);
-  const rawAgentName = item.event?.meta?.agentName;
-  const avatar = useAgentAvatarDisplay(rawAgentName, isUser);
+  const rawAgentId = item.event?.meta?.agentId;
+  const avatar = useAgentAvatarDisplay(rawAgentId, isUser);
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );

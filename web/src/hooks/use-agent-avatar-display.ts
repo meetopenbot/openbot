@@ -3,9 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 
 /**
- * Maps stream meta (`agentName` is often an agent id) to props for `AgentAvatar`.
+ * Maps stream meta (`agentId`) to props for `AgentAvatar`.
  */
-export function useAgentAvatarDisplay(raw: string | undefined, isUser: boolean) {
+export function useAgentAvatarDisplay(agentId: string | undefined, isUser: boolean) {
   const { data: agents = [] } = useQuery({
     queryKey: ["agents"],
     queryFn: api.getAgents,
@@ -16,7 +16,7 @@ export function useAgentAvatarDisplay(raw: string | undefined, isUser: boolean) 
     if (isUser) {
       return { name: "user", label: "You", imageUrl: undefined as string | undefined };
     }
-    const key = (raw && raw.trim()) || "default";
+    const key = (agentId && agentId.trim()) || "default";
     const byId = agents.find((a) => a.id === key);
     if (byId) {
       return {
@@ -37,5 +37,5 @@ export function useAgentAvatarDisplay(raw: string | undefined, isUser: boolean) 
       return { name: "default" as const, label: "OpenBot", imageUrl: undefined as string | undefined };
     }
     return { name: key, label: key, imageUrl: undefined as string | undefined };
-  }, [isUser, raw, agents]);
+  }, [isUser, agentId, agents]);
 }

@@ -2,22 +2,10 @@ import { MelonyPlugin } from "melony";
 import { generateText, LanguageModel } from "ai";
 import { ConversationState, ConversationEvent } from "../app/types.js";
 
-function getTitleSourceMessages(
-  state: ConversationState,
-  event: ConversationEvent,
-): any[] {
+function getTitleSourceMessages(state: ConversationState): any[] {
   if (Array.isArray(state.messages) && state.messages.length >= 2) {
     return state.messages;
   }
-
-  const agentName = event.meta?.agentName;
-  if (!agentName) return [];
-
-  const agentMessages = state.agentStates?.[agentName]?.messages;
-  if (Array.isArray(agentMessages) && agentMessages.length >= 2) {
-    return agentMessages;
-  }
-
   return [];
 }
 
@@ -32,10 +20,7 @@ export const topicAgent =
         return;
       }
 
-      const messagesForTitle = getTitleSourceMessages(
-        state,
-        event as ConversationEvent,
-      );
+      const messagesForTitle = getTitleSourceMessages(state);
 
       // Don't title if there are too few messages
       if (messagesForTitle.length < 2) {

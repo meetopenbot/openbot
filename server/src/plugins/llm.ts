@@ -14,9 +14,26 @@ async function toInlineDataUrl(url: string, mimeType: string): Promise<string> {
   return `data:${mimeType};base64,${base64}`;
 }
 
-async function toModelMessages(messages: SimpleMessage[]): Promise<ModelMessage[]> {
+async function toModelMessages(
+  messages: SimpleMessage[],
+  currentAgentId?: string,
+): Promise<ModelMessage[]> {
   return Promise.all(
     messages.map(async (message) => {
+      const agentId = message.meta?.agentId;
+      let content = message.content;
+
+      // For assistant messages from other agents, prefix with the agent id
+      // so the current LLM knows who said what in the shared history.
+      if (
+        message.role === 'assistant' &&
+        agentId &&
+        agentId !== currentAgentId &&
+        typeof content === 'string'
+      ) {
+        content = `[@${agentId}]: ${content}`;
+      }
+
       if (message.role === 'tool') {
         return {
           role: 'tool',
@@ -38,10 +55,10 @@ async function toModelMessages(messages: SimpleMessage[]): Promise<ModelMessage[
       }
 
       if (message.role === 'assistant') {
-        if (Array.isArray(message.content)) {
+        if (Array.isArray(content)) {
           return {
             role: 'assistant',
-            content: message.content.map((c: any) => {
+            content: content.map((c: any) => {
               if (c.type === 'tool-call') {
                 return {
                   type: 'tool-call',
@@ -63,7 +80,7 @@ async function toModelMessages(messages: SimpleMessage[]): Promise<ModelMessage[
         }
         return {
           role: 'assistant',
-          content: message.content,
+          content: content,
         } as ModelMessage;
       }
 
@@ -98,18 +115,18 @@ async function toModelMessages(messages: SimpleMessage[]): Promise<ModelMessage[
 
           return {
             role: 'user',
-            content: [{ type: 'text', text: message.content as string }, ...attachmentParts],
+            content: [{ type: 'text', text: content as string }, ...attachmentParts],
           } as ModelMessage;
         }
         return {
           role: 'user',
-          content: message.content as string,
+          content: content as string,
         } as ModelMessage;
       }
 
       return {
         role: message.role as any,
-        content: message.content as any,
+        content: content as any,
       } as ModelMessage;
     }),
   );
@@ -258,6 +275,12 @@ export const llmPlugin =
 
       // 1. Add new message to history with correct positioning and unblocking logic.
       if (newMessage) {
+        // Tag user messages for the timeline
+        if (newMessage.role === 'user' && !newMessage.meta?.agentId) {
+          if (!newMessage.meta) newMessage.meta = {};
+          newMessage.meta.agentId = 'you';
+        }
+
         if (newMessage.role === 'tool') {
           insertToolResult(state.messages, newMessage);
         } else {
@@ -306,10 +329,15 @@ export const llmPlugin =
       // Evaluate dynamic system prompt if it's a function
       const systemPrompt = typeof system === 'function' ? await system(context) : system;
 
-      const modelMessages = await toModelMessages(state.messages as SimpleMessage[]);
+      const currentAgentId = (state as any).agentId || 'assistant';
+      const modelMessages = await toModelMessages(state.messages as SimpleMessage[], currentAgentId);
 
       // Initialize an empty assistant message to be populated as we stream
-      const assistantMessage: SimpleMessage = { role: 'assistant', content: '' };
+      const assistantMessage: SimpleMessage = {
+        role: 'assistant',
+        content: '',
+        meta: { agentId: currentAgentId },
+      };
       state.messages.push(assistantMessage);
 
       // console.log("messages:::::", JSON.stringify(state.messages, null, 2));

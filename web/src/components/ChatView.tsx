@@ -23,7 +23,7 @@ function StreamingIndicator() {
 }
 
 function DelegationBlock({ children }: { children: React.ReactNode }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   return (
     <div className="ml-10 my-1 border-l-2 border-muted/60">
@@ -135,10 +135,10 @@ export function ChatView({
       topLevelEvents.forEach((item, idx) => {
         const eventTimestamp =
           item.meta?.timestamp || (msg as any).timestamp || Date.now();
-        const agentName =
+        const agentId =
           msg.role === "user"
             ? "You"
-            : item.meta?.agentName || config?.name || "Assistant";
+            : item.meta?.agentId || config?.name || "Assistant";
 
         const isDelegated = !!item.meta?.delegationId;
 
@@ -148,7 +148,7 @@ export function ChatView({
           messageId: msg.id,
           meta: {
             timestamp: eventTimestamp,
-            agentName,
+            agentId,
             role: msg.role,
           },
           isGrouped: false,
@@ -163,7 +163,7 @@ export function ChatView({
       if (
         prev &&
         prev.meta.role === item.meta.role &&
-        prev.meta.agentName === item.meta.agentName &&
+        prev.meta.agentId === item.meta.agentId &&
         prev.depth === item.depth
       ) {
         const timeDiff = item.meta.timestamp - prev.meta.timestamp;

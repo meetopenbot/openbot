@@ -4,7 +4,7 @@ export type ChatRenderableItem = {
   messageId: string;
   meta: {
     timestamp: number;
-    agentName: string;
+    agentId: string;
     role: string;
   };
   isGrouped: boolean;

@@ -4,12 +4,16 @@ export interface SimpleMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string | any[];
   attachments?: AttachmentRef[];
+  meta?: {
+    agentId?: string;
+    [key: string]: any;
+  };
 }
 
 type ChatEventBase<T extends string, D> = { type: T } & D & {
   type: T;
   meta?: {
-    agentName?: string;
+    agentId?: string;
     [key: string]: any;
   };
 };
@@ -98,31 +102,14 @@ export type ConversationEvent = (
   | MessageReactionEvent
 ) & {
   meta?: {
-    agentName?: string;
+    agentId?: string;
     [key: string]: any;
   };
 };
 
 /**
- * Per-agent isolated state for delegated/DM/specialized agents, stored in
- * `ConversationState.agentStates[agentName]`. Channel lead (`default`) uses the
- * root `ConversationState` instead (see `resolveAgentRuntimeState` in router).
+ * Root conversation state; all agents share a single top-level state object.
  */
-export interface AgentState {
-  messages?: any[];
-  cwd?: string;
-  /** Current conversation/channel id. */
-  conversationId?: string;
-  /** The id of this agent (e.g. "os", "default"). */
-  agentId?: string;
-  pendingApprovals?: Record<string, any>;
-  usage?: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-  };
-}
-
 export interface ConversationState {
   title?: string;
   conversationId?: string;
@@ -143,8 +130,6 @@ export interface ConversationState {
     outputTokens: number;
     totalTokens: number;
   };
-  /** Isolated state per agent, keyed by agent name */
-  agentStates?: Record<string, AgentState>;
 
   /** Dynamic top-level state for session-wide data (e.g. project_plan, todos) */
   [key: string]: any;

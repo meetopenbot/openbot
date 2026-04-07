@@ -94,7 +94,7 @@ function ChatPlaceholder() {
                   type: 'agent:input',
                   meta:
                     !isChannelConversation && resolvedAgentId
-                      ? { agentName: resolvedAgentId }
+                      ? { agentId: resolvedAgentId }
                       : undefined,
                   data: { content: s.label },
                 })

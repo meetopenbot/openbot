@@ -110,7 +110,7 @@ export function ChatProvider({
           id: event.id || `asst_${Math.random().toString(36).slice(2, 9)}`,
           runId: event.runId || event.meta?.runId,
           role: "assistant",
-          agentName: event.meta?.agentName,
+          agentId: event.meta?.agentId,
           delegationId: event.id,
           content: [event],
         };
@@ -127,11 +127,11 @@ export function ChatProvider({
         };
         msgs.push(currentMsg);
       } else if (currentMsg?.role === "assistant") {
-        const eventAgentName = event.meta?.agentName;
+        const eventAgentId = event.meta?.agentId;
         const eventDelegationId = event.meta?.delegationId;
 
-        // Start a new block when the agent name or delegation context changes
-        const agentChanged = eventAgentName && currentMsg.agentName && eventAgentName !== currentMsg.agentName;
+        // Start a new block when the agent id or delegation context changes
+        const agentChanged = eventAgentId && currentMsg.agentId && eventAgentId !== currentMsg.agentId;
         const delegationChanged = (eventDelegationId || undefined) !== (currentMsg.delegationId || undefined);
 
         if (agentChanged || delegationChanged) {
@@ -139,14 +139,14 @@ export function ChatProvider({
             id: event.id || `asst_${Math.random().toString(36).slice(2, 9)}`,
             runId: event.runId || event.meta?.runId,
             role: "assistant",
-            agentName: eventAgentName,
+            agentId: eventAgentId,
             delegationId: eventDelegationId,
             content: [event],
           };
           msgs.push(currentMsg);
         } else {
-          if (!currentMsg.agentName && eventAgentName) {
-            currentMsg.agentName = eventAgentName;
+          if (!currentMsg.agentId && eventAgentId) {
+            currentMsg.agentId = eventAgentId;
           }
           currentMsg.content.push(event);
         }
@@ -155,7 +155,7 @@ export function ChatProvider({
           id: event.id || `asst_${Math.random().toString(36).slice(2, 9)}`,
           runId: event.runId || event.meta?.runId,
           role: "assistant",
-          agentName: event.meta?.agentName,
+          agentId: event.meta?.agentId,
           delegationId: event.meta?.delegationId,
           content: [event],
         };

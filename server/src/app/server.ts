@@ -242,12 +242,7 @@ export async function startServer(options: ServerOptions = {}) {
 
         // For delegated sub-runs, set depth to prevent infinite recursion
         if (delegation) {
-          if (!state.agentStates) state.agentStates = {};
-          const targetAgentId = event.meta?.agentName;
-          if (targetAgentId) {
-            const targetState = (state.agentStates[targetAgentId] ??= {}) as any;
-            targetState._delegationDepth = delegation.depth;
-          }
+          (state as any)._delegationDepth = delegation.depth;
         }
 
         activeRuns.add(runId);
@@ -265,14 +260,14 @@ export async function startServer(options: ServerOptions = {}) {
               break;
             }
 
-            const agentName = chunk.meta?.agentName;
-            if (typeof agentName === 'string' && agentName) {
+            const agentId = chunk.meta?.agentId;
+            if (typeof agentId === 'string' && agentId) {
               const activeAgents = runAgentsById.get(runId);
-              activeAgents?.add(agentName);
+              activeAgents?.add(agentId);
 
               if (!state.participatingAgents) state.participatingAgents = [];
-              if (!state.participatingAgents.includes(agentName)) {
-                state.participatingAgents.push(agentName);
+              if (!state.participatingAgents.includes(agentId)) {
+                state.participatingAgents.push(agentId);
               }
             }
 
@@ -288,7 +283,7 @@ export async function startServer(options: ServerOptions = {}) {
                   event: {
                     type: 'agent:input',
                     data: { content },
-                    meta: { agentName: targetAgentId, delegation: true },
+                    meta: { agentId: targetAgentId, delegation: true },
                   } as ConversationEvent,
                   delegation: {
                     parentDelegationId: chunk.id!,
@@ -346,7 +341,7 @@ export async function startServer(options: ServerOptions = {}) {
                     ? feedback.slice(0, MAX_FEEDBACK_LEN) + '\n…(truncated)'
                     : feedback,
                 },
-                meta: { agentName: leadAgentId },
+                meta: { agentId: leadAgentId },
               } as ConversationEvent,
             });
           }

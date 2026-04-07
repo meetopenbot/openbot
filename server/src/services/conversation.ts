@@ -109,16 +109,9 @@ export async function loadConversationState(conversationId: string): Promise<Con
 /** Runtime-only fields that must not survive reload (corrupt next runs if persisted). */
 function stateForPersistence(state: ConversationState): ConversationState {
   const snapshot = JSON.parse(JSON.stringify(state)) as ConversationState;
-  if (snapshot.agentStates) {
-    for (const key of Object.keys(snapshot.agentStates)) {
-      const ag = snapshot.agentStates[key];
-      if (ag && typeof ag === "object") {
-        delete (ag as any).conversationId;
-        delete (ag as any).agentId;
-        delete (ag as any)._delegationDepth;
-      }
-    }
-  }
+  // These are set at runtime by the router/server and shouldn't be saved to disk
+  delete (snapshot as any).agentId;
+  delete (snapshot as any)._delegationDepth;
   return snapshot;
 }
 

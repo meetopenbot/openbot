@@ -62,7 +62,7 @@ export function delegationPlugin(deps: DelegationPluginDeps) {
             leadAgentId: currentAgentId,
             depth: depth + 1,
           },
-          meta: { agentName: currentAgentId },
+          meta: { agentId: currentAgentId },
         } as ConversationEvent;
       },
     );

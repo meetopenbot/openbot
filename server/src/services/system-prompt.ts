@@ -37,21 +37,21 @@ function truncateText(text: string, max: number): string {
 function formatActivityEntry(event: Record<string, any>): string {
   const type = event.type;
   const data = event.data ?? event;
-  const agentName = event.meta?.agentName;
+  const agentId = event.meta?.agentId;
   const content = data?.content ?? "";
 
   if (type === "agent:input") {
-    const sender = agentName ? `user → @${agentName}` : "user";
+    const sender = agentId ? `user → @${agentId}` : "user";
     return `[${sender}] ${truncateText(content, MAX_ENTRY_CHARS)}`;
   }
 
   if (type === "agent:output") {
-    const agent = agentName || "assistant";
+    const agent = agentId || "assistant";
     return `[${agent}] ${truncateText(content, MAX_ENTRY_CHARS)}`;
   }
 
   if (type === "agent:delegation") {
-    const from = agentName || "agent";
+    const from = agentId || "agent";
     const to = data?.targetAgentId || "agent";
     return `[${from} → @${to}] ${truncateText(content, MAX_ENTRY_CHARS)}`;
   }
@@ -180,7 +180,6 @@ export function createSystemPromptBuilder(options: SystemPromptOptions) {
     // Session state (custom keys only)
     const reservedKeys = new Set([
       "messages",
-      "agentStates",
       "usage",
       "cwd",
       "openbotRoot",

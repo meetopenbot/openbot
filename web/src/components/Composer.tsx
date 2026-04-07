@@ -129,7 +129,7 @@ export function Composer() {
     send({
       type: "agent:input",
       meta: {
-        ...(targetAgentId ? { agentName: targetAgentId } : {}),
+        ...(targetAgentId ? { agentId: targetAgentId } : {}),
       },
       data: { content: trimmed, attachments: attachments.length > 0 ? attachments : undefined },
     });

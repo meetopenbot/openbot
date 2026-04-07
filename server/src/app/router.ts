@@ -2,42 +2,14 @@ import { Runtime } from "melony";
 import { ConversationEvent, ConversationState } from "./types.js";
 
 /**
- * Legacy channel sessions stored the lead ("default") under agentStates.default.
- * Hoist that slice onto the root conversation state once so cwd, conversationId,
- * messages, and tool state stay on the same object the runtime uses.
- */
-function hoistChannelDefaultAgentSlice(root: ConversationState) {
-  const nested = root.agentStates?.default;
-  if (!nested || typeof nested !== "object") return;
-
-  const nm = nested.messages;
-  if (Array.isArray(nm) && nm.length > 0) {
-    if (!root.messages || root.messages.length === 0) {
-      root.messages = nm;
-    }
-    delete (nested as { messages?: unknown }).messages;
-  }
-}
-
-/**
- * Resolves the Melony `state` object for an agent. Channel lead uses the root
- * conversation state; other agents use an isolated agentStates entry.
+ * Resolves the Melony `state` object for an agent. All agents share the same root
+ * conversation state for shared context and project visibility.
  */
 export function resolveAgentRuntimeState(
   root: ConversationState,
-  agentId: string,
+  _agentId: string,
 ): ConversationState {
-  if (agentId === "you") {
-    return root;
-  }
-  const cid = root.conversationId || "";
-  if (agentId === "default" && cid.startsWith("channel_")) {
-    if (!root.agentStates) root.agentStates = {};
-    hoistChannelDefaultAgentSlice(root);
-    return root;
-  }
-  if (!root.agentStates) root.agentStates = {};
-  return (root.agentStates[agentId] ??= {}) as ConversationState;
+  return root;
 }
 
 export function summarizeAgentEventValue(event: any): string | undefined {
@@ -70,10 +42,9 @@ export async function* runOpenBot(
 
   // Initialize state
   if (!state.messages) state.messages = [];
-  if (!state.agentStates) state.agentStates = {};
 
   // --- 1. DISPATCHER: Determine the target agent for this message ---
-  let targetAgentId: string | undefined = event.meta?.agentName;
+  let targetAgentId: string | undefined = event.meta?.agentId;
 
   // If the event is an agent:input and not a delegation, determine the target agent.
   if (event.type === "agent:input" && !event.meta?.delegation) {
@@ -91,11 +62,11 @@ export async function* runOpenBot(
   // --- 2. EXECUTION: Run the target agent ---
   const runtime = targetAgentId ? agentRuntimes.get(targetAgentId) : undefined;
 
-  // For non-input events with an explicit agentName, always try that agent first
-  if (event.type !== "agent:input" && event.meta?.agentName) {
-    const explicitRuntime = agentRuntimes.get(event.meta.agentName);
+  // For non-input events with an explicit agentId, always try that agent first
+  if (event.type !== "agent:input" && event.meta?.agentId) {
+    const explicitRuntime = agentRuntimes.get(event.meta.agentId);
     if (explicitRuntime) {
-      const target = event.meta.agentName;
+      const target = event.meta.agentId;
       const targetState = resolveAgentRuntimeState(state, target);
       (targetState as any).conversationId = state.conversationId;
       (targetState as any).agentId = target;
@@ -106,7 +77,7 @@ export async function* runOpenBot(
       })) {
         yield {
           ...agentChunk,
-          meta: { ...(agentChunk as any)?.meta, agentName: target },
+          meta: { ...(agentChunk as any)?.meta, agentId: target },
         } as ConversationEvent;
       }
       return;
@@ -135,7 +106,7 @@ export async function* runOpenBot(
 
       const outMeta = {
         ...chunk.meta,
-        ...(targetAgentId ? { agentName: targetAgentId } : {}),
+        ...(targetAgentId ? { agentId: targetAgentId } : {}),
       };
 
       if (chunk.type === "suspend") {
@@ -165,7 +136,7 @@ export async function* runOpenBot(
         for await (const _ of titleRuntime.run(
           {
             type: "agent:output",
-            meta: { agentName: targetAgentId },
+            meta: { agentId: targetAgentId },
             data: { content: lastOutput },
           } as ConversationEvent,
           { runId: context.runId, state: genState as any },
