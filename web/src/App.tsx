@@ -1,5 +1,6 @@
+import { useMemo, useState } from 'react';
 import { ChatProvider } from './hooks/use-chat';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useSession } from './hooks/use-session';
 import { useConfig } from './hooks/use-config';
@@ -15,6 +16,7 @@ import { ChannelSpecSidebar } from './components/ChannelSpecSidebar';
 import { AgentProfileSidebar } from './components/AgentProfileSidebar';
 import { Button } from './components/ui/button';
 import { InfoIcon } from 'lucide-react';
+import type { SettingsSection } from './components/layout/SettingsSidebar';
 
 export function App() {
   const queryClient = useQueryClient();
@@ -23,7 +25,8 @@ export function App() {
   const { data: config, isLoading: configLoading } = useConfig();
   const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: api.getAgents });
   const [rightPanel, setRightPanel] = useState<'spec' | 'agent' | null>(null);
-  const activeConversationId = conversationId || conversations[0]?.id || '';
+  const defaultAgent = agents.find(a => a.isDefault);
+  const activeConversationId = conversationId || (defaultAgent ? `dm_${defaultAgent.id || defaultAgent.name}` : (conversations[0]?.id || ''));
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
   const dmAgentIdFromRoute = activeConversationId.startsWith('dm_')
@@ -52,6 +55,23 @@ export function App() {
   const tab = useMemo(() => {
     return new URLSearchParams(path).get('tab') || 'chat';
   }, [path]);
+
+  const settingsSection = useMemo(() => {
+    const params = new URLSearchParams(path);
+    const section = params.get('settingsSection');
+    return (section as SettingsSection) || 'general';
+  }, [path]);
+
+  const setSettingsSection = useCallback(
+    (section: SettingsSection) => {
+      const params = new URLSearchParams(path);
+      params.set('tab', 'settings');
+      params.set('settingsSection', section);
+      params.delete('agentId');
+      navigate(`/?${params.toString()}`);
+    },
+    [path, navigate],
+  );
 
   const eventHandlers = useMemo(
     () => ({
@@ -117,6 +137,8 @@ export function App() {
             onNavigate={navigate}
             rightOpen={Boolean(rightPanel)}
             rightWidthClassName="w-[640px] 2xl:w-[840px]"
+            settingsSection={tab === 'settings' || tab === 'agents' ? settingsSection : undefined}
+            onSettingsSectionChange={setSettingsSection}
             rightSidebar={
               rightPanel === 'spec' ? (
                 <ChannelSpecSidebar
@@ -160,9 +182,20 @@ export function App() {
               />
             )}
             {tab === 'chat' && !activeConversationId && <NoConversationsPlaceholder />}
-            {tab === 'agents' && <SettingsPage defaultSection="agents" />}
+            {tab === 'agents' && (
+              <SettingsPage
+                defaultSection="agents"
+                currentSection={settingsSection}
+                onSectionChange={setSettingsSection}
+              />
+            )}
             {tab === 'automations' && <AutomationsPage />}
-            {tab === 'settings' && <SettingsPage />}
+            {tab === 'settings' && (
+              <SettingsPage
+                currentSection={settingsSection}
+                onSectionChange={setSettingsSection}
+              />
+            )}
           </AppLayout>
         </AppLayoutProvider>
       </ThemeProvider>

@@ -10,6 +10,8 @@ import { cn } from '../../lib/utils';
 
 const SIDEBAR_WIDTH = 272;
 
+import { SettingsSidebar, type SettingsSection } from './SettingsSidebar';
+
 interface AppLayoutProps {
   children: ReactNode;
   conversationId: string;
@@ -22,6 +24,8 @@ interface AppLayoutProps {
   rightWidthClassName?: string;
   rightOpen?: boolean;
   onHeaderClick?: () => void;
+  settingsSection?: SettingsSection;
+  onSettingsSectionChange?: (section: SettingsSection) => void;
 }
 
 export function AppLayoutProvider({ children }: { children: ReactNode }) {
@@ -50,6 +54,8 @@ export function AppLayout({
   rightWidthClassName,
   rightOpen,
   onHeaderClick,
+  settingsSection,
+  onSettingsSectionChange,
 }: AppLayoutProps) {
   const rightRailUsesClasses = Boolean(rightWidthClassName);
   const { open, toggle } = useSidebar();
@@ -76,6 +82,10 @@ export function AppLayout({
     headerTitle = activeAgent.name;
   }
 
+  if (currentTab === 'settings' && settingsSection) {
+    headerTitle = settingsSection.charAt(0).toUpperCase() + settingsSection.slice(1);
+  }
+
   return (
     <div className="flex h-screen w-screen overflow-hidden text-foreground bg-background">
       <aside
@@ -83,11 +93,19 @@ export function AppLayout({
         style={{ width: open ? SIDEBAR_WIDTH : 0 }}
       >
         <div className="h-full bg-background" style={{ width: SIDEBAR_WIDTH }}>
-          <AppSidebar
-            conversationId={conversationId}
-            currentTab={currentTab}
-            onNavigate={onNavigate}
-          />
+          {currentTab === 'settings' && settingsSection && onSettingsSectionChange ? (
+            <SettingsSidebar
+              currentSection={settingsSection}
+              onSectionChange={onSettingsSectionChange}
+              onBack={() => onNavigate('/')}
+            />
+          ) : (
+            <AppSidebar
+              conversationId={conversationId}
+              currentTab={currentTab}
+              onNavigate={onNavigate}
+            />
+          )}
         </div>
       </aside>
 
@@ -147,6 +165,13 @@ export function AppLayout({
                     <path d="m6 9 6 6 6-6" />
                   </svg>
                 </button>
+              </div>
+            )}
+            {currentTab === 'settings' && (
+              <div className="flex items-center gap-2 min-w-0 ml-1">
+                <h1 className="text-sm font-semibold text-foreground/85 truncate">
+                  {headerTitle}
+                </h1>
               </div>
             )}
           </div>

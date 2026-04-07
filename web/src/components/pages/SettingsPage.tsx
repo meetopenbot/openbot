@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTheme } from '../ThemeProvider';
 import { useConfig } from '../../hooks/use-config';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, USER_VARIABLE_SECRET_UNCHANGED, type MarketplaceItem } from '../../lib/api';
 import { useSession } from '../../hooks/use-session';
-import { cn } from '../../lib/utils';
-import { AgentsPage } from './AgentsPage';
 import { ExtensionItem } from '../ExtensionItem';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
+import { Input } from '../ui/input';
+import { Checkbox } from '../ui/checkbox';
+import { Trash2, Plus, Save, CheckCircle2, AlertCircle } from 'lucide-react';
+import type { SettingsSection } from '../layout/SettingsSidebar';
 
 type Theme = 'light' | 'dark' | 'system';
 const VARIABLE_MASK_DISPLAY = '••••••••••••••••';
@@ -19,25 +21,28 @@ const THEME_OPTIONS: { value: Theme; label: string; icon: string }[] = [
   { value: 'system', label: 'System', icon: 'monitor' },
 ];
 
-export function SettingsPage({ defaultSection }: { defaultSection?: SettingsSection }) {
-  return <SettingsPageWithSections defaultSection={defaultSection} />;
+export function SettingsPage({
+  defaultSection,
+  currentSection,
+  onSectionChange,
+}: {
+  defaultSection?: SettingsSection;
+  currentSection?: SettingsSection;
+  onSectionChange?: (section: SettingsSection) => void;
+}) {
+  return (
+    <SettingsPageWithSections
+      defaultSection={defaultSection}
+      currentSection={currentSection}
+      onSectionChange={onSectionChange}
+    />
+  );
 }
-
-type SettingsSection = 'general' | 'variables' | 'agents' | 'plugins' | 'system';
-
-const SETTINGS_SECTIONS: Array<{ id: SettingsSection; label: string }> = [
-  { id: 'general', label: 'General' },
-  { id: 'variables', label: 'Variables' },
-  { id: 'agents', label: 'Agents' },
-  { id: 'plugins', label: 'Plugins' },
-  { id: 'system', label: 'System' },
-];
 
 function resolveSettingsSection(raw: string | null): SettingsSection {
   if (
     raw === 'general' ||
     raw === 'variables' ||
-    raw === 'agents' ||
     raw === 'plugins' ||
     raw === 'system'
   ) {
@@ -67,7 +72,15 @@ function variableRowsFromServer(
   }));
 }
 
-function SettingsPageWithSections({ defaultSection }: { defaultSection?: SettingsSection }) {
+function SettingsPageWithSections({
+  defaultSection,
+  currentSection,
+  onSectionChange,
+}: {
+  defaultSection?: SettingsSection;
+  currentSection?: SettingsSection;
+  onSectionChange?: (section: SettingsSection) => void;
+}) {
   const { path, navigate } = useSession();
   const { data: config } = useConfig();
   const { theme, setTheme } = useTheme();
@@ -88,19 +101,21 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
   const [profileSaved, setProfileSaved] = useState(false);
 
   const settingsSection = useMemo(() => {
+    if (currentSection) return currentSection;
     const params = new URLSearchParams(path);
     const fromQuery = resolveSettingsSection(params.get('settingsSection'));
     if (params.has('settingsSection')) return fromQuery;
     return defaultSection ?? 'general';
-  }, [path, defaultSection]);
+  }, [path, defaultSection, currentSection]);
 
   const setSettingsSection = (section: SettingsSection) => {
+    if (onSectionChange) {
+      onSectionChange(section);
+      return;
+    }
     const params = new URLSearchParams(path);
     params.set('tab', 'settings');
     params.set('settingsSection', section);
-    if (section !== 'agents') {
-      params.delete('agentId');
-    }
     navigate(`/?${params.toString()}`);
   };
 
@@ -216,35 +231,10 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
   return (
     <div className="h-full overflow-hidden">
       <div className="flex h-full">
-        <aside className="hidden sm:flex w-52 shrink-0 border-r border-border/50 bg-muted/10 p-3">
-          <div className="w-full flex flex-col gap-1">
-            <div className="px-2 py-1.5">
-              <h2 className="text-sm font-semibold tracking-tight">Settings</h2>
-              <p className="text-[11px] text-muted-foreground/70">Manage OpenBot</p>
-            </div>
-            {SETTINGS_SECTIONS.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => setSettingsSection(section.id)}
-                className={cn(
-                  'w-full rounded-md px-2.5 py-2 text-left text-[13px] transition-colors',
-                  settingsSection === section.id
-                    ? 'bg-muted/70 text-foreground font-medium'
-                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
-                )}
-              >
-                {section.label}
-              </button>
-            ))}
-          </div>
-        </aside>
         <div className="flex-1 min-w-0 h-full">
-          {settingsSection === 'agents' && <AgentsPage />}
-          {settingsSection !== 'agents' && (
-            <div className="h-full overflow-auto">
-              <div className="mx-auto flex max-w-xl flex-col gap-10 px-6 py-10 animate-in fade-in">
-                {settingsSection === 'general' && (
+          <div className="h-full overflow-auto">
+            <div className="mx-auto flex max-w-xl flex-col gap-10 px-6 py-10 animate-in fade-in">
+              {settingsSection === 'general' && (
                   <>
                     <div className="flex flex-col gap-1">
                       <h2 className="text-lg font-semibold tracking-tight">General</h2>
@@ -290,7 +280,7 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                       </div>
                       <Textarea
                         value={profileDraft}
-                        onChange={(e) => setProfileDraft(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setProfileDraft(e.target.value)}
                         placeholder="Tell agents about yourself — your name, preferences, projects, how you like to work..."
                         rows={8}
                         className="font-mono text-xs resize-y"
@@ -333,164 +323,185 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                   </>
                 )}
                 {settingsSection === 'variables' && (
-                  <section className="flex flex-col gap-4 pb-20">
+                  <section className="flex flex-col gap-6 pb-20">
                     <div className="flex flex-col gap-1">
-                      <h2 className="text-lg font-semibold tracking-tight">Variables</h2>
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-lg font-semibold tracking-tight">Variables</h2>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1.5"
+                          onClick={() =>
+                            setVarRows((prev) => [
+                              {
+                                id: crypto.randomUUID(),
+                                key: '',
+                                secret: true,
+                                draft: '',
+                                committedUnchanged: false,
+                              },
+                              ...prev,
+                            ])
+                          }
+                        >
+                          <Plus className="size-3.5" />
+                          Add variable
+                        </Button>
+                      </div>
                       <p className="text-[13px] text-muted-foreground/70">
                         Environment variables stored in{' '}
-                        <code className="rounded bg-muted/50 px-1 py-0.5 text-[11px]">variables.json</code>{' '}
-                        (not in <code className="rounded bg-muted/50 px-1 py-0.5 text-[11px]">config.json</code>
-                        ). Applied to the server process on save and reload.
+                        <code className="rounded bg-muted/50 px-1 py-0.5 text-[11px]">
+                          variables.json
+                        </code>
+                        . Applied to the server process on save.
                       </p>
                     </div>
 
                     {variablesSaveError && (
-                      <p className="rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs text-red-600 dark:text-red-300">
+                      <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                        <AlertCircle className="size-3.5" />
                         {variablesSaveError}
-                      </p>
+                      </div>
                     )}
 
-                    <div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setVarRows((prev) => [
-                            {
-                              id: crypto.randomUUID(),
-                              key: '',
-                              secret: true,
-                              draft: '',
-                              committedUnchanged: false,
-                            },
-                            ...prev,
-                          ])
-                        }
-                      >
-                        Add variable
-                      </Button>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      {varRows.length > 0 && (
-                        <div className="hidden sm:flex items-center gap-2 px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
-                          <span className="w-44">Name</span>
-                          <span className="flex-1">Value</span>
-                          <span className="w-16 text-center">Secret</span>
-                          <span className="w-10"></span>
-                        </div>
-                      )}
-
-                      <div className="flex flex-col gap-2">
-                        {varRows.length === 0 ? (
-                          <p className="py-8 text-center text-xs text-muted-foreground bg-muted/5 rounded-xl border border-dashed border-border/50">
-                            No variables yet.
-                          </p>
-                        ) : (
-                          varRows.map((row) => {
-                            const showMasked =
-                              row.secret && row.committedUnchanged && varValueFocusId !== row.id;
-                            const displayValue = showMasked ? VARIABLE_MASK_DISPLAY : row.draft;
-                            return (
-                              <div
-                                key={row.id}
-                                className="flex flex-col gap-2 rounded-lg border border-border/50 bg-muted/5 p-2 sm:flex-row sm:items-center sm:gap-2"
-                              >
-                                <input
-                                  value={row.key}
-                                  onChange={(e) =>
-                                    setVarRows((prev) =>
-                                      prev.map((r) =>
-                                        r.id === row.id ? { ...r, key: e.target.value } : r,
-                                      ),
-                                    )
-                                  }
-                                  placeholder="NAME"
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  className="w-full shrink-0 rounded-md border border-border/60 bg-background px-2.5 py-1.5 font-mono text-xs transition-colors focus:border-primary/30 focus:outline-none sm:w-44"
-                                />
-                                <input
-                                  type={row.secret ? 'password' : 'text'}
-                                  value={displayValue}
-                                  onChange={(e) =>
-                                    setVarRows((prev) =>
-                                      prev.map((r) =>
-                                        r.id === row.id
-                                          ? {
-                                              ...r,
-                                              draft: e.target.value,
-                                              committedUnchanged: false,
-                                            }
-                                          : r,
-                                      ),
-                                    )
-                                  }
-                                  onFocus={() => setVarValueFocusId(row.id)}
-                                  onBlur={() =>
-                                    setVarValueFocusId((id) => (id === row.id ? null : id))
-                                  }
-                                  placeholder={row.secret ? '••••••••' : 'value'}
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  className="flex-1 rounded-md border border-border/60 bg-background px-2.5 py-1.5 font-mono text-xs transition-colors focus:border-primary/30 focus:outline-none"
-                                />
-                                <div className="flex items-center gap-4 shrink-0 px-1 sm:w-28 sm:justify-end sm:gap-4">
-                                  <label className="flex cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
-                                    <input
-                                      type="checkbox"
-                                      checked={row.secret}
+                    <div className="rounded-md border border-border/50 overflow-hidden">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-muted/30 border-b border-border/50">
+                            <th className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 w-[35%]">Key</th>
+                            <th className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">Value</th>
+                            <th className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 w-16 text-center">Secret</th>
+                            <th className="px-4 py-2 w-10"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/40">
+                          {varRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="py-12 text-center text-xs text-muted-foreground bg-muted/5">
+                                No variables yet.
+                              </td>
+                            </tr>
+                          ) : (
+                            varRows.map((row) => {
+                              const showMasked =
+                                row.secret && row.committedUnchanged && varValueFocusId !== row.id;
+                              const displayValue = showMasked ? VARIABLE_MASK_DISPLAY : row.draft;
+                              return (
+                                <tr key={row.id} className="group hover:bg-muted/5 transition-colors">
+                                  <td className="px-3 py-2">
+                                    <Input
+                                      value={row.key}
+                                      onChange={(e) =>
+                                        setVarRows((prev) =>
+                                          prev.map((r) =>
+                                            r.id === row.id ? { ...r, key: e.target.value } : r,
+                                          ),
+                                        )
+                                      }
+                                      placeholder="KEY"
+                                      autoComplete="off"
+                                      spellCheck={false}
+                                      className="h-8 font-mono text-[11px] bg-transparent border-transparent focus:bg-background focus:border-input shadow-none"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <Input
+                                      type={row.secret && !showMasked ? 'password' : 'text'}
+                                      value={displayValue}
                                       onChange={(e) =>
                                         setVarRows((prev) =>
                                           prev.map((r) =>
                                             r.id === row.id
                                               ? {
                                                   ...r,
-                                                  secret: e.target.checked,
-                                                  committedUnchanged: e.target.checked
-                                                    ? r.committedUnchanged
-                                                    : false,
+                                                  draft: e.target.value,
+                                                  committedUnchanged: false,
                                                 }
                                               : r,
                                           ),
                                         )
                                       }
-                                      className="size-3.5 rounded border-border/60"
+                                      onFocus={() => setVarValueFocusId(row.id)}
+                                      onBlur={() =>
+                                        setVarValueFocusId((id) => (id === row.id ? null : id))
+                                      }
+                                      placeholder={row.secret ? '••••••••' : 'value'}
+                                      autoComplete="off"
+                                      spellCheck={false}
+                                      className="h-8 font-mono text-[11px] bg-transparent border-transparent focus:bg-background focus:border-input shadow-none"
                                     />
-                                    <span className="sm:hidden">Secret</span>
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setVarRows((prev) => prev.filter((r) => r.id !== row.id))
-                                    }
-                                    className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                                    title="Remove variable"
-                                  >
-                                    <TrashIcon />
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
+                                  </td>
+                                  <td className="px-3 py-2 text-center">
+                                    <div className="flex justify-center">
+                                      <Checkbox
+                                        checked={row.secret}
+                                        onChange={(e) =>
+                                          setVarRows((prev) =>
+                                            prev.map((r) =>
+                                              r.id === row.id
+                                                ? {
+                                                    ...r,
+                                                    secret: e.target.checked,
+                                                    committedUnchanged: e.target.checked
+                                                      ? r.committedUnchanged
+                                                      : false,
+                                                  }
+                                                : r,
+                                            ),
+                                          )
+                                        }
+                                        className="size-3.5 border-muted-foreground/40 data-[state=checked]:border-primary"
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setVarRows((prev) => prev.filter((r) => r.id !== row.id))
+                                      }
+                                      className="rounded-md p-1.5 text-muted-foreground/40 hover:bg-destructive/10 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                                      title="Remove variable"
+                                    >
+                                      <Trash2 className="size-3.5" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
                     </div>
 
                     {varRows.length > 0 && (
-                      <div className="flex justify-start pt-2">
+                      <div className="flex items-center gap-3">
                         <Button
                           type="button"
                           disabled={saveVariablesMutation.isPending}
                           onClick={() => saveVariablesMutation.mutate()}
+                          className="min-w-[120px] gap-2"
                         >
-                          {varsSaved
-                            ? 'Saved'
-                            : saveVariablesMutation.isPending
-                              ? 'Saving...'
-                              : 'Save variables'}
+                          {varsSaved ? (
+                            <>
+                              <CheckCircle2 className="size-4" />
+                              Saved
+                            </>
+                          ) : saveVariablesMutation.isPending ? (
+                            'Saving...'
+                          ) : (
+                            <>
+                              <Save className="size-4" />
+                              Save variables
+                            </>
+                          )}
                         </Button>
+                        {varRows.some((r) => r.key === '' || (r.draft === '' && !r.committedUnchanged)) && (
+                          <span className="text-[11px] text-muted-foreground/50 italic">
+                            Some fields are empty
+                          </span>
+                        )}
                       </div>
                     )}
                   </section>
@@ -632,7 +643,6 @@ function SettingsPageWithSections({ defaultSection }: { defaultSection?: Setting
                 )}
               </div>
             </div>
-          )}
         </div>
       </div>
     </div>
@@ -678,25 +688,6 @@ function ThemeIcon({ type }: { type: string }) {
       <rect width="20" height="14" x="2" y="3" rx="2" />
       <line x1="8" x2="16" y1="21" y2="21" />
       <line x1="12" x2="12" y1="17" y2="21" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 6h18" />
-      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
     </svg>
   );
 }
