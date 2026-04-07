@@ -1,5 +1,5 @@
-import { cn } from "../../lib/utils";
-import { ChevronLeft, Settings2, Variable, Puzzle, Cpu } from "lucide-react";
+import { cn } from '../../lib/utils';
+import { ChevronLeft, Settings2, Variable, Puzzle, Cpu } from 'lucide-react';
 
 export type SettingsSection = 'general' | 'variables' | 'plugins' | 'system';
 
@@ -19,7 +19,7 @@ interface SettingsSidebarProps {
 export function SettingsSidebar({ currentSection, onSectionChange, onBack }: SettingsSidebarProps) {
   return (
     <div className="flex flex-col h-full w-full border-r border-border/50 bg-background">
-      <div className="flex items-center gap-2 px-4 h-12 border-b border-border/50 shrink-0">
+      <div className="flex items-center gap-2 px-4 h-14 border-b border-border/50 shrink-0">
         <button
           onClick={onBack}
           className="flex items-center gap-2 px-2 py-1.5 -ml-1 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-all duration-150 group"
@@ -36,7 +36,7 @@ export function SettingsSidebar({ currentSection, onSectionChange, onBack }: Set
             Settings
           </span>
         </div>
-        
+
         <div className="flex flex-col gap-px">
           {SETTINGS_SECTIONS.map((section) => {
             const Icon = section.icon;
@@ -52,10 +52,12 @@ export function SettingsSidebar({ currentSection, onSectionChange, onBack }: Set
                     : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
                 )}
               >
-                <Icon className={cn(
-                  "size-[18px] shrink-0",
-                  currentSection === section.id ? "text-foreground" : "text-muted-foreground/70"
-                )} />
+                <Icon
+                  className={cn(
+                    'size-[18px] shrink-0',
+                    currentSection === section.id ? 'text-foreground' : 'text-muted-foreground/70',
+                  )}
+                />
                 <span className="truncate">{section.label}</span>
               </button>
             );

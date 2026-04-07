@@ -29,14 +29,46 @@ interface AppLayoutProps {
 }
 
 export function AppLayoutProvider({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(true);
-  const [rightOpen, setRightOpen] = useState(false);
-  const toggle = useCallback(() => setOpen((v) => !v), []);
-  const toggleRight = useCallback(() => setRightOpen((v) => !v), []);
+  const [open, setOpen] = useState(() => {
+    const saved = localStorage.getItem('openbot:sidebar:open');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [rightPanel, setRightPanel] = useState<'spec' | 'agent' | null>(() => {
+    const saved = localStorage.getItem('openbot:sidebar:rightPanel');
+    return (saved as 'spec' | 'agent') || null;
+  });
+
+  const toggle = useCallback(() => {
+    setOpen((v) => {
+      const next = !v;
+      localStorage.setItem('openbot:sidebar:open', String(next));
+      return next;
+    });
+  }, []);
+
+  const handleSetOpen = useCallback((v: boolean) => {
+    setOpen(v);
+    localStorage.setItem('openbot:sidebar:open', String(v));
+  }, []);
+
+  const handleSetRightPanel = useCallback((panel: 'spec' | 'agent' | null) => {
+    setRightPanel(panel);
+    if (panel) {
+      localStorage.setItem('openbot:sidebar:rightPanel', panel);
+    } else {
+      localStorage.removeItem('openbot:sidebar:rightPanel');
+    }
+  }, []);
 
   return (
     <SidebarContext.Provider
-      value={{ open, toggle, setOpen, rightOpen, toggleRight, setRightOpen }}
+      value={{
+        open,
+        toggle,
+        setOpen: handleSetOpen,
+        rightPanel,
+        setRightPanel: handleSetRightPanel,
+      }}
     >
       {children}
     </SidebarContext.Provider>
@@ -52,13 +84,13 @@ export function AppLayout({
   rightSidebar,
   rightWidth = 300,
   rightWidthClassName,
-  rightOpen,
   onHeaderClick,
   settingsSection,
   onSettingsSectionChange,
 }: AppLayoutProps) {
   const rightRailUsesClasses = Boolean(rightWidthClassName);
-  const { open, toggle } = useSidebar();
+  const { open, toggle, rightPanel } = useSidebar();
+  const rightOpen = Boolean(rightPanel);
   const { data: conversations = [] } = useConversations();
   const { data: agents = [] } = useQuery({
     queryKey: ['agents'],

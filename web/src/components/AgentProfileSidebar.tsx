@@ -1,26 +1,25 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type AgentConfig } from "../lib/api";
-import { useModels } from "../hooks/use-models";
-import { ModelSelector } from "./ModelSelector";
-import { AgentAvatar } from "./AgentAvatar";
-import { Button } from "./ui/button";
-import { XIcon, FileTextIcon, SettingsIcon, DatabaseIcon } from "lucide-react";
-import { Textarea } from "./ui/textarea";
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api, type AgentConfig } from '../lib/api';
+import { useModels } from '../hooks/use-models';
+import { ModelSelector } from './ModelSelector';
+import { AgentAvatar } from './AgentAvatar';
+import { Button } from './ui/button';
+import { XIcon, FileTextIcon, SettingsIcon, DatabaseIcon } from 'lucide-react';
+import { Textarea } from './ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
-type Tab = "instructions" | "configure" | "state";
+type Tab = 'instructions' | 'configure' | 'state';
 
 type PluginRow = { name: string; configText: string };
 
 function configToPluginRows(config: AgentConfig): PluginRow[] {
   return (config.plugins || []).map((plugin) => {
-    if (typeof plugin === "string") return { name: plugin, configText: "" };
+    if (typeof plugin === 'string') return { name: plugin, configText: '' };
     return {
       name: plugin.name,
       configText:
-        typeof plugin.config === "undefined"
-          ? ""
-          : JSON.stringify(plugin.config, null, 2),
+        typeof plugin.config === 'undefined' ? '' : JSON.stringify(plugin.config, null, 2),
     };
   });
 }
@@ -39,47 +38,43 @@ interface AgentProfileSidebarProps {
   onClose?: () => void;
 }
 
-export function AgentProfileSidebar({
-  agent,
-  conversationId,
-  onClose,
-}: AgentProfileSidebarProps) {
+export function AgentProfileSidebar({ agent, conversationId, onClose }: AgentProfileSidebarProps) {
   const queryClient = useQueryClient();
   const { data: models = [] } = useModels();
-  const [tab, setTab] = useState<Tab>("instructions");
+  const [tab, setTab] = useState<Tab>('instructions');
 
-  const [mdContent, setMdContent] = useState("");
+  const [mdContent, setMdContent] = useState('');
   const [isMdSaving, setIsMdSaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState(agent.name);
-  const [description, setDescription] = useState("");
-  const [model, setModel] = useState("");
-  const [runtime, setRuntime] = useState("llm");
-  const [image, setImage] = useState("");
-  const [subscribeText, setSubscribeText] = useState("");
+  const [description, setDescription] = useState('');
+  const [model, setModel] = useState('');
+  const [runtime, setRuntime] = useState('llm');
+  const [image, setImage] = useState('');
+  const [subscribeText, setSubscribeText] = useState('');
   const [pluginRows, setPluginRows] = useState<PluginRow[]>([]);
 
-  const effectiveName = agent.isDefault ? "default" : agent.id;
+  const effectiveName = agent.isDefault ? 'default' : agent.id;
   const isCodeOnly = !agent.isDefault && agent.hasAgentMd === false;
 
   const { data: registryPlugins = [] } = useQuery({
-    queryKey: ["registry", "plugins"],
+    queryKey: ['registry', 'plugins'],
     queryFn: api.getRegistryPlugins,
   });
 
   const { data: stateData, isLoading: isStateLoading } = useQuery({
-    queryKey: ["conversationState", conversationId],
+    queryKey: ['conversationState', conversationId],
     queryFn: () => api.getConversationState(conversationId),
-    enabled: !!conversationId && tab === "state",
+    enabled: !!conversationId && tab === 'state',
   });
 
   const { isLoading, data: profileData } = useQuery({
-    queryKey: ["agentProfile", effectiveName],
+    queryKey: ['agentProfile', effectiveName],
     queryFn: async () => {
       const [md, config] = await Promise.all([
-        api.getAgentMd(effectiveName).catch(() => ""),
+        api.getAgentMd(effectiveName).catch(() => ''),
         agent.isDefault
           ? api.getConfig().then((c) => ({
               name: c.name,
@@ -95,23 +90,23 @@ export function AgentProfileSidebar({
       if (agent.isDefault) {
         const c = config as { name: string; description: string; model: string; image?: string };
         setName(c.name || agent.name);
-        setDescription(c.description || "");
-        setModel(c.model || "");
-        setImage(c.image || "");
+        setDescription(c.description || '');
+        setModel(c.model || '');
+        setImage(c.image || '');
       } else {
         const c = config as AgentConfig;
         setName(c.name || agent.name);
-        setDescription(c.description || "");
-        setModel(c.model || "");
+        setDescription(c.description || '');
+        setModel(c.model || '');
         setRuntime(
-          typeof c.runtime === "string"
+          typeof c.runtime === 'string'
             ? c.runtime
-            : typeof c.runtime === "object" && c.runtime !== null
-            ? (c.runtime as any).name
-            : "llm",
+            : typeof c.runtime === 'object' && c.runtime !== null
+              ? (c.runtime as any).name
+              : 'llm',
         );
-        setImage(c.image || "");
-        setSubscribeText((c.subscribe || []).join(", "));
+        setImage(c.image || '');
+        setSubscribeText((c.subscribe || []).join(', '));
         setPluginRows(configToPluginRows(c));
       }
 
@@ -123,12 +118,12 @@ export function AgentProfileSidebar({
   const updateMdMutation = useMutation({
     mutationFn: (md: string) => api.updateAgentMd(effectiveName, md),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agentProfile", effectiveName] });
+      queryClient.invalidateQueries({ queryKey: ['agentProfile', effectiveName] });
       setIsMdSaving(false);
     },
     onError: () => {
       setIsMdSaving(false);
-    }
+    },
   });
 
   const handleSaveInstructions = () => {
@@ -174,12 +169,12 @@ export function AgentProfileSidebar({
         }
 
         const subscribe = subscribeText
-          .split(",")
+          .split(',')
           .map((s) => s.trim())
           .filter(Boolean);
 
         if (!name.trim() || !description.trim()) {
-          setError("Name and description are required");
+          setError('Name and description are required');
           setSaving(false);
           return;
         }
@@ -188,28 +183,26 @@ export function AgentProfileSidebar({
           name: name.trim(),
           description: description.trim(),
           model: model.trim() || undefined,
-          runtime: runtime.trim() || "llm",
+          runtime: runtime.trim() || 'llm',
           image: image.trim() || undefined,
           plugins,
           subscribe,
         });
       }
 
-      await queryClient.invalidateQueries({ queryKey: ["agents"] });
-      await queryClient.invalidateQueries({ queryKey: ["agentProfile", effectiveName] });
+      await queryClient.invalidateQueries({ queryKey: ['agents'] });
+      await queryClient.invalidateQueries({ queryKey: ['agentProfile', effectiveName] });
       setError(null);
     } catch (err) {
       console.error(err);
-      setError("Failed to save changes");
+      setError('Failed to save changes');
     } finally {
       setSaving(false);
     }
   };
 
   const selectedPluginNames = pluginRows.map((r) => r.name).filter(Boolean);
-  const nextPluginToAdd = registryPlugins.find(
-    (p) => !selectedPluginNames.includes(p.name),
-  );
+  const nextPluginToAdd = registryPlugins.find((p) => !selectedPluginNames.includes(p.name));
 
   if (isLoading) {
     return (
@@ -227,7 +220,7 @@ export function AgentProfileSidebar({
         <div className="flex items-center justify-between gap-3 w-full">
           <div className="flex items-center gap-2.5 min-w-0">
             <AgentAvatar
-              name={agent.isDefault ? "default" : agent.id}
+              name={agent.isDefault ? 'default' : agent.id}
               label={agent.name}
               imageUrl={agent.image}
               className="size-7 shrink-0 rounded-md"
@@ -235,7 +228,9 @@ export function AgentProfileSidebar({
             <div className="min-w-0">
               <h2 className="text-sm font-semibold text-foreground truncate">{agent.name}</h2>
               {agent.isDefault && (
-                <p className="text-[10px] text-blue-500 font-medium uppercase tracking-wider">Default Agent</p>
+                <p className="text-[10px] text-blue-500 font-medium uppercase tracking-wider">
+                  Default Agent
+                </p>
               )}
             </div>
           </div>
@@ -252,45 +247,31 @@ export function AgentProfileSidebar({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-border/50 px-4 shrink-0">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setTab("instructions")}
-            className={`relative flex items-center gap-1.5 px-1 py-2.5 text-xs font-medium transition-colors ${
-              tab === "instructions" ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
-            }`}
-          >
-            <FileTextIcon className="size-3.5" />
-            Instructions
-            {tab === "instructions" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground rounded-full" />}
-          </button>
-          <button
-            onClick={() => setTab("configure")}
-            className={`relative flex items-center gap-1.5 px-1 py-2.5 text-xs font-medium transition-colors ${
-              tab === "configure" ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
-            }`}
-          >
-            <SettingsIcon className="size-3.5" />
-            Configure
-            {tab === "configure" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground rounded-full" />}
-          </button>
-          <button
-            onClick={() => setTab("state")}
-            className={`relative flex items-center gap-1.5 px-1 py-2.5 text-xs font-medium transition-colors ${
-              tab === "state" ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
-            }`}
-          >
-            <DatabaseIcon className="size-3.5" />
-            State
-            {tab === "state" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground rounded-full" />}
-          </button>
+      <Tabs
+        value={tab}
+        onValueChange={(value: string) => setTab(value as Tab)}
+        className="flex-1 h-full overflow-hidden flex flex-col min-h-0 gap-0"
+      >
+        {/* Tabs */}
+        <div className="border-b border-border/50 px-4 shrink-0">
+          <TabsList variant="line">
+            <TabsTrigger value="instructions">
+              <FileTextIcon className="size-3.5" />
+              Instructions
+            </TabsTrigger>
+            <TabsTrigger value="configure">
+              <SettingsIcon className="size-3.5" />
+              Configure
+            </TabsTrigger>
+            <TabsTrigger value="state">
+              <DatabaseIcon className="size-3.5" />
+              State
+            </TabsTrigger>
+          </TabsList>
         </div>
-      </div>
 
-      {/* Tab Content */}
-      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-        {tab === "instructions" && (
+        {/* Tab Content */}
+        <TabsContent value="instructions" className="m-0">
           <InstructionsTab
             isCodeOnly={isCodeOnly}
             folder={agent.folder}
@@ -300,8 +281,8 @@ export function AgentProfileSidebar({
             onSave={handleSaveInstructions}
             hasChanges={mdContent !== profileData?.md}
           />
-        )}
-        {tab === "configure" && (
+        </TabsContent>
+        <TabsContent value="configure" className="m-0">
           <ConfigureTab
             isDefault={agent.isDefault}
             isCodeOnly={isCodeOnly}
@@ -326,8 +307,8 @@ export function AgentProfileSidebar({
             saving={saving}
             onSave={handleSaveConfig}
           />
-        )}
-        {tab === "state" && (
+        </TabsContent>
+        <TabsContent value="state" className="m-0">
           <div className="flex-1 flex flex-col min-h-0">
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar relative">
               {isStateLoading ? (
@@ -346,8 +327,8 @@ export function AgentProfileSidebar({
               )}
             </div>
           </div>
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -374,7 +355,16 @@ function InstructionsTab({
       <div className="flex-1 flex items-center justify-center p-6 text-center">
         <div className="flex flex-col gap-3 items-center max-w-xs">
           <div className="size-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
               <line x1="16" y1="13" x2="8" y2="13" />
@@ -383,7 +373,9 @@ function InstructionsTab({
           </div>
           <h3 className="text-sm font-semibold text-foreground">Code-only Agent</h3>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            This agent has no <code className="text-[11px] px-1 py-0.5 rounded bg-muted">AGENT.md</code>. Edit files directly in the source folder.
+            This agent has no{' '}
+            <code className="text-[11px] px-1 py-0.5 rounded bg-muted">AGENT.md</code>. Edit files
+            directly in the source folder.
           </p>
           {folder && (
             <button
@@ -413,9 +405,9 @@ function InstructionsTab({
           onClick={onSave}
           disabled={isSaving || !hasChanges}
           className="w-full"
-          size="sm"
+          variant="secondary"
         >
-          {isSaving ? "Saving..." : "Save Instructions"}
+          {isSaving ? 'Saving...' : 'Save Instructions'}
         </Button>
       </div>
     </div>
@@ -480,149 +472,175 @@ function ConfigureTab({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto custom-scrollbar">
-      <div className="p-4 flex flex-col gap-5">
+    <div className="flex-1 h-full min-h-0 flex flex-col">
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+        <div className="p-4 flex flex-col gap-5">
+          {error && (
+            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+              {error}
+            </p>
+          )}
+
+          <Field label="Name">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm transition-all focus:border-foreground/30 focus:outline-none"
+              placeholder="Agent name"
+            />
+          </Field>
+
+          <Field label="Description">
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full bg-background/50 px-3 py-2 text-sm transition-all focus-visible:border-foreground/30 focus-visible:ring-0 resize-y"
+              placeholder="Short summary"
+            />
+          </Field>
+
+          <Field label="Model (optional)">
+            <ModelSelector
+              value={model}
+              models={models}
+              onChange={setModel}
+              placeholder="openai/gpt-4o"
+            />
+          </Field>
+
+          {!isDefault && (
+            <>
+              <Field label="Runtime">
+                <select
+                  value={runtime}
+                  onChange={(e) => setRuntime(e.target.value)}
+                  className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm transition-all focus:border-foreground/30 focus:outline-none"
+                >
+                  <option value="llm">Default (LLM + Orchestrator)</option>
+                  {registryPlugins
+                    .filter(
+                      (p) =>
+                        p.name !== 'shell' && p.name !== 'file-system' && p.name !== 'approval',
+                    )
+                    .map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+
+              <Field label="Image URL (optional)">
+                <input
+                  value={image}
+                  onChange={(e) => setImage(e.target.value)}
+                  className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm transition-all focus:border-foreground/30 focus:outline-none"
+                  placeholder="https://..."
+                />
+              </Field>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                    Plugins
+                  </label>
+                  <button
+                    onClick={() => {
+                      if (!nextPluginToAdd) return;
+                      setPluginRows((rows) => [
+                        ...rows,
+                        { name: nextPluginToAdd.name, configText: '' },
+                      ]);
+                    }}
+                    disabled={!nextPluginToAdd}
+                    className="rounded-md border border-border/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                  >
+                    + Add
+                  </button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {pluginRows.map((row, index) => (
+                    <div
+                      key={index}
+                      className="rounded-lg border border-border/60 bg-background/50 p-2.5 transition-all hover:bg-muted/10"
+                    >
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={row.name}
+                          onChange={(e) => {
+                            const next = [...pluginRows];
+                            next[index] = { ...next[index], name: e.target.value };
+                            setPluginRows(next);
+                          }}
+                          className="flex-1 rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs focus:outline-none"
+                        >
+                          {[
+                            ...registryPlugins,
+                            ...(!registryPlugins.some((p) => p.name === row.name) && row.name
+                              ? [{ name: row.name, description: 'Custom plugin' }]
+                              : []),
+                          ].map((plugin) => {
+                            const taken = pluginRows.some(
+                              (item, i) => i !== index && item.name === plugin.name,
+                            );
+                            return (
+                              <option key={plugin.name} value={plugin.name} disabled={taken}>
+                                {plugin.name}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <button
+                          onClick={() =>
+                            setPluginRows((rows) => rows.filter((_, i) => i !== index))
+                          }
+                          className="rounded-md p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                          title="Remove"
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M3 6h18" />
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Field label="Subscribed Events">
+                <input
+                  value={subscribeText}
+                  onChange={(e) => setSubscribeText(e.target.value)}
+                  className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm transition-all focus:border-foreground/30 focus:outline-none"
+                  placeholder="event:chat:message, ..."
+                />
+              </Field>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-border/50 p-4 bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/60">
         {error && (
-          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+          <p className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
             {error}
           </p>
         )}
-
-        <Field label="Name">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm transition-all focus:border-foreground/30 focus:outline-none"
-            placeholder="Agent name"
-          />
-        </Field>
-
-        <Field label="Description">
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            className="w-full bg-background/50 px-3 py-2 text-sm transition-all focus-visible:border-foreground/30 focus-visible:ring-0 resize-y"
-            placeholder="Short summary"
-          />
-        </Field>
-
-        <Field label="Model (optional)">
-          <ModelSelector
-            value={model}
-            models={models}
-            onChange={setModel}
-            placeholder="openai/gpt-4o"
-          />
-        </Field>
-
-        {!isDefault && (
-          <>
-            <Field label="Runtime">
-              <select
-                value={runtime}
-                onChange={(e) => setRuntime(e.target.value)}
-                className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm transition-all focus:border-foreground/30 focus:outline-none"
-              >
-                <option value="llm">Default (LLM + Orchestrator)</option>
-                {registryPlugins
-                  .filter((p) => p.name !== "shell" && p.name !== "file-system" && p.name !== "approval")
-                  .map((p) => (
-                    <option key={p.name} value={p.name}>{p.name}</option>
-                  ))}
-              </select>
-            </Field>
-
-            <Field label="Image URL (optional)">
-              <input
-                value={image}
-                onChange={(e) => setImage(e.target.value)}
-                className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm transition-all focus:border-foreground/30 focus:outline-none"
-                placeholder="https://..."
-              />
-            </Field>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                  Plugins
-                </label>
-                <button
-                  onClick={() => {
-                    if (!nextPluginToAdd) return;
-                    setPluginRows((rows) => [...rows, { name: nextPluginToAdd.name, configText: "" }]);
-                  }}
-                  disabled={!nextPluginToAdd}
-                  className="rounded-md border border-border/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-                >
-                  + Add
-                </button>
-              </div>
-              <div className="flex flex-col gap-2">
-                {pluginRows.map((row, index) => (
-                  <div
-                    key={index}
-                    className="rounded-lg border border-border/60 bg-background/50 p-2.5 transition-all hover:bg-muted/10"
-                  >
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={row.name}
-                        onChange={(e) => {
-                          const next = [...pluginRows];
-                          next[index] = { ...next[index], name: e.target.value };
-                          setPluginRows(next);
-                        }}
-                        className="flex-1 rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs focus:outline-none"
-                      >
-                        {[
-                          ...registryPlugins,
-                          ...(!registryPlugins.some((p) => p.name === row.name) && row.name
-                            ? [{ name: row.name, description: "Custom plugin" }]
-                            : []),
-                        ].map((plugin) => {
-                          const taken = pluginRows.some(
-                            (item, i) => i !== index && item.name === plugin.name,
-                          );
-                          return (
-                            <option key={plugin.name} value={plugin.name} disabled={taken}>
-                              {plugin.name}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <button
-                        onClick={() => setPluginRows((rows) => rows.filter((_, i) => i !== index))}
-                        className="rounded-md p-1 text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors"
-                        title="Remove"
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 6h18" />
-                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <Field label="Subscribed Events">
-              <input
-                value={subscribeText}
-                onChange={(e) => setSubscribeText(e.target.value)}
-                className="w-full rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-sm transition-all focus:border-foreground/30 focus:outline-none"
-                placeholder="event:chat:message, ..."
-              />
-            </Field>
-          </>
-        )}
-
-        <div className="pt-2 pb-4">
-          <Button onClick={onSave} disabled={saving} className="w-full">
-            {saving ? "Saving..." : "Save Configuration"}
-          </Button>
-        </div>
+        <Button onClick={onSave} disabled={saving} className="w-full" variant="secondary">
+          {saving ? 'Saving...' : 'Save Configuration'}
+        </Button>
       </div>
     </div>
   );

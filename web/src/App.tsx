@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ChatProvider } from './hooks/use-chat';
 import { useCallback, useEffect } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -17,6 +17,7 @@ import { AgentProfileSidebar } from './components/AgentProfileSidebar';
 import { Button } from './components/ui/button';
 import { InfoIcon } from 'lucide-react';
 import type { SettingsSection } from './components/layout/SettingsSidebar';
+import { useSidebar } from './hooks/use-sidebar';
 
 export function App() {
   const queryClient = useQueryClient();
@@ -24,11 +25,47 @@ export function App() {
   const { data: conversations = [] } = useConversations();
   const { data: config, isLoading: configLoading } = useConfig();
   const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: api.getAgents });
-  const [rightPanel, setRightPanel] = useState<'spec' | 'agent' | null>(null);
-  const defaultAgent = agents.find(a => a.isDefault);
-  const activeConversationId = conversationId || (defaultAgent ? `dm_${defaultAgent.id || defaultAgent.name}` : (conversations[0]?.id || ''));
 
-  const activeConversation = conversations.find((c) => c.id === activeConversationId);
+  return (
+    <ThemeProvider>
+      <AppLayoutProvider>
+        <AppContent
+          queryClient={queryClient}
+          conversationId={conversationId}
+          path={path}
+          navigate={navigate}
+          ensureConversationInUrl={ensureConversationInUrl}
+          conversations={conversations}
+          config={config}
+          configLoading={configLoading}
+          agents={agents}
+        />
+      </AppLayoutProvider>
+    </ThemeProvider>
+  );
+}
+
+function AppContent({
+  queryClient,
+  conversationId,
+  path,
+  navigate,
+  ensureConversationInUrl,
+  conversations,
+  config,
+  configLoading,
+  agents,
+}: any) {
+  const { rightPanel, setRightPanel } = useSidebar();
+
+  const defaultAgent = agents.find((a: any) => a.isDefault);
+  const activeConversationId =
+    conversationId ||
+    (defaultAgent
+      ? `dm_${defaultAgent.id || defaultAgent.name}`
+      : conversations[0]?.id || '');
+
+  const activeConversation = conversations.find((c: any) => c.id === activeConversationId);
   const dmAgentIdFromRoute = activeConversationId.startsWith('dm_')
     ? activeConversationId.slice(3)
     : undefined;
@@ -37,8 +74,9 @@ export function App() {
       ? activeConversation.agentId
       : dmAgentIdFromRoute;
   const activeAgent = resolvedDmAgentId
-    ? agents.find((a) => a.id === resolvedDmAgentId || a.name === resolvedDmAgentId)
+    ? agents.find((a: any) => a.id === resolvedDmAgentId || a.name === resolvedDmAgentId)
     : null;
+
   const markConversationRead = useCallback(
     async (id: string) => {
       if (!id) return;
@@ -81,7 +119,7 @@ export function App() {
       'client:invalidate': async (chunk: any) => {
         if (Array.isArray(chunk.data?.tags)) {
           queryClient.invalidateQueries({
-            predicate: (query) => {
+            predicate: (query: any) => {
               const queryTags = (query.meta as any)?.tags as string[] | undefined;
               return queryTags?.some((tag) => chunk.data.tags.includes(tag)) ?? false;
             },
@@ -95,10 +133,6 @@ export function App() {
     }),
     [queryClient, ensureConversationInUrl, activeConversationId, markConversationRead],
   );
-
-  useEffect(() => {
-    setRightPanel(null);
-  }, [activeConversationId]);
 
   useEffect(() => {
     if (!conversationId && activeConversationId) {
@@ -118,87 +152,99 @@ export function App() {
     return () => window.removeEventListener('focus', handleFocus);
   }, [activeConversationId, markConversationRead]);
 
+  const handleNavigate = useCallback(
+    (path: string) => {
+      const params = new URLSearchParams(path.split('?')[1] || '');
+      const nextConversationId = params.get('conversationId');
+
+      if (nextConversationId && nextConversationId !== activeConversationId) {
+        if (nextConversationId.startsWith('dm_')) {
+          setRightPanel('agent');
+        } else if (nextConversationId.startsWith('channel_')) {
+          // Only switch to spec if a panel is already open
+          if (rightPanel) {
+            setRightPanel('spec');
+          }
+        }
+      }
+      navigate(path);
+    },
+    [activeConversationId, navigate, rightPanel, setRightPanel],
+  );
+
+  useEffect(() => {
+    if (tab === 'settings' || tab === 'agents') {
+      setRightPanel(null);
+    }
+  }, [tab, setRightPanel]);
+
   if (configLoading) return <LoadingScreen />;
   if (config && !config.configured) {
     return (
-      <ThemeProvider>
-        <Onboarding defaultModelId={config.defaultModelId} defaultModels={config.defaultModels} />
-      </ThemeProvider>
+      <Onboarding defaultModelId={config.defaultModelId} defaultModels={config.defaultModels} />
     );
   }
 
   return (
     <ChatProvider conversationId={activeConversationId} eventHandlers={eventHandlers}>
-      <ThemeProvider>
-        <AppLayoutProvider>
-          <AppLayout
-            conversationId={activeConversationId}
-            currentTab={tab === 'agents' ? 'settings' : tab}
-            onNavigate={navigate}
-            rightOpen={Boolean(rightPanel)}
-            rightWidthClassName="w-[640px] 2xl:w-[840px]"
-            settingsSection={tab === 'settings' || tab === 'agents' ? settingsSection : undefined}
-            onSettingsSectionChange={setSettingsSection}
-            rightSidebar={
-              rightPanel === 'spec' ? (
-                <ChannelSpecSidebar
-                  conversationId={activeConversationId}
-                  onClose={() => setRightPanel(null)}
-                />
-              ) : rightPanel === 'agent' && activeAgent ? (
-                <AgentProfileSidebar
-                  agent={activeAgent}
-                  conversationId={activeConversationId}
-                  onClose={() => setRightPanel(null)}
-                />
-              ) : null
-            }
-            rightActions={
-              tab === 'chat' ? (
-                <Button
-                  type="button"
-                  variant={rightPanel ? 'secondary' : 'ghost'}
-                  size="sm"
-                  onClick={() => {
-                    const nextPanel = activeConversationId.startsWith('channel_') ? 'spec' : 'agent';
-                    setRightPanel((panel) => (panel === nextPanel ? null : nextPanel));
-                  }}
-                  className="h-8 size-8 p-0"
-                  aria-pressed={Boolean(rightPanel)}
-                  title={rightPanel ? 'Hide info' : 'Show info'}
-                >
-                  <InfoIcon className="size-4" />
-                </Button>
-              ) : null
-            }
-            onHeaderClick={() => {
-              const nextPanel = activeConversationId.startsWith('channel_') ? 'spec' : 'agent';
-              setRightPanel((panel) => (panel === nextPanel ? null : nextPanel));
-            }}
-          >
-            {tab === 'chat' && activeConversationId && (
-              <ChatPage
-                conversationId={activeConversationId}
-              />
-            )}
-            {tab === 'chat' && !activeConversationId && <NoConversationsPlaceholder />}
-            {tab === 'agents' && (
-              <SettingsPage
-                defaultSection="agents"
-                currentSection={settingsSection}
-                onSectionChange={setSettingsSection}
-              />
-            )}
-            {tab === 'automations' && <AutomationsPage />}
-            {tab === 'settings' && (
-              <SettingsPage
-                currentSection={settingsSection}
-                onSectionChange={setSettingsSection}
-              />
-            )}
-          </AppLayout>
-        </AppLayoutProvider>
-      </ThemeProvider>
+      <AppLayout
+        conversationId={activeConversationId}
+        currentTab={tab === 'agents' ? 'settings' : tab}
+        onNavigate={handleNavigate}
+        rightWidthClassName="w-[640px] 2xl:w-[840px]"
+        settingsSection={tab === 'settings' || tab === 'agents' ? settingsSection : undefined}
+        onSettingsSectionChange={setSettingsSection}
+        rightSidebar={
+          rightPanel === 'spec' ? (
+            <ChannelSpecSidebar
+              conversationId={activeConversationId}
+              onClose={() => setRightPanel(null)}
+            />
+          ) : rightPanel === 'agent' && activeAgent ? (
+            <AgentProfileSidebar
+              agent={activeAgent}
+              conversationId={activeConversationId}
+              onClose={() => setRightPanel(null)}
+            />
+          ) : null
+        }
+        rightActions={
+          tab === 'chat' ? (
+            <Button
+              type="button"
+              variant={rightPanel ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => {
+                const nextPanel = activeConversationId.startsWith('channel_') ? 'spec' : 'agent';
+                setRightPanel(rightPanel === nextPanel ? null : nextPanel);
+              }}
+              className="h-8 size-8 p-0"
+              aria-pressed={Boolean(rightPanel)}
+              title={rightPanel ? 'Hide info' : 'Show info'}
+            >
+              <InfoIcon className="size-4" />
+            </Button>
+          ) : null
+        }
+        onHeaderClick={() => {
+          const nextPanel = activeConversationId.startsWith('channel_') ? 'spec' : 'agent';
+          setRightPanel(rightPanel === nextPanel ? null : nextPanel);
+        }}
+      >
+        {tab === 'chat' && activeConversationId && <ChatPage conversationId={activeConversationId} />}
+        {tab === 'chat' && !activeConversationId && <NoConversationsPlaceholder />}
+        {tab === 'agents' && (
+          <SettingsPage
+            defaultSection={'agents' as SettingsSection}
+            currentSection={settingsSection}
+            onSectionChange={setSettingsSection}
+          />
+        )}
+        {tab === 'automations' && <AutomationsPage />}
+        {tab === 'settings' && (
+          <SettingsPage currentSection={settingsSection} onSectionChange={setSettingsSection} />
+        )}
+      </AppLayout>
     </ChatProvider>
   );
 }

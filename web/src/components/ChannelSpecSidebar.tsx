@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 import { XIcon, UsersIcon, FileTextIcon, DatabaseIcon, ScrollTextIcon } from "lucide-react";
 import { Textarea } from "./ui/textarea";
 import { AgentAvatar } from "./AgentAvatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
 type ChannelTab = "spec" | "participants" | "state" | "events";
 
@@ -100,53 +101,33 @@ export function ChannelSpecSidebar({
         </div>
       </div>
 
-      <div className="border-b border-border/50 px-4 shrink-0">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setTab("spec")}
-            className={`relative flex items-center gap-1.5 px-1 py-2.5 text-xs font-medium transition-colors ${
-              tab === "spec" ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
-            }`}
-          >
-            <FileTextIcon className="size-3.5" />
-            Spec
-            {tab === "spec" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground rounded-full" />}
-          </button>
-          <button
-            onClick={() => setTab("participants")}
-            className={`relative flex items-center gap-1.5 px-1 py-2.5 text-xs font-medium transition-colors ${
-              tab === "participants" ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
-            }`}
-          >
-            <UsersIcon className="size-3.5" />
-            Participants
-            {tab === "participants" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground rounded-full" />}
-          </button>
-          <button
-            onClick={() => setTab("state")}
-            className={`relative flex items-center gap-1.5 px-1 py-2.5 text-xs font-medium transition-colors ${
-              tab === "state" ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
-            }`}
-          >
-            <DatabaseIcon className="size-3.5" />
-            State
-            {tab === "state" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground rounded-full" />}
-          </button>
-          <button
-            onClick={() => setTab("events")}
-            className={`relative flex items-center gap-1.5 px-1 py-2.5 text-xs font-medium transition-colors ${
-              tab === "events" ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
-            }`}
-          >
-            <ScrollTextIcon className="size-3.5" />
-            Events
-            {tab === "events" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground rounded-full" />}
-          </button>
+      <Tabs
+        value={tab}
+        onValueChange={(value: string) => setTab(value as ChannelTab)}
+        className="flex-1 h-full overflow-hidden flex flex-col min-h-0 gap-0"
+      >
+        <div className="border-b border-border/50 px-4 shrink-0">
+          <TabsList variant="line">
+            <TabsTrigger value="spec">
+              <FileTextIcon className="size-3.5" />
+              Specification
+            </TabsTrigger>
+            <TabsTrigger value="participants">
+              <UsersIcon className="size-3.5" />
+              Participants
+            </TabsTrigger>
+            <TabsTrigger value="state">
+              <DatabaseIcon className="size-3.5" />
+              State
+            </TabsTrigger>
+            <TabsTrigger value="events">
+              <ScrollTextIcon className="size-3.5" />
+              Events
+            </TabsTrigger>
+          </TabsList>
         </div>
-      </div>
 
-      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-        {tab === "spec" && (
+        <TabsContent value="spec" className="m-0">
           <div className="flex-1 flex flex-col min-h-0">
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar relative">
               <Textarea
@@ -161,17 +142,17 @@ export function ChannelSpecSidebar({
                 onClick={handleSaveSpec}
                 disabled={isSaving || editedSpec === specData?.spec}
                 className="w-full"
-                size="sm"
+                variant="secondary"
               >
-                {isSaving ? "Saving..." : "Save Spec"}
+                {isSaving ? "Saving..." : "Save Specification"}
               </Button>
             </div>
           </div>
-        )}
+        </TabsContent>
 
-        {tab === "participants" && (
+        <TabsContent value="participants" className="m-0">
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               {participatingAgents.length > 0 ? (
                 participatingAgents.map((agentId: string) => {
                   const agent = agents.find((a: any) => a.id === agentId || a.name === agentId);
@@ -200,9 +181,9 @@ export function ChannelSpecSidebar({
               )}
             </div>
           </div>
-        )}
+        </TabsContent>
 
-        {tab === "state" && (
+        <TabsContent value="state" className="m-0">
           <div className="flex-1 flex flex-col min-h-0">
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar relative">
               {isStateLoading ? (
@@ -221,9 +202,9 @@ export function ChannelSpecSidebar({
               )}
             </div>
           </div>
-        )}
+        </TabsContent>
 
-        {tab === "events" && (
+        <TabsContent value="events" className="m-0">
           <div className="flex-1 flex flex-col min-h-0">
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar relative">
               {isEventsLoading ? (
@@ -241,8 +222,8 @@ export function ChannelSpecSidebar({
               )}
             </div>
           </div>
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

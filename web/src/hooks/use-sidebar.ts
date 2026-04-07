@@ -4,18 +4,16 @@ export interface SidebarContextValue {
   open: boolean;
   toggle: () => void;
   setOpen: (open: boolean) => void;
-  rightOpen: boolean;
-  toggleRight: () => void;
-  setRightOpen: (open: boolean) => void;
+  rightPanel: 'spec' | 'agent' | null;
+  setRightPanel: (panel: 'spec' | 'agent' | null) => void;
 }
 
 export const SidebarContext = createContext<SidebarContextValue>({
   open: true,
   toggle: () => {},
   setOpen: () => {},
-  rightOpen: false,
-  toggleRight: () => {},
-  setRightOpen: () => {},
+  rightPanel: null,
+  setRightPanel: () => {},
 });
 
 export function useSidebar() {
