@@ -19,6 +19,14 @@ export function getCopyableTextForItem(
     }
   }
 
+  if (event.type === "agent:handoff") {
+    const d = event.data;
+    const from = d?.fromAgentId ?? "";
+    const to = d?.toAgentId ?? "";
+    const body = typeof d?.content === "string" ? d.content : "";
+    return `Handoff @${from} → @${to}: ${body}`.trim();
+  }
+
   const raw =
     event.data?.content ?? event.data?.result ?? event.data?.message;
   if (raw == null) return "";
@@ -45,7 +53,11 @@ export function hasRenderableContent(message: { content: any }): boolean {
       return true;
     }
     if (TEXT_EVENT_TYPES.has(event.type)) {
-      if (event.type === "agent:input" || event.type === "agent:delegation")
+      if (
+        event.type === "user:input" ||
+        event.type === "agent:handoff" ||
+        event.type === "agent:delegation"
+      )
         return true;
       const rawContent =
         event.data?.content ?? event.data?.result ?? event.data?.message;

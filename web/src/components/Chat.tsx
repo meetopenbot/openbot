@@ -9,13 +9,14 @@ export function Chat({
   placeholder?: ReactNode;
   placeholderNode?: any;
 }) {
-  const { messages, streaming, messageReactions, setMessageReaction } =
+  const { messages, streaming, activeAgentId, messageReactions, setMessageReaction } =
     useChat();
 
   return (
     <ChatView
       messages={messages}
       streaming={streaming}
+      activeAgentId={activeAgentId}
       placeholder={placeholder}
       placeholderNode={placeholderNode}
       messageReactions={messageReactions}

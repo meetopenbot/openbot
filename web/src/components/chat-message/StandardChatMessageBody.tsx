@@ -2,6 +2,27 @@ import { WidgetRenderer } from "../WidgetRenderer";
 
 /** Body for a single timeline event. */
 export function StandardChatMessageBody({ event }: { event: any }) {
+  if (event.type === "agent:handoff") {
+    const d = event.data ?? {};
+    const from = typeof d.fromAgentId === "string" ? d.fromAgentId : "?";
+    const to = typeof d.toAgentId === "string" ? d.toAgentId : "?";
+    const body = typeof d.content === "string" ? d.content : "";
+    return (
+      <div className="rounded-md border border-border/50 bg-muted/25 px-3 py-2 text-[13px] text-foreground/90 whitespace-pre-wrap">
+        <span className="text-muted-foreground">Handoff</span>{" "}
+        <span className="font-semibold text-foreground">@{from}</span>
+        <span className="text-muted-foreground"> → </span>
+        <span className="font-semibold text-foreground">@{to}</span>
+        {body ? (
+          <>
+            {"\n\n"}
+            {body}
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
   if (event.type === "ui") {
     return (
       <WidgetRenderer block={event.data} eventMeta={event.meta} />

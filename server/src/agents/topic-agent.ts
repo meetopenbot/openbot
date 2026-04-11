@@ -42,7 +42,7 @@ export const topicAgent =
           // Notify the client to refresh the conversations list in the sidebar
           yield {
             type: "client:invalidate",
-            data: { tags: ["conversations"] },
+            data: { tags: ["conversations", "channels"] },
           } as any;
         }
       } catch (error) {

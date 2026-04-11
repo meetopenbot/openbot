@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode, useMemo } from "react";
 import { useConfig } from "../hooks/use-config";
 import { WidgetRenderer } from "./WidgetRenderer";
 import type { MessageReactionSentiment } from "../hooks/use-chat";
+import { AgentAvatar } from "./AgentAvatar";
+import { useAgentAvatarDisplay } from "../hooks/use-agent-avatar-display";
 import {
   ChatMessageItem,
   hasRenderableContent,
@@ -9,14 +11,37 @@ import {
   type ChatRenderableItem,
 } from "./chat-message";
 
-function StreamingIndicator() {
+function StreamingIndicator({ agentId }: { agentId?: string }) {
+  const avatar = useAgentAvatarDisplay(agentId, false);
+
   return (
-    <div className="flex items-start w-full px-5 py-3 animate-fade-in">
-      <div className="w-[36px] mr-3 shrink-0" />
-      <div className="flex items-center gap-1.5 py-1 px-2.5 bg-muted/30 rounded-full border border-border/20">
-        <span className="size-1 rounded-full bg-foreground/40 animate-[pulse-dot_1.4s_ease-in-out_infinite]" />
-        <span className="size-1 rounded-full bg-foreground/40 animate-[pulse-dot_1.4s_ease-in-out_0.2s_infinite]" />
-        <span className="size-1 rounded-full bg-foreground/40 animate-[pulse-dot_1.4s_ease-in-out_0.4s_infinite]" />
+    <div className="flex flex-col w-full px-6 py-3 mt-1 animate-fade-in">
+      <div className="flex w-full items-start gap-4">
+        <div className="w-[32px] shrink-0">
+          <AgentAvatar
+            name={avatar.name}
+            label={avatar.label}
+            imageUrl={avatar.imageUrl}
+            className="size-8 rounded-md shadow-sm"
+          />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[13px] font-semibold text-foreground/90">
+              {avatar.label}
+            </span>
+            <span className="text-[11px] text-muted-foreground/30 font-medium italic">
+              thinking...
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 py-1">
+            <span className="size-1 rounded-full bg-foreground/40 animate-[pulse-dot_1.4s_ease-in-out_infinite]" />
+            <span className="size-1 rounded-full bg-foreground/40 animate-[pulse-dot_1.4s_ease-in-out_0.2s_infinite]" />
+            <span className="size-1 rounded-full bg-foreground/40 animate-[pulse-dot_1.4s_ease-in-out_0.4s_infinite]" />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -49,6 +74,7 @@ function DelegationBlock({ children }: { children: React.ReactNode }) {
 export function ChatView({
   messages,
   streaming,
+  activeAgentId,
   placeholder,
   placeholderNode,
   messageReactions = {},
@@ -56,6 +82,7 @@ export function ChatView({
 }: {
   messages: any[];
   streaming?: boolean;
+  activeAgentId?: string | null;
   placeholder?: ReactNode;
   placeholderNode?: any;
   messageReactions?: Record<string, MessageReactionSentiment>;
@@ -77,60 +104,60 @@ export function ChatView({
     visibleMessages.forEach((msg, msgIndex) => {
       const topLevelEvents: any[] = [];
 
-      const content = Array.isArray(msg.content)
-        ? msg.content
-        : [
-            {
-              type: msg.role === "user" ? "agent:input" : "agent:output",
-              data: { content: msg.content },
-              meta: { timestamp: (msg as any).timestamp || Date.now() },
-            },
-          ];
+        const content = Array.isArray(msg.content)
+          ? msg.content
+          : [
+              {
+                type: msg.role === "user" ? "user:input" : "agent:output",
+                data: { content: msg.content },
+                meta: { timestamp: (msg as any).timestamp || Date.now() },
+              },
+            ];
 
-      content.forEach((event: any, eventIndex: number) => {
-        if (event.type === "agent:output-delta") {
-          const hasFinalOutput = content.some(
-            (e: any) => e.type === "agent:output",
-          );
-          if (hasFinalOutput) return;
-          const nextDelta = content
-            .slice(eventIndex + 1)
-            .find((e: any) => e.type === "agent:output-delta");
-          if (nextDelta) return;
-        }
-
-        if (event.type === "ui" || TEXT_EVENT_TYPES.has(event.type)) {
-          if (
-            event.type === "ui" &&
-            (event.data?.placement === "sidebar" ||
-              event.data?.placement === "attention")
-          )
-            return;
-
-          if (TEXT_EVENT_TYPES.has(event.type)) {
-            const rawContent =
-              event.data?.content ??
-              event.data?.result ??
-              event.data?.message;
-            const delta = event.data?.delta;
-            if (
-              !rawContent &&
-              !delta &&
-              event.type !== "agent:input"
-            )
-              return;
-            if (
-              typeof rawContent === "string" &&
-              !rawContent.trim() &&
-              !delta &&
-              event.type !== "agent:input"
-            )
-              return;
+        content.forEach((event: any, eventIndex: number) => {
+          if (event.type === "agent:output-delta") {
+            const hasFinalOutput = content.some(
+              (e: any) => e.type === "agent:output",
+            );
+            if (hasFinalOutput) return;
+            const nextDelta = content
+              .slice(eventIndex + 1)
+              .find((e: any) => e.type === "agent:output-delta");
+            if (nextDelta) return;
           }
 
-          topLevelEvents.push(event);
-        }
-      });
+          if (event.type === "ui" || TEXT_EVENT_TYPES.has(event.type)) {
+            if (
+              event.type === "ui" &&
+              (event.data?.placement === "sidebar" ||
+                event.data?.placement === "attention")
+            )
+              return;
+
+            if (TEXT_EVENT_TYPES.has(event.type)) {
+              const rawContent =
+                event.data?.content ??
+                event.data?.result ??
+                event.data?.message;
+              const delta = event.data?.delta;
+              if (
+                !rawContent &&
+                !delta &&
+                event.type !== "user:input"
+              )
+                return;
+              if (
+                typeof rawContent === "string" &&
+                !rawContent.trim() &&
+                !delta &&
+                event.type !== "user:input"
+              )
+                return;
+            }
+
+            topLevelEvents.push(event);
+          }
+        });
 
       topLevelEvents.forEach((item, idx) => {
         const eventTimestamp =
@@ -244,7 +271,7 @@ export function ChatView({
           </DelegationBlock>
         );
       })}
-      {streaming && <StreamingIndicator />}
+      {streaming && <StreamingIndicator agentId={activeAgentId ?? undefined} />}
       <div ref={bottomRef} className="h-0" />
     </div>
   );

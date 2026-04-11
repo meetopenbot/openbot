@@ -2,6 +2,7 @@
 export const TEXT_EVENT_TYPES = new Set([
   "agent:output",
   "agent:output-delta",
-  "agent:input",
+  "user:input",
+  "agent:handoff",
   "agent:delegation",
 ]);

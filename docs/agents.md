@@ -68,7 +68,7 @@ export const agent: TSAgentDefinition = {
       model,
       system: "You are a specialized TS Agent...",
       toolDefinitions: { /* custom tools */ },
-      // I/O defaults to standardized: agent:input / agent:output
+      // I/O defaults to standardized: user:input / agent:output
     }));
   },
   capabilities: {

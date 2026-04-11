@@ -5,7 +5,7 @@ import { Chat } from '../Chat';
 import { Composer } from '../Composer';
 import { AttentionRail } from '../AttentionRail';
 import { AgentAvatar } from '../AgentAvatar';
-import { useConversations } from '../../hooks/use-sessions';
+import { useConversations, useChannels } from '../../hooks/use-sessions';
 import { useSession } from '../../hooks/use-session';
 import { api } from '../../lib/api';
 import { HashIcon } from 'lucide-react';
@@ -34,6 +34,7 @@ function ChatPlaceholder() {
   const { send } = useChat();
   const { conversationId } = useSession();
   const { data: conversations = [] } = useConversations();
+  const { data: channels = [] } = useChannels();
   const { data: agents = [] } = useQuery({
     queryKey: ['agents'],
     queryFn: api.getAgents,
@@ -45,9 +46,9 @@ function ChatPlaceholder() {
   });
   const isChannelConversation = conversationId.startsWith('channel_');
 
-  const activeConversation = conversations.find(
-    (conversation) => conversation.id === conversationId,
-  );
+  const activeConversation =
+    conversations.find((conversation) => conversation.id === conversationId) ||
+    channels.find((conversation) => conversation.id === conversationId);
   const dmAgentIdFromRoute = conversationId.startsWith('dm_') ? conversationId.slice(3) : undefined;
   const resolvedAgentId = activeConversation?.agentId || dmAgentIdFromRoute;
   const activeAgent = resolvedAgentId
@@ -91,7 +92,7 @@ function ChatPlaceholder() {
               key={s.label}
               onClick={() =>
                 send({
-                  type: 'agent:input',
+                  type: 'user:input',
                   meta:
                     !isChannelConversation && resolvedAgentId
                       ? { agentId: resolvedAgentId }

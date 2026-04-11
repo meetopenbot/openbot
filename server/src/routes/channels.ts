@@ -5,11 +5,17 @@ import {
   loadChannelSpec,
   saveChannelSpec,
   normalizeConversationId,
+  listConversations,
 } from '../services/conversation.js';
 import type { ServerContext } from './context.js';
 
 export function createChannelsRouter(_ctx: ServerContext) {
   const router = Router();
+  
+  router.get('/', async (_req, res) => {
+    const channels = await listConversations('channel');
+    res.json(channels);
+  });
 
   router.post('/', async (req, res) => {
     const { name } = req.body as { name?: string };

@@ -253,7 +253,7 @@ export const llmPlugin =
       system,
       toolDefinitions = {},
       actionEventPrefix = 'action:',
-      promptInputType = 'agent:input',
+      promptInputType = 'user:input',
       actionResultInputType = 'action:result',
       completionEventType = 'agent:output',
       usageEventType = 'usage:update',
@@ -355,6 +355,7 @@ export const llmPlugin =
       });
 
       if (outputSchema) {
+        /*
         for await (const delta of result.partialOutputStream) {
           if (!silent) {
             yield {
@@ -363,6 +364,7 @@ export const llmPlugin =
             } as any;
           }
         }
+        */
 
         const finalObject = await result.output;
         assistantMessage.content = JSON.stringify(finalObject);
@@ -374,6 +376,7 @@ export const llmPlugin =
           } as any;
         }
       } else {
+        /*
         for await (const delta of result.textStream) {
           assistantMessage.content += delta;
           if (!silent) {
@@ -383,6 +386,10 @@ export const llmPlugin =
             } as any;
           }
         }
+        */
+
+        const text = await result.text;
+        assistantMessage.content = text;
       }
 
       const assistantText = assistantMessage.content as string;
@@ -467,14 +474,28 @@ export const llmPlugin =
       }
     }
 
-    // Handle user text input
-    builder.on(promptInputType, async function* (event, context) {
+    const handlePromptLikeInput = async function* (event: any, context: RuntimeContext) {
       const content = typeof event.data?.content === 'string' ? event.data.content : '';
       const attachments = Array.isArray(event.data?.attachments)
         ? event.data.attachments
         : undefined;
-      yield* routeToLLM({ role: 'user', content, attachments }, context);
-    });
+      const invokedByAgentId =
+        event.type === 'agent:invoke' &&
+        typeof event.meta?.invokedByAgentId === 'string' &&
+        event.meta.invokedByAgentId.trim() !== ''
+          ? event.meta.invokedByAgentId.trim()
+          : undefined;
+
+      const userTurn: SimpleMessage = { role: 'user', content, attachments };
+      if (invokedByAgentId) {
+        userTurn.meta = { invokedByAgentId, agentId: invokedByAgentId };
+      }
+      yield* routeToLLM(userTurn, context);
+    };
+
+    // User text (`user:input`) and agent-to-agent invokes (`agent:invoke`) share the same LLM path.
+    builder.on(promptInputType, handlePromptLikeInput);
+    builder.on('agent:invoke', handlePromptLikeInput);
 
     // Feed action results back as system-role feedback to the model.
     builder.on(actionResultInputType, async function* (event, context) {

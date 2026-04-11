@@ -17,6 +17,56 @@ export const toTitleCaseFromSlug = (value: string) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ') || 'Agent';
 
+const AVATAR_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif'] as const;
+const AVATAR_FILE_NAMES = ['avatar', 'icon', 'image', 'logo'] as const;
+
+/**
+ * First on-disk avatar asset for an agent, using the same rules as `GET /api/agents/:name/avatar`.
+ */
+export async function resolveLocalAgentAvatarFilePath(
+  name: string,
+  resolvedBaseDir: string,
+  defaultName: string,
+): Promise<string | null> {
+  let agentFolder: string | null = null;
+  if (name === defaultName || name === 'default') {
+    agentFolder = resolvedBaseDir;
+  } else {
+    agentFolder = await resolveAgentFolder(name, resolvedBaseDir);
+  }
+
+  const searchDirs = [
+    name === defaultName || name === 'default'
+      ? path.join(resolvedBaseDir, 'assets')
+      : agentFolder
+        ? path.join(agentFolder, 'assets')
+        : path.join(resolvedBaseDir, 'agents', name, 'assets'),
+    path.join(process.cwd(), 'server', 'src', 'agents', name, 'assets'),
+    path.join(process.cwd(), 'server', 'src', 'assets', 'agents', name),
+    path.join(process.cwd(), 'server', 'src', 'agents', 'assets'),
+    path.join(process.cwd(), 'server', 'src', 'assets'),
+  ];
+
+  for (const dir of searchDirs) {
+    for (const fileName of AVATAR_FILE_NAMES) {
+      for (const ext of AVATAR_EXTENSIONS) {
+        const isAgentSpecificDir =
+          dir.includes(name) || (agentFolder !== null && dir.includes(agentFolder));
+        const baseName = dir.endsWith('assets') && !isAgentSpecificDir ? name : fileName;
+        const p = path.join(dir, `${baseName}${ext}`);
+        try {
+          await fs.access(p);
+          return p;
+        } catch {
+          // continue
+        }
+        if (baseName === name) break;
+      }
+    }
+  }
+  return null;
+}
+
 export const resolveAgentFolder = async (
   agentIdOrName: string,
   resolvedBaseDir: string,

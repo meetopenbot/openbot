@@ -26,7 +26,7 @@ You can start a run with a simple POST request:
 curl \
   -H "Content-Type: application/json" \
   -H "x-openbot-conversation-id: dm_default" \
-  -d '{"type":"agent:input","data":{"content":"Hello!"}}' \
+  -d '{"type":"user:input","data":{"content":"Hello!"}}' \
   http://localhost:4001/api/runs
 ```
 

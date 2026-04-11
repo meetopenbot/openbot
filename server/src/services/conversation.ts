@@ -294,7 +294,10 @@ export async function loadConversationEventsRaw(conversationId: string): Promise
   }
 }
 
-export async function listConversations(userId = "you"): Promise<Array<{
+export async function listConversations(
+  kind?: "dm" | "channel",
+  userId = "you",
+): Promise<Array<{
   id: string;
   kind: "dm" | "channel";
   title?: string;
@@ -319,7 +322,7 @@ export async function listConversations(userId = "you"): Promise<Array<{
     participatingAgents?: string[];
   }> = [];
 
-  const directories = [CONVERSATIONS_DIR, CHANNELS_DIR];
+  const directories = kind === "dm" ? [CONVERSATIONS_DIR] : kind === "channel" ? [CHANNELS_DIR] : [CONVERSATIONS_DIR, CHANNELS_DIR];
   for (const dir of directories) {
     if (fs.existsSync(dir)) {
       try {

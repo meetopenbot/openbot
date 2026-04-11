@@ -26,10 +26,35 @@ export interface AttachmentRef {
   url: string;
 }
 
-export type AgentInputEvent = ChatEventBase<"agent:input", {
+export type UserInputEvent = ChatEventBase<"user:input", {
   content: string;
   attachments?: AttachmentRef[];
 }>;
+
+/** First-class timeline row: one agent routed work to another (server or future emitters). */
+export type AgentHandoffEvent = ChatEventBase<
+  "agent:handoff",
+  {
+    handoffId: string;
+    fromAgentId: string;
+    toAgentId: string;
+    content: string;
+  }
+>;
+
+/**
+ * Internal trigger for “run this agent on this text” without impersonating a user `user:input`.
+ * Melony always re-emits the triggering event first; the server skips persisting that echo
+ * because `agent:handoff` is the user-visible anchor.
+ */
+export type AgentInvokeEvent = ChatEventBase<
+  "agent:invoke",
+  {
+    content: string;
+    attachments?: AttachmentRef[];
+    handoffId?: string;
+  }
+>;
 
 /** Timeline anchor for agent-to-agent handoff. */
 export type AgentDelegationEvent = ChatEventBase<
@@ -92,7 +117,9 @@ export type RunEvent = ChatEventBase<
 >;
 
 export type ConversationEvent = (
-  | AgentInputEvent
+  | UserInputEvent
+  | AgentHandoffEvent
+  | AgentInvokeEvent
   | AgentDelegationEvent
   | AgentOutputEvent
   | AgentOutputDeltaEvent
@@ -117,12 +144,6 @@ export type RunJob = {
   conversationId: string;
   runId: string;
   event: ConversationEvent;
-  delegation?: {
-    parentDelegationId: string;
-    toolCallId: string;
-    leadAgentId: string;
-    depth: number;
-  };
 };
 
 /**

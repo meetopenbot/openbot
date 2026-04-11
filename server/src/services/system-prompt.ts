@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { RuntimeContext } from "melony";
-import { ConversationState, ConversationEvent } from "../app/types.js";
+import { ConversationState, ConversationEvent, SimpleMessage } from "../app/types.js";
 import { RuntimeRegistry } from "../registry/runtime-registry.js";
 import { createMemoryModule, type MemoryModule } from "../plugins/memory.js";
 import { loadChannelSpec, loadConversationEvents } from "./conversation.js";
@@ -19,8 +19,9 @@ function expandPath(p: string): string {
 }
 
 const BROADCAST_EVENT_TYPES = new Set([
-  "agent:input",
+  "user:input",
   "agent:output",
+  "agent:handoff",
   "agent:delegation",
 ]);
 
@@ -40,7 +41,7 @@ function formatActivityEntry(event: Record<string, any>): string {
   const agentId = event.meta?.agentId;
   const content = data?.content ?? "";
 
-  if (type === "agent:input") {
+  if (type === "user:input") {
     const sender = agentId ? `user → @${agentId}` : "user";
     return `[${sender}] ${truncateText(content, MAX_ENTRY_CHARS)}`;
   }
@@ -54,6 +55,13 @@ function formatActivityEntry(event: Record<string, any>): string {
     const from = agentId || "agent";
     const to = data?.targetAgentId || "agent";
     return `[${from} → @${to}] ${truncateText(content, MAX_ENTRY_CHARS)}`;
+  }
+
+  if (type === "agent:handoff") {
+    const from = data?.fromAgentId || agentId || "agent";
+    const to = data?.toAgentId || "agent";
+    const body = typeof data?.content === "string" ? data.content : "";
+    return `[handoff ${from} → @${to}] ${truncateText(body, MAX_ENTRY_CHARS)}`;
   }
 
   return "";
@@ -203,11 +211,31 @@ export function createSystemPromptBuilder(options: SystemPromptOptions) {
 
     // ── Guidelines ───────────────────────────────────────────────────
     const isChannel = conversationId?.startsWith("channel_");
+
+    const msgs = (state.messages ?? []) as SimpleMessage[];
+    const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+    const handoffFromAgentId =
+      lastUser &&
+      typeof (lastUser.meta as any)?.invokedByAgentId === "string" &&
+      (lastUser.meta as any).invokedByAgentId.trim() !== "" &&
+      (lastUser.meta as any).invokedByAgentId !== currentAgentId
+        ? String((lastUser.meta as any).invokedByAgentId).trim()
+        : undefined;
+
+    const handoffGuidance = handoffFromAgentId
+      ? `
+<agent_handoff>
+Your latest user turn was routed to you by another agent (@${handoffFromAgentId}) via a channel handoff (not a direct composer message).
+When you are done, include @${handoffFromAgentId} in your reply so they can continue the thread for the user.
+</agent_handoff>`
+      : "";
+
     parts.push(`<guidelines>
 You are interacting directly with the user. Focus on solving their request using your tools.
-You can collaborate with other agents using the "delegate" tool to delegate tasks or ask questions.
-When delegating multiple steps, do them strictly in order: one delegate call, wait for its result, then the next.${isChannel ? `
-When working in a channel, review <channel_activity> to understand what other agents have already done. Build on their work instead of repeating it. Reference the <channel_spec> for the shared goals.` : ""}
+You can collaborate with other agents by @mentioning them in your response (e.g., "Hey @os, can you list the files?") or using the "delegate" tool.
+When you mention another agent, they will see your message and respond independently in the channel.
+Review <channel_activity> to understand what other agents have already done. Build on their work instead of repeating it.${isChannel ? `
+Reference the <channel_spec> for the shared goals.` : ""}${handoffGuidance}
 Use memory tools to manage persistent knowledge about the user and workspace:
 - \`remember(content, tags)\`: Store important facts, preferences, or context
 - \`recall(query, tags)\`: Search long-term memory before answering questions that might relate to past interactions

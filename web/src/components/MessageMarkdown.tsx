@@ -39,7 +39,7 @@ function MentionText({ children: text }: { children: string }) {
 
   if (!text || agents.length === 0) return <>{text}</>;
 
-  const mentionPattern = /@(\w+)/g;
+  const mentionPattern = /@([a-z0-9-_]+)/gi;
   const parts: (string | React.ReactElement)[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;

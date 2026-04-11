@@ -41,7 +41,7 @@ Plugins provide the actual tools and logic used by agents.
 ## 🔄 Common Workflows
 
 ### @mention Agent Invocation Flow
-1. **User Input** → `agent:input` event with `@agentId` in content.
+1. **User Input** → `user:input` event with `@agentId` in content.
 2. **Router Parses** → Extracts @mention, strips it from content, resolves target agent.
 3. **Agent Execution** → Target agent's runtime processes the message, streams `agent:output` events.
 

@@ -29,15 +29,6 @@ export function delegationPlugin(deps: DelegationPluginDeps) {
       ) {
         const { agentId, content, toolCallId } = event.data;
         const currentAgentId = (context.state as any).agentId ?? 'default';
-        const depth: number = (context.state as any)._delegationDepth ?? 0;
-
-        if (depth >= MAX_DEPTH) {
-          yield {
-            type: 'action:result',
-            data: { action: 'delegate', toolCallId, result: 'Max delegation depth reached.' },
-          } as ConversationEvent;
-          return;
-        }
 
         const runtime = deps.getAgentRuntimes().get(agentId);
         if (!runtime) {
@@ -48,22 +39,23 @@ export function delegationPlugin(deps: DelegationPluginDeps) {
           return;
         }
 
-        // Emit the delegation event. The server run-loop intercepts this to:
-        //   1. Queue an independent sub-run for the target agent
-        //   2. Resume the lead agent with the result when the sub-run finishes
-        // The lead agent's turn ends here — no blocking wait.
+        // Just output the delegation as a message in the channel.
+        // The server-side mention detection will pick this up and trigger the target agent.
         yield {
-          type: 'agent:delegation',
-          id: generateId(),
-          data: {
-            targetAgentId: agentId,
-            content,
-            toolCallId,
-            leadAgentId: currentAgentId,
-            depth: depth + 1,
-          },
+          type: 'agent:output',
+          data: { content: `@${agentId} ${content}` },
           meta: { agentId: currentAgentId },
         } as ConversationEvent;
+
+        // yield {
+        //   type: 'action:result',
+        //   data: {
+        //     action: 'delegate',
+        //     toolCallId,
+        //     result: `Message sent to @${agentId}. Waiting for their response in the channel.`,
+        //   },
+        //   meta: { agentId: currentAgentId },
+        // } as ConversationEvent;
       },
     );
   };

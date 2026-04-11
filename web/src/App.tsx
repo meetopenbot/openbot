@@ -4,7 +4,7 @@ import { useCallback, useEffect } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useSession } from './hooks/use-session';
 import { useConfig } from './hooks/use-config';
-import { useConversations } from './hooks/use-sessions';
+import { useConversations, useChannels } from './hooks/use-sessions';
 import { api } from './lib/api';
 import { AppLayout, AppLayoutProvider } from './components/layout/AppLayout';
 import { ChatPage } from './components/pages/ChatPage';
@@ -23,6 +23,7 @@ export function App() {
   const queryClient = useQueryClient();
   const { conversationId, path, navigate, ensureConversationInUrl } = useSession();
   const { data: conversations = [] } = useConversations();
+  const { data: channels = [] } = useChannels();
   const { data: config, isLoading: configLoading } = useConfig();
   const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: api.getAgents });
 
@@ -36,6 +37,7 @@ export function App() {
           navigate={navigate}
           ensureConversationInUrl={ensureConversationInUrl}
           conversations={conversations}
+          channels={channels}
           config={config}
           configLoading={configLoading}
           agents={agents}
@@ -52,6 +54,7 @@ function AppContent({
   navigate,
   ensureConversationInUrl,
   conversations,
+  channels,
   config,
   configLoading,
   agents,
@@ -63,9 +66,11 @@ function AppContent({
     conversationId ||
     (defaultAgent
       ? `dm_${defaultAgent.id || defaultAgent.name}`
-      : conversations[0]?.id || '');
+      : conversations[0]?.id || channels[0]?.id || '');
 
-  const activeConversation = conversations.find((c: any) => c.id === activeConversationId);
+  const activeConversation =
+    conversations.find((c: any) => c.id === activeConversationId) ||
+    channels.find((c: any) => c.id === activeConversationId);
   const dmAgentIdFromRoute = activeConversationId.startsWith('dm_')
     ? activeConversationId.slice(3)
     : undefined;
@@ -83,6 +88,7 @@ function AppContent({
       try {
         await api.markConversationRead(id);
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['channels'] });
       } catch (error) {
         console.error('Failed to mark conversation read:', error);
       }
@@ -113,7 +119,7 @@ function AppContent({
 
   const eventHandlers = useMemo(
     () => ({
-      'agent:input': async () => {
+      'user:input': async () => {
         ensureConversationInUrl(activeConversationId);
       },
       'client:invalidate': async (chunk: any) => {
@@ -128,6 +134,7 @@ function AppContent({
       },
       'stream:done': async () => {
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['channels'] });
         await markConversationRead(activeConversationId);
       },
     }),

@@ -11,11 +11,11 @@ import {
 } from '../services/conversation.js';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import type { ConversationState, ConversationEvent } from './types.js';
+import type { ConversationState, ConversationEvent, RunJob } from './types.js';
 
 import { startAutomationWorker } from '../services/automation-worker.js';
 import { listAutomations, type AutomationRecord } from '../services/automations.js';
-import { summarizeAgentEventValue } from './router.js';
+import { findFirstMention } from './router.js';
 import { createIndexRouter } from '../routes/index.js';
 import { createModelsRouter } from '../routes/models.js';
 import { createAutomationsRouter } from '../routes/automations.js';
@@ -112,7 +112,7 @@ export async function startServer(options: ServerOptions = {}) {
 
     const iterator = runtime.run(
       {
-        type: 'agent:input',
+        type: 'user:input',
         data: { content },
       },
       { runId, state },
@@ -156,18 +156,6 @@ export async function startServer(options: ServerOptions = {}) {
 
   const conversationSubscribers = new Map<string, Set<(event: ConversationEvent) => void>>();
 
-  type RunJob = {
-    conversationId: string;
-    runId: string;
-    event: ConversationEvent;
-    delegation?: {
-      parentDelegationId: string;
-      toolCallId: string;
-      leadAgentId: string;
-      depth: number;
-    };
-  };
-
   const runQueue: RunJob[] = [];
   const activeRuns = new Set<string>();
   const runConversationById = new Map<string, string>();
@@ -209,7 +197,7 @@ export async function startServer(options: ServerOptions = {}) {
         const job = runQueue.shift();
         if (!job) continue;
 
-        const { conversationId, runId, event, delegation } = job;
+        const { conversationId, runId, event } = job;
         runConversationById.set(runId, conversationId);
         runAgentsById.set(runId, new Set());
         const state: ConversationState = (await loadConversationState(conversationId)) ?? {};
@@ -217,20 +205,16 @@ export async function startServer(options: ServerOptions = {}) {
         if (!state.cwd) state.cwd = process.cwd();
         if (!state.openbotRoot) state.openbotRoot = process.cwd();
 
-        // For delegated sub-runs, set depth to prevent infinite recursion
-        if (delegation) {
-          (state as any)._delegationDepth = delegation.depth;
-        }
-
         activeRuns.add(runId);
         await appendConversationEvent(conversationId, runId, {
           type: 'run:started',
           data: { runId },
         } as ConversationEvent);
 
-        let lastSubAgentOutput = '';
         const iterator = runtime.run(event, { runId, state });
         try {
+          const agentIds = runtime.registry.getAgents().map((a) => a.id);
+
           for await (const chunk of iterator) {
             if (cancelledRuns.has(runId)) {
               await iterator.return?.();
@@ -248,47 +232,51 @@ export async function startServer(options: ServerOptions = {}) {
               }
             }
 
-            // --- DELEGATION HANDOFF ---
-            // When the lead agent delegates, queue an independent sub-run.
-            if (chunk.type === 'agent:delegation') {
-              const { targetAgentId, content, toolCallId, leadAgentId, depth } = chunk.data;
-              if (targetAgentId && content) {
-                console.log(`[delegation] Handoff: ${leadAgentId} → ${targetAgentId}`);
+            // --- @MENTION DETECTION ---
+            // When an agent mentions another agent in their output, queue an independent run.
+            if (chunk.type === 'agent:output') {
+              const content = chunk.data?.content;
+              const mention = findFirstMention(content, agentIds);
+
+              // Trigger the mentioned agent if it's not the one currently speaking
+              if (mention && mention !== agentId) {
+                const fromAgent =
+                  typeof agentId === 'string' && agentId.trim() !== '' ? agentId.trim() : 'default';
+                const handoffId = generateId();
+                const invokeId = generateId();
+
+                console.log(`[mention] Handoff: ${fromAgent} → ${mention}`);
+
+                await appendConversationEvent(conversationId, runId, {
+                  type: 'agent:handoff',
+                  id: handoffId,
+                  data: {
+                    handoffId,
+                    fromAgentId: fromAgent,
+                    toAgentId: mention,
+                    content,
+                  },
+                  meta: { agentId: fromAgent },
+                } as ConversationEvent);
+
                 runQueue.push({
                   conversationId,
-                  runId: `run_delegated_${generateId()}`,
+                  runId: `run_mention_${generateId()}`,
                   event: {
-                    type: 'agent:input',
-                    data: { content },
-                    meta: { agentId: targetAgentId, delegation: true },
+                    type: 'agent:invoke',
+                    id: invokeId,
+                    data: { content, handoffId },
+                    meta: {
+                      agentId: mention,
+                      invokedByAgentId: fromAgent,
+                    },
                   } as ConversationEvent,
-                  delegation: {
-                    parentDelegationId: chunk.id!,
-                    toolCallId,
-                    leadAgentId: leadAgentId || 'default',
-                    depth: typeof depth === 'number' ? depth : 1,
-                  },
                 });
               }
             }
 
-            // For delegated sub-runs, skip logging the synthetic agent:input
-            // (Melony re-emits the triggering event; logging it makes UI show "You")
-            if (delegation && chunk.type === 'agent:input') continue;
-
-            // For delegated sub-runs, tag events so the UI can nest them
-            if (delegation) {
-              chunk.meta = {
-                ...(chunk.meta || {}),
-                delegationId: delegation.parentDelegationId,
-              };
-
-              // Capture the last meaningful output for the callback
-              if (chunk.type === 'agent:output' || chunk.type === 'agent:output-delta') {
-                const summary = summarizeAgentEventValue(chunk);
-                if (summary) lastSubAgentOutput = summary;
-              }
-            }
+            // Melony always re-emits the triggering event; `agent:invoke` is internal (handoff is the UX row).
+            if (chunk.type === 'agent:invoke') continue;
 
             await appendConversationEvent(conversationId, runId, chunk);
           }
@@ -297,32 +285,6 @@ export async function startServer(options: ServerOptions = {}) {
             type: cancelledRuns.has(runId) ? 'run:cancelled' : 'run:finished',
             data: { runId },
           } as ConversationEvent);
-
-          // --- DELEGATION CALLBACK ---
-          // When a delegated sub-run finishes, resume the lead agent with the tool result.
-          if (delegation && !cancelledRuns.has(runId)) {
-            const { toolCallId, leadAgentId } = delegation;
-            const feedback = lastSubAgentOutput.trim() || '(Sub-agent produced no output)';
-            const MAX_FEEDBACK_LEN = 12_000;
-            console.log(`[delegation] Callback: resuming ${leadAgentId} with tool result`);
-
-            runQueue.push({
-              conversationId,
-              runId: `run_resume_${generateId()}`,
-              event: {
-                type: 'action:result',
-                data: {
-                  action: 'delegate',
-                  toolCallId,
-                  result:
-                    feedback.length > MAX_FEEDBACK_LEN
-                      ? feedback.slice(0, MAX_FEEDBACK_LEN) + '\n…(truncated)'
-                      : feedback,
-                },
-                meta: { agentId: leadAgentId },
-              } as ConversationEvent,
-            });
-          }
         } catch (error) {
           console.error('Background run failed:', error);
           await appendConversationEvent(conversationId, runId, {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useConversations } from '../../hooks/use-sessions';
+import { useConversations, useChannels } from '../../hooks/use-sessions';
 import { useSidebar } from '../../hooks/use-sidebar';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
@@ -21,6 +21,7 @@ interface AppSidebarProps {
 export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSidebarProps) {
   const { open } = useSidebar();
   const { data: conversations = [] } = useConversations();
+  const { data: channelsData = [] } = useChannels();
   const queryClient = useQueryClient();
   const [showCreateBot, setShowCreateBot] = useState(false);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
@@ -38,19 +39,18 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
     mutationFn: (id: string) => api.deleteChannel(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['channels'] });
       onNavigate('/');
     },
   });
 
-  const channels = conversations
-    .filter((conversation) => conversation.kind === 'channel')
-    .sort((a, b) => {
-      const labelA = (a.title || a.id).toLowerCase();
-      const labelB = (b.title || b.id).toLowerCase();
-      const byLabel = labelA.localeCompare(labelB, undefined, { sensitivity: 'base' });
-      if (byLabel !== 0) return byLabel;
-      return a.id.localeCompare(b.id);
-    });
+  const channels = channelsData.sort((a, b) => {
+    const labelA = (a.title || a.id).toLowerCase();
+    const labelB = (b.title || b.id).toLowerCase();
+    const byLabel = labelA.localeCompare(labelB, undefined, { sensitivity: 'base' });
+    if (byLabel !== 0) return byLabel;
+    return a.id.localeCompare(b.id);
+  });
 
   const defaultAgent = allAgents.find((a) => a.isDefault);
   const customAgents = allAgents.filter((a) => !a.isDefault);

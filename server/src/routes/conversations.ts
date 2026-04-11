@@ -15,7 +15,7 @@ export function createConversationsRouter(ctx: ServerContext) {
   const router = Router();
 
   router.get('/', async (_req, res) => {
-    const conversations = await listConversations();
+    const conversations = await listConversations('dm');
     res.json(conversations);
   });
 

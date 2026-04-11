@@ -35,7 +35,7 @@ export const channelPlugin = (): MelonyPlugin<ConversationState, ConversationEve
       // Notify client to refresh conversation list
       yield {
         type: 'client:invalidate',
-        data: { tags: ['conversations'] },
+        data: { tags: ['conversations', 'channels'] },
       } as any;
 
     } catch (error: any) {

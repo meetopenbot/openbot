@@ -8,6 +8,7 @@ interface ChatContextType {
   send: (payload: any) => Promise<void>;
   stop: () => void;
   streaming: boolean;
+  activeAgentId: string | null;
   events: any[];
   messages: any[];
   messageReactions: Record<string, MessageReactionSentiment>;
@@ -60,25 +61,36 @@ export function ChatProvider({
     enabled: Boolean(conversationId),
   });
 
-  const activeRunId = useMemo(() => {
+  const { activeRunId, activeAgentId } = useMemo(() => {
     let depth = 0;
     let latestRunId: string | null = null;
+    let latestAgentId: string | null = null;
     for (const event of events) {
       if (!event || typeof event !== "object") continue;
-      const runId = event.data?.runId;
-      if (!runId || typeof runId !== "string") continue;
+      const runId = event.data?.runId || event.runId || event.meta?.runId;
+      const agentId = event.meta?.agentId;
+
       if (event.type === "run:started") {
         depth++;
         latestRunId = runId;
+        if (agentId) latestAgentId = agentId;
       } else if (
         event.type === "run:finished" ||
         event.type === "run:cancelled" ||
         event.type === "run:failed"
       ) {
         depth = Math.max(0, depth - 1);
+        if (depth === 0) {
+          latestRunId = null;
+          latestAgentId = null;
+        }
+      }
+
+      if (depth > 0 && agentId) {
+        latestAgentId = agentId;
       }
     }
-    return depth > 0 ? latestRunId : null;
+    return { activeRunId: latestRunId, activeAgentId: latestAgentId };
   }, [events]);
 
   const streaming = useMemo(() => isSubmitting || !!activeRunId, [isSubmitting, activeRunId]);
@@ -104,6 +116,20 @@ export function ChatProvider({
         return;
       }
 
+      // Channel handoff — timeline row (from → to)
+      if (event.type === "agent:handoff") {
+        const fromId = event.data?.fromAgentId;
+        currentMsg = {
+          id: event.id || `asst_${Math.random().toString(36).slice(2, 9)}`,
+          runId: event.runId || event.meta?.runId,
+          role: "assistant",
+          agentId: typeof fromId === "string" ? fromId : event.meta?.agentId,
+          content: [event],
+        };
+        msgs.push(currentMsg);
+        return;
+      }
+
       // Delegation announcement — always its own block
       if (event.type === "agent:delegation") {
         currentMsg = {
@@ -118,7 +144,7 @@ export function ChatProvider({
         return;
       }
 
-      if (event.type === "agent:input" || event.type === "user:input") {
+      if (event.type === "user:input") {
         currentMsg = {
           id: event.id || Math.random().toString(36).substring(7),
           runId: event.runId || event.meta?.runId,
@@ -227,6 +253,7 @@ export function ChatProvider({
     send,
     stop,
     streaming,
+    activeAgentId,
     events,
     messages,
     messageReactions,

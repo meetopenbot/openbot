@@ -39,7 +39,7 @@ export function Composer() {
 
   const detectMention = useCallback((text: string, cursorPos: number) => {
     const before = text.slice(0, cursorPos);
-    const match = before.match(/@(\w*)$/);
+    const match = before.match(/@([a-z0-9-_]*)$/i);
     if (match) {
       setMentionQuery(match[1]);
       setMentionIndex(0);
@@ -54,7 +54,7 @@ export function Composer() {
     const cursorPos = textarea.selectionStart;
     const before = content.slice(0, cursorPos);
     const after = content.slice(cursorPos);
-    const match = before.match(/@(\w*)$/);
+    const match = before.match(/@([a-z0-9-_]*)$/i);
     if (!match) return;
     const start = before.length - match[0].length;
     const newContent = before.slice(0, start) + `@${agentId} ` + after;
@@ -127,7 +127,7 @@ export function Composer() {
     }
 
     send({
-      type: "agent:input",
+      type: "user:input",
       meta: {
         ...(targetAgentId ? { agentId: targetAgentId } : {}),
       },

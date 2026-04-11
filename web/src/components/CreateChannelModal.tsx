@@ -22,6 +22,7 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
     onSuccess: (channelId) => {
       setError('');
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['channels'] });
       onCreated(channelId);
       onClose();
     },

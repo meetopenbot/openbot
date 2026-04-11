@@ -32,6 +32,22 @@ export function summarizeAgentEventValue(event: any): string | undefined {
   return undefined;
 }
 
+/**
+ * Finds the first @mention in a text string and checks if it's a valid agent.
+ */
+export function findFirstMention(text: string, agentIds: string[]): string | undefined {
+  if (!text) return undefined;
+  const mentionPattern = /@([a-z0-9-_]+)/gi;
+  let match;
+  while ((match = mentionPattern.exec(text)) !== null) {
+    const mention = match[1].toLowerCase();
+    if (agentIds.includes(mention)) {
+      return mention;
+    }
+  }
+  return undefined;
+}
+
 export async function* runOpenBot(
   event: ConversationEvent,
   context: { runId: string; state: ConversationState },
@@ -46,11 +62,15 @@ export async function* runOpenBot(
   // --- 1. DISPATCHER: Determine the target agent for this message ---
   let targetAgentId: string | undefined = event.meta?.agentId;
 
-  // If the event is an agent:input and not a delegation, determine the target agent.
-  if (event.type === "agent:input" && !event.meta?.delegation) {
+  // If the event is an user:input and not a delegation, determine the target agent.
+  if (event.type === "user:input" && !event.meta?.delegation) {
+    const agentIds = Array.from(agentRuntimes.keys());
+    const content = event.data?.content || "";
+    const mention = findFirstMention(content, agentIds);
+
     if (conversationId.startsWith("channel_")) {
-      // Channels: always the default agent at the top level; use `delegate` for other agents.
-      targetAgentId = "default";
+      // Channels: route to the first @mentioned agent, or fall back to "default".
+      targetAgentId = mention || "default";
     } else if (conversationId.startsWith("dm_")) {
       targetAgentId = conversationId.slice("dm_".length);
     }
@@ -63,7 +83,7 @@ export async function* runOpenBot(
   const runtime = targetAgentId ? agentRuntimes.get(targetAgentId) : undefined;
 
   // For non-input events with an explicit agentId, always try that agent first
-  if (event.type !== "agent:input" && event.meta?.agentId) {
+  if (event.type !== "user:input" && event.meta?.agentId) {
     const explicitRuntime = agentRuntimes.get(event.meta.agentId);
     if (explicitRuntime) {
       const target = event.meta.agentId;

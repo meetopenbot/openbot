@@ -4,16 +4,34 @@ import fs from 'node:fs/promises';
 import matter from 'gray-matter';
 import { loadConfig, saveConfig, DEFAULT_BASE_DIR, resolvePath } from '../app/config.js';
 import { listAgents, listToolPlugins } from '../registry/agent-registry.js';
-import type { ListedAgent, ListedToolPlugin } from '../registry/agent-registry.js';
+import type { ListedToolPlugin } from '../registry/agent-registry.js';
 import { readAgentConfig } from '../registry/agent-loader.js';
 import { getMarketplaceRegistry, installMarketplacePlugin } from '../services/marketplace.js';
-import { toTitleCaseFromSlug, resolveAgentFolder } from './utils.js';
+import {
+  toTitleCaseFromSlug,
+  resolveAgentFolder,
+  resolveLocalAgentAvatarFilePath,
+} from './utils.js';
 import type { ServerContext } from './context.js';
+
+function resolveAgentListImageUrl(
+  origin: string,
+  routeKey: string,
+  candidate: string | undefined,
+  hasLocalAvatar: boolean,
+): string | undefined {
+  const t = typeof candidate === 'string' ? candidate.trim() : '';
+  if (t.startsWith('http://') || t.startsWith('https://')) return t;
+  if (hasLocalAvatar) {
+    return `${origin}/api/agents/${encodeURIComponent(routeKey)}/avatar`;
+  }
+  return t || undefined;
+}
 
 export function createAgentsRouter(ctx: ServerContext) {
   const router = Router();
 
-  router.get('/', async (_req, res) => {
+  router.get('/', async (req, res) => {
     const cfg = loadConfig();
     const baseDir = cfg.baseDir || DEFAULT_BASE_DIR;
     const resolvedBaseDir = resolvePath(baseDir);
@@ -72,7 +90,23 @@ export function createAgentsRouter(ctx: ServerContext) {
       seenIds.add(entry.id);
     }
 
-    res.json(agents);
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const enriched = await Promise.all(
+      agents.map(async (a: (typeof agents)[number]) => {
+        const routeKey = a.isDefault ? 'default' : a.id;
+        const hasLocalAvatar = !!(await resolveLocalAgentAvatarFilePath(
+          routeKey,
+          resolvedBaseDir,
+          defaultName,
+        ));
+        return {
+          ...a,
+          image: resolveAgentListImageUrl(origin, routeKey, a.image, hasLocalAvatar),
+        };
+      }),
+    );
+
+    res.json(enriched);
   });
 
   router.post('/', async (req, res) => {
@@ -565,37 +599,9 @@ export function createAgentsRouter(ctx: ServerContext) {
       }
     }
 
-    const extensions = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif'];
-    const fileNames = ['avatar', 'icon', 'image', 'logo'];
-
-    const searchDirs = [
-      name === defaultName || name === 'default'
-        ? path.join(resolvedBaseDir, 'assets')
-        : agentFolder
-          ? path.join(agentFolder, 'assets')
-          : path.join(resolvedBaseDir, 'agents', name, 'assets'),
-      path.join(process.cwd(), 'server', 'src', 'agents', name, 'assets'),
-      path.join(process.cwd(), 'server', 'src', 'assets', 'agents', name),
-      path.join(process.cwd(), 'server', 'src', 'agents', 'assets'),
-      path.join(process.cwd(), 'server', 'src', 'assets'),
-    ];
-
-    for (const dir of searchDirs) {
-      for (const fileName of fileNames) {
-        for (const ext of extensions) {
-          const isAgentSpecificDir =
-            dir.includes(name) || (agentFolder && dir.includes(agentFolder));
-          const baseName = dir.endsWith('assets') && !isAgentSpecificDir ? name : fileName;
-          const p = path.join(dir, `${baseName}${ext}`);
-          try {
-            await fs.access(p);
-            return res.sendFile(p);
-          } catch {
-            // continue
-          }
-          if (baseName === name) break;
-        }
-      }
+    const localPath = await resolveLocalAgentAvatarFilePath(name, resolvedBaseDir, defaultName);
+    if (localPath) {
+      return res.sendFile(localPath);
     }
 
     res.status(404).send('Avatar not found');

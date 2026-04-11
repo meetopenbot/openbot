@@ -9,3 +9,12 @@ export function useConversations() {
     refetchInterval: 30_000,
   });
 }
+
+export function useChannels() {
+  return useQuery({
+    queryKey: ["channels"],
+    queryFn: api.getChannels,
+    meta: { tags: ["channels"] },
+    refetchInterval: 30_000,
+  });
+}

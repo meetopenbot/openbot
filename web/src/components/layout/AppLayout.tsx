@@ -1,6 +1,6 @@
 import { useState, useCallback, type ReactNode } from 'react';
 import { SidebarContext, useSidebar } from '../../hooks/use-sidebar';
-import { useConversations } from '../../hooks/use-sessions';
+import { useConversations, useChannels } from '../../hooks/use-sessions';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { AppSidebar } from './AppSidebar';
@@ -92,14 +92,15 @@ export function AppLayout({
   const { open, toggle, rightPanel } = useSidebar();
   const rightOpen = Boolean(rightPanel);
   const { data: conversations = [] } = useConversations();
+  const { data: channels = [] } = useChannels();
   const { data: agents = [] } = useQuery({
     queryKey: ['agents'],
     queryFn: api.getAgents,
   });
 
-  const activeConversation = conversations.find(
-    (conversation) => conversation.id === conversationId,
-  );
+  const activeConversation =
+    conversations.find((conversation) => conversation.id === conversationId) ||
+    channels.find((conversation) => conversation.id === conversationId);
   const dmAgentIdFromRoute = conversationId.startsWith('dm_') ? conversationId.slice(3) : undefined;
   const resolvedDmAgentId =
     activeConversation?.kind === 'dm' && activeConversation.agentId

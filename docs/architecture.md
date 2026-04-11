@@ -20,7 +20,7 @@ Holds all available agents. Agents can be:
 Manages functionality that can be shared across agents. Plugins provide tool definitions and implementations (e.g., `shell`, `file-system`).
 
 ### 4. Melony App
-The underlying event-driven orchestration layer that handles communication between agents via events like `agent:input` and `agent:output`.
+The underlying event-driven orchestration layer that handles communication between agents via events like `user:input` and `agent:output`.
 
 ## Message Flow
 

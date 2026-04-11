@@ -166,6 +166,7 @@ export const api = {
     }),
 
   getConversations: () => request<ConversationInfo[]>("/api/conversations"),
+  getChannels: () => request<ConversationInfo[]>("/api/channels"),
   markConversationRead: (id: string) =>
     request<{ success: boolean; conversationId: string; lastReadEventId?: string; lastReadAt?: number }>(
       `/api/conversations/${encodeURIComponent(id)}/read`,

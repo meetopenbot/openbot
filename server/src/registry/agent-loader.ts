@@ -64,6 +64,8 @@ export interface ListedAgent {
   description: string;
   type: 'agent';
   folder: string;
+  /** From AGENT.md frontmatter when present */
+  image?: string;
 }
 
 export async function readAgentConfig(agentDir: string): Promise<AgentConfig> {
@@ -114,11 +116,15 @@ export async function listAgents(dir: string): Promise<ListedAgent[]> {
     const meta = await getPluginMetadata(agentDir);
     let name = meta.name || entry.name;
     let description = meta.description || 'No description';
+    let image: string | undefined;
 
     try {
       const agentConfig = await readAgentConfig(agentDir);
       if (agentConfig.name?.trim()) name = agentConfig.name.trim();
       if (agentConfig.description?.trim()) description = agentConfig.description.trim();
+      if (typeof agentConfig.image === 'string' && agentConfig.image.trim()) {
+        image = agentConfig.image.trim();
+      }
     } catch {
       // Keep package/default metadata fallback
     }
@@ -129,6 +135,7 @@ export async function listAgents(dir: string): Promise<ListedAgent[]> {
       description,
       type: 'agent',
       folder: agentDir,
+      image,
     });
   }
 
