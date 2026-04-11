@@ -86,6 +86,11 @@ export type MessageReactionEvent = ChatEventBase<"message:reaction", {
   reaction: "like" | "dislike" | "none";
 }>;
 
+export type RunEvent = ChatEventBase<
+  "run:started" | "run:cancelled" | "run:finished" | "run:failed",
+  { runId: string; message?: string }
+>;
+
 export type ConversationEvent = (
   | AgentInputEvent
   | AgentDelegationEvent
@@ -100,10 +105,23 @@ export type ConversationEvent = (
   | ExecutionStateEvent
   | SuspendEvent
   | MessageReactionEvent
+  | RunEvent
 ) & {
   meta?: {
     agentId?: string;
     [key: string]: any;
+  };
+};
+
+export type RunJob = {
+  conversationId: string;
+  runId: string;
+  event: ConversationEvent;
+  delegation?: {
+    parentDelegationId: string;
+    toolCallId: string;
+    leadAgentId: string;
+    depth: number;
   };
 };
 
