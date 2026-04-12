@@ -32,7 +32,7 @@ export function AppSidebar({ conversationId, currentTab, onNavigate }: AppSideba
   const { data: conversationsActivity } = useQuery({
     queryKey: ['conversations-activity'],
     queryFn: api.getConversationsActivity,
-    refetchInterval: 1000,
+    refetchInterval: 5000,
   });
 
   const deleteChannelMutation = useMutation({

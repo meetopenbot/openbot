@@ -260,7 +260,7 @@ export async function logConversationEvent(conversationId: string, runId: string
   await saveConversationState(normalizedConversationId, state);
 }
 
-export async function loadConversationEvents(conversationId: string): Promise<ConversationEvent[]> {
+export async function loadConversationEvents(conversationId: string, afterId?: string): Promise<ConversationEvent[]> {
   const normalizedConversationId = normalizeConversationId(conversationId);
   const conversationDir = getConversationDir(normalizedConversationId);
   const logPath = path.join(conversationDir, "events.jsonl");
@@ -269,10 +269,16 @@ export async function loadConversationEvents(conversationId: string): Promise<Co
 
   try {
     const data = fs.readFileSync(logPath, "utf-8");
-    return data
+    const events = data
       .split("\n")
       .filter((line) => line.trim() !== "")
       .map((line, index) => normalizeStoredLogLine(JSON.parse(line) as Record<string, unknown>, index));
+
+    if (afterId) {
+      const index = events.findIndex((ev) => ev.id === afterId);
+      if (index !== -1) return events.slice(index + 1);
+    }
+    return events;
   } catch (error) {
     console.error(`Failed to load events for conversation ${normalizedConversationId}:`, error);
     return [];

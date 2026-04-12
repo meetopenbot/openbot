@@ -2,22 +2,56 @@ const BASE_URL = (window as any).MELONY_BASE_URL || "http://localhost:4001";
 
 export { BASE_URL };
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
+export interface EventResponse {
+  results: any[];
+}
+
+async function sendEvent<T = any>(
+  event: any,
+  meta?: { 
+    conversationId?: string; 
+    runId?: string; 
+    agentId?: string; 
+    responseType?: 'stream' | 'json' 
+  }
+): Promise<T> {
+  const responseType = meta?.responseType || 'json';
+  const res = await fetch(`${BASE_URL}/api/events`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(meta?.conversationId ? { 'x-openbot-conversation-id': meta.conversationId } : {}),
+      ...(meta?.runId ? { 'x-openbot-run-id': meta.runId } : {}),
+      ...(meta?.agentId ? { 'x-openbot-agent-id': meta.agentId } : {}),
+      'x-openbot-response-type': responseType,
+    },
+    body: JSON.stringify(event),
   });
+
   if (!res.ok) {
     let detail = "";
     try {
       const body = await res.json() as { error?: string };
       detail = body.error ? `: ${body.error}` : "";
     } catch {
-      // ignore parse errors for non-json responses
+      // ignore
     }
     throw new Error(`API error: ${res.status}${detail}`);
   }
-  return res.json();
+
+  if (responseType === 'stream') {
+    return res as any; // Return the response object for streaming
+  }
+
+  const { results } = await res.json() as EventResponse;
+  // For JSON requests, we usually want the data from the last event or a specific result event
+  const lastEvent = results[results.length - 1];
+  return (lastEvent?.data ?? lastEvent) as T;
+}
+
+// Helper for simple JSON events
+async function request<T>(type: string, data?: any, meta?: any): Promise<T> {
+  return sendEvent<T>({ type, data }, { ...meta, responseType: 'json' });
 }
 
 export interface ConversationInfo {
@@ -119,13 +153,6 @@ export interface MarketplaceItem {
   image?: string;
 }
 
-export interface ConversationsActivityResponse {
-  byConversation: Record<string, { active: boolean; agents: string[] }>;
-}
-
-/** Send this as `value` for a secret row the user did not change (must match server). */
-export const USER_VARIABLE_SECRET_UNCHANGED = "••••••••••••••••";
-
 export interface UserVariablePublic {
   key: string;
   secret: boolean;
@@ -133,223 +160,89 @@ export interface UserVariablePublic {
   value?: string;
 }
 
-export interface UserVariablesResponse {
-  variables: UserVariablePublic[];
+export interface PromptSuggestion {
+  label: string;
+  icon?: string;
 }
 
+/** Send this as `value` for a secret row the user did not change (must match server). */
+export const USER_VARIABLE_SECRET_UNCHANGED = "••••••••••••••••";
+
 export const api = {
-  getConfig: () => request<AppConfig>("/api/config"),
+  // Config
+  getConfig: () => request<AppConfig>("config:get"),
+  updateConfig: (data: any) => request<{ success: boolean }>("config:update", data),
 
-  updateConfig: (data: {
-    name?: string;
-    description?: string;
-    model?: string;
-    image?: string;
-    openai_api_key?: string;
-    anthropic_api_key?: string;
-  }) => request<{ success: boolean }>("/api/config", { method: "POST", body: JSON.stringify(data) }),
+  // User
+  getUserProfile: () => request<{ profile: string }>("user:get-profile"),
+  updateUserProfile: (profile: string) => request<{ success: boolean }>("user:update-profile", { profile }),
+  getVariables: () => request<{ variables: UserVariablePublic[] }>("variables:list"),
+  updateVariables: (variables: any[]) => request<{ success: boolean }>("variables:update", { variables }),
 
-  getUserProfile: () => request<{ profile: string }>("/api/user/profile"),
+  // Conversations & Channels
+  getConversations: () => request<ConversationInfo[]>("conversations:list"),
+  getChannels: () => request<ConversationInfo[]>("channels:list"),
+  getConversationsActivity: () => request<{ byConversation: Record<string, { active: boolean; agents: string[] }> }>("conversations:get-activity"),
+  createChannel: (name: string) => request<ChannelInfo>("channels:create", { name }),
+  deleteChannel: (conversationId: string) => request<{ success: boolean }>("channels:delete", { conversationId }),
+  getChannelSpec: (conversationId: string) => request<{ spec: string }>("channels:get-spec", { conversationId }),
+  updateChannelSpec: (conversationId: string, spec: string) => request<{ success: boolean }>("channels:update-spec", { conversationId, spec }),
+  
+  // Conversation State & Events
+  getConversationState: (conversationId: string) => request<any>("conversations:get-state", { conversationId }),
+  getConversationEvents: (conversationId: string) => request<any[]>("conversations:get-events", { conversationId }),
+  markConversationRead: (conversationId: string) => request<{ success: boolean }>("conversations:mark-read", { conversationId }),
+  
+  // Agents
+  getAgents: () => request<any[]>("agents:list"),
+  getAgentConfig: (agentId: string) => request<AgentConfig>("agents:get-config", { agentId }),
+  updateAgentConfig: (agentId: string, config: AgentConfig) => request<{ success: boolean }>("agents:update-config", { agentId, config }),
+  getAgentMd: (agentId: string) => request<{ md: string }>("agents:get-md", { agentId }).then(r => r.md),
+  updateAgentMd: (agentId: string, md: string) => request<{ success: boolean }>("agents:update-md", { agentId, md }),
 
-  updateUserProfile: (profile: string) =>
-    request<{ success: boolean }>("/api/user/profile", {
-      method: "PUT",
-      body: JSON.stringify({ profile }),
-    }),
+  // Marketplace
+  getMarketplacePlugins: () => request<MarketplaceItem[]>("marketplace:list"),
+  installMarketplacePlugin: (id: string) => request<{ success: boolean; installedName: string; item: MarketplaceItem }>("marketplace:install", { id }),
 
-  getVariables: () => request<UserVariablesResponse>("/api/variables"),
+  // Plugins
+  getInstalledPlugins: () => request<InstalledPluginInfo[]>("plugins:list"),
+  getRegistryPlugins: () => request<{ name: string; description: string; isBuiltIn?: boolean }[]>("plugins:registry-list"),
 
-  updateVariables: (variables: Array<{ key: string; secret: boolean; value: string }>) =>
-    request<{ success: boolean }>("/api/variables", {
-      method: "PUT",
-      body: JSON.stringify({ variables }),
-    }),
+  // Automations
+  getAutomations: () => request<AutomationItem[]>("automations:list"),
+  createAutomation: (data: any) => request<AutomationItem>("automations:create", data),
+  updateAutomation: (id: string, data: any) => request<AutomationItem>("automations:update", { id, ...data }),
+  deleteAutomation: (id: string) => request<{ success: boolean }>("automations:delete", { id }),
 
-  getConversations: () => request<ConversationInfo[]>("/api/conversations"),
-  getChannels: () => request<ConversationInfo[]>("/api/channels"),
-  markConversationRead: (id: string) =>
-    request<{ success: boolean; conversationId: string; lastReadEventId?: string; lastReadAt?: number }>(
-      `/api/conversations/${encodeURIComponent(id)}/read`,
-      { method: "POST" },
-    ),
-  getConversationsActivity: () =>
-    request<ConversationsActivityResponse>("/api/conversations/activity"),
+  // Starter prompts (empty-state suggestions)
+  getPrompts: () => request<PromptSuggestion[]>("prompts:list"),
 
-  createChannel: (name: string) =>
-    request<{ success: boolean; channel: ChannelInfo }>("/api/channels", {
-      method: "POST",
-      body: JSON.stringify({ name }),
-    }),
+  // Models
+  getModels: () => request<ModelOption[]>("models:list"),
+  previewModels: (data: { provider: ModelProvider; apiKey: string }) => request<ModelOption[]>("models:preview", data),
 
-  deleteChannel: (id: string) =>
-    request<{ success: boolean }>(`/api/channels/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    }),
+  // Uploads
+  uploadImage: (data: { name: string; mimeType: string; dataBase64: string }) => 
+    request<any>("uploads:image", data),
 
-  getChannelSpec: (id: string) =>
-    request<{ spec: string }>(`/api/channels/${encodeURIComponent(id)}/spec`),
+  // Actions
+  openFolder: (folder: string) => request<{ success: boolean }>("actions:open-folder", { folder }),
+  reload: () => request<{ success: boolean }>("actions:reload"),
+  getVersion: () => request<{ current: string; latest: string; updateAvailable: boolean }>("version:get"),
 
-  updateChannelSpec: (id: string, spec: string) =>
-    request<{ success: boolean }>(`/api/channels/${encodeURIComponent(id)}/spec`, {
-      method: "PUT",
-      body: JSON.stringify({ spec }),
-    }),
+  // Runs & Events
+  sendEventStream: (conversationId: string, event: any, options?: { runId?: string; agentId?: string }) => 
+    sendEvent(event, { conversationId, ...options, responseType: 'stream' }),
+  
+  sendEventJson: (conversationId: string, event: any, options?: { runId?: string; agentId?: string }) => 
+    sendEvent(event, { conversationId, ...options, responseType: 'json' }),
 
-  getConversationState: (id: string) =>
-    request<any>(`/api/conversations/${encodeURIComponent(id)}/state`),
-
-  getConversationEvents: (id: string) => request<any[]>(`/api/conversations/${encodeURIComponent(id)}/events`),
-  getConversationEventsRaw: async (id: string) => {
-    const res = await fetch(`${BASE_URL}/api/conversations/${encodeURIComponent(id)}/events/raw`);
-    if (!res.ok) throw new Error(`API error: ${res.status}`);
-    return res.text();
-  },
-  getConversationStreamUrl: (id: string, afterId?: string) => {
-    const base = `${BASE_URL}/api/conversations/${encodeURIComponent(id)}/stream`;
-    if (!afterId) return base;
-    return `${base}?afterId=${encodeURIComponent(afterId)}`;
-  },
-  createRun: (
-    conversationId: string,
-    event: any,
-    options?: { runId?: string },
-  ) =>
-    request<{ runId: string }>('/api/runs', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-openbot-conversation-id': conversationId,
-        ...(options?.runId ? { 'x-openbot-run-id': options.runId } : {}),
-      },
-      body: JSON.stringify(event),
-    }),
-  cancelRun: (runId: string) =>
-    request<{ success: boolean }>(`/api/runs/${encodeURIComponent(runId)}/cancel`, {
-      method: 'POST',
-    }),
-
-  postMessageReaction: (
-    conversationId: string,
-    payload: { targetMessageId: string; reaction: "like" | "dislike" | "none" },
-  ) =>
-    request<{ success: boolean }>(
-      `/api/conversations/${encodeURIComponent(conversationId)}/reactions`,
-      { method: "POST", body: JSON.stringify(payload) },
-    ),
-
-  getAgents: () =>
-    request<
-      {
-        id: string;
-        name: string;
-        description: string;
-        folder?: string;
-        isDefault?: boolean;
-        isBuiltIn?: boolean;
-        hasAgentMd?: boolean;
-        image?: string;
-        type?: string;
-      }[]
-    >("/api/agents"),
-
-  createAgent: (data: CreateAgentPayload) =>
-    request<{ success: boolean; id: string }>("/api/agents", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
-  getInstalledPlugins: () =>
-    request<InstalledPluginInfo[]>("/api/plugins"),
-
-  getRegistryPlugins: () =>
-    request<{ name: string; description: string; isBuiltIn?: boolean }[]>("/api/registry/plugins"),
-
-  getPrompts: () =>
-    request<{ label: string; icon: string }[]>("/api/prompts"),
-
-  getAutomations: () =>
-    request<AutomationItem[]>("/api/automations"),
-
-  createAutomation: (data: {
-    name: string;
-    prompt: string;
-    cron: string;
-    targetType: "orchestrator" | "agent";
-    agentName?: string;
-  }) =>
-    request<AutomationItem>("/api/automations", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
-  updateAutomation: (
-    id: string,
-    data: Partial<Pick<AutomationItem, "name" | "prompt" | "cron" | "enabled" | "targetType" | "agentName">>
-  ) =>
-    request<AutomationItem>(`/api/automations/${encodeURIComponent(id)}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-
-  deleteAutomation: (id: string) =>
-    request<{ success: boolean }>(`/api/automations/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    }),
- 
-  getModels: () =>
-    request<ModelOption[]>("/api/models"),
-
-  previewModels: (data: { provider: ModelProvider; apiKey: string }) =>
-    request<ModelOption[]>("/api/models/preview", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
-  getAgentMd: async (agentId: string) => {
-    const res = await fetch(`${BASE_URL}/api/agents/${encodeURIComponent(agentId)}/md`);
-    if (!res.ok) throw new Error(`API error: ${res.status}`);
-    return res.text();
-  },
-
-  updateAgentMd: (agentId: string, md: string) =>
-    request<{ success: boolean }>(`/api/agents/${encodeURIComponent(agentId)}/md`, {
-      method: "PUT",
-      body: JSON.stringify({ md }),
-    }),
-
-  getAgentConfig: (agentId: string) =>
-    request<AgentConfig>(`/api/agents/${encodeURIComponent(agentId)}/config`),
-
-  updateAgentConfig: (agentId: string, config: AgentConfig) =>
-    request<{ success: boolean }>(`/api/agents/${encodeURIComponent(agentId)}/config`, {
-      method: "PUT",
-      body: JSON.stringify(config),
-    }),
-
-  getMarketplacePlugins: () =>
-    request<MarketplaceItem[]>("/api/marketplace/plugins"),
-
-  installMarketplacePlugin: (id: string) =>
-    request<{ success: boolean; installedName: string; item: MarketplaceItem }>("/api/marketplace/install-plugin", {
-      method: "POST",
-      body: JSON.stringify({ id }),
-    }),
-
-  openFolder: (folder: string) =>
-    request<{ success: boolean }>("/api/actions/open-folder", {
-      method: "POST",
-      body: JSON.stringify({ folder }),
-    }),
-
-  reload: () =>
-    request<{ success: boolean }>("/api/actions/reload", { method: "POST" }),
-
-  uploadImage: (data: { name: string; mimeType: string; dataBase64: string }) =>
-    request<AttachmentRef>("/api/uploads/image", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
-  getVersion: () =>
-    request<{ current: string; latest: string; updateAvailable: boolean }>("/api/version"),
+  // Legacy/Compatibility if needed (but refactored to use events)
+  createRun: (conversationId: string, event: any, options?: { runId?: string }) =>
+    sendEvent(event, { conversationId, runId: options?.runId, responseType: 'json' }),
+    
+  cancelRun: (runId: string) => request<{ success: boolean }>("run:cancel", { runId }),
+  
+  postMessageReaction: (conversationId: string, data: any) => 
+    request<{ success: boolean }>("message:reaction", data, { conversationId }),
 };

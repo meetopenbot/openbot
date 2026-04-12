@@ -65,3 +65,42 @@ export async function saveAutomations(items: AutomationRecord[]): Promise<void> 
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, JSON.stringify(items, null, 2), "utf-8");
 }
+
+export async function createAutomation(data: Omit<AutomationRecord, "id" | "createdAt" | "updatedAt" | "enabled">): Promise<AutomationRecord> {
+  const items = await listAutomations();
+  const now = new Date().toISOString();
+  const newItem: AutomationRecord = {
+    ...data,
+    id: `auto_${Math.random().toString(36).slice(2, 11)}`,
+    enabled: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+  items.push(newItem);
+  await saveAutomations(items);
+  return newItem;
+}
+
+export async function updateAutomation(id: string, data: Partial<AutomationRecord>): Promise<AutomationRecord> {
+  const items = await listAutomations();
+  const index = items.findIndex((i) => i.id === id);
+  if (index === -1) throw new Error("Automation not found");
+
+  const updated = {
+    ...items[index],
+    ...data,
+    id, // ensure ID doesn't change
+    updatedAt: new Date().toISOString(),
+  };
+  items[index] = updated;
+  await saveAutomations(items);
+  return updated;
+}
+
+export async function deleteAutomation(id: string): Promise<boolean> {
+  const items = await listAutomations();
+  const next = items.filter((i) => i.id !== id);
+  if (next.length === items.length) return false;
+  await saveAutomations(next);
+  return true;
+}

@@ -47,6 +47,10 @@ export async function createOpenBot(options?: {
     agentRuntimes.set(agent.id, builder.build());
   }
 
+  // Register the internal system agent
+  const { createSystemAgent } = await import("./system-agent.js");
+  agentRuntimes.set("system", createSystemAgent(registry));
+
   // 3. Trigger initialization for all runtimes
   const initPromises: Promise<void>[] = [];
   const exhaust = async (runtime: Runtime<ConversationState, ConversationEvent>, agentId: string) => {

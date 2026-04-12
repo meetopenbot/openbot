@@ -87,6 +87,9 @@ export function listUserVariablesPublic(): UserVariablePublic[] {
   });
 }
 
+/** Legacy alias for system agent */
+export const getVariables = listUserVariablesPublic;
+
 /**
  * Applies stored variables to `process.env`. Keys removed from the file are deleted from
  * `process.env` if they were previously applied by this module.
@@ -161,4 +164,10 @@ export function normalizeAndSaveVariables(rows: IncomingVariableRow[]): {
   saveUserVariables(variables);
   applyUserVariablesToProcessEnv();
   return { ok: true, variables };
+}
+
+/** Legacy alias for system agent */
+export async function updateVariables(variables: IncomingVariableRow[]): Promise<void> {
+  const res = normalizeAndSaveVariables(variables);
+  if (!res.ok) throw new Error(res.error);
 }

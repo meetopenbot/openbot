@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, BASE_URL } from "../lib/api";
 
 export type MessageReactionSentiment = "like" | "dislike";
 
@@ -94,6 +94,28 @@ export function ChatProvider({
   }, [events]);
 
   const streaming = useMemo(() => isSubmitting || !!activeRunId, [isSubmitting, activeRunId]);
+
+  /** Server-side active runs (this conv or others) — cheap poll only while this conv looks idle. */
+  const { data: conversationsActivity } = useQuery({
+    queryKey: ["conversations-activity"],
+    queryFn: api.getConversationsActivity,
+    enabled: Boolean(conversationId) && eventsHydrated,
+    staleTime: 4_000,
+    refetchInterval: (q) => {
+      if (!conversationId) return false;
+      const by = (q.state.data as { byConversation?: Record<string, { active?: boolean }> } | undefined)
+        ?.byConversation;
+      if (by?.[conversationId]?.active) return false;
+      return 5_000;
+    },
+  });
+
+  const remoteConversationActive = Boolean(
+    conversationsActivity?.byConversation?.[conversationId]?.active,
+  );
+
+  /** Long-lived SSE only when something may append events for this conversation. */
+  const needLiveEvents = streaming || remoteConversationActive;
 
   // Compute messages and reaction map from events
   const { messages, messageReactions } = useMemo(() => {
@@ -291,52 +313,82 @@ export function ChatProvider({
   ]);
 
   useEffect(() => {
-    if (!eventsHydrated || !conversationId) return;
+    if (!eventsHydrated || !conversationId || !needLiveEvents) return;
+
+    const ac = new AbortController();
     let isClosed = false;
     let reconnectTimer: number | undefined;
-    let source: EventSource | undefined;
 
-    const connect = () => {
-      if (isClosed || !conversationId) return;
-      const url = api.getConversationStreamUrl(conversationId, latestEventIdRef.current ?? undefined);
-      source = new EventSource(url);
+    const connect = async () => {
+      if (isClosed || !conversationId || ac.signal.aborted) return;
 
-      source.onmessage = (message) => {
-        if (!message.data) return;
-        try {
-          const chunk = JSON.parse(message.data);
-          setEvents((prev) => mergeUniqueEvents(prev, [chunk]));
-          if (chunk?.id && typeof chunk.id === "string") {
-            latestEventIdRef.current = chunk.id;
+      try {
+        const response = await fetch(`${BASE_URL}/api/events`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-openbot-conversation-id": conversationId,
+            "x-openbot-response-type": "stream",
+            ...(latestEventIdRef.current ? { "x-openbot-after-id": latestEventIdRef.current } : {}),
+          },
+          body: JSON.stringify({ type: "conversations:subscribe" }),
+          signal: ac.signal,
+        });
+
+        if (!response.ok) throw new Error(`Stream error: ${response.status}`);
+        if (!response.body) throw new Error("No response body");
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done || isClosed || ac.signal.aborted) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6);
+              try {
+                const chunk = JSON.parse(data);
+                setEvents((prev) => mergeUniqueEvents(prev, [chunk]));
+                if (chunk?.id && typeof chunk.id === "string") {
+                  latestEventIdRef.current = chunk.id;
+                }
+                if (eventHandlers && eventHandlers[chunk.type]) {
+                  void eventHandlers[chunk.type](chunk);
+                }
+                if (
+                  eventHandlers &&
+                  (chunk.type === "run:finished" || chunk.type === "run:cancelled" || chunk.type === "run:failed") &&
+                  eventHandlers["stream:done"]
+                ) {
+                  void eventHandlers["stream:done"](chunk);
+                }
+              } catch (error) {
+                console.error("Failed to parse stream event:", error);
+              }
+            }
           }
-          if (eventHandlers && eventHandlers[chunk.type]) {
-            void eventHandlers[chunk.type](chunk);
-          }
-          if (
-            eventHandlers &&
-            (chunk.type === "run:finished" || chunk.type === "run:cancelled" || chunk.type === "run:failed") &&
-            eventHandlers["stream:done"]
-          ) {
-            void eventHandlers["stream:done"](chunk);
-          }
-        } catch (error) {
-          console.error("Failed to parse stream event:", error);
         }
-      };
-
-      source.onerror = () => {
-        source?.close();
-        if (!isClosed) reconnectTimer = window.setTimeout(connect, 1000);
-      };
+      } catch (error) {
+        if (ac.signal.aborted || isClosed) return;
+        console.error("Stream connection failed:", error);
+        reconnectTimer = window.setTimeout(connect, 1000);
+      }
     };
 
-    connect();
+    void connect();
     return () => {
       isClosed = true;
+      ac.abort();
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
-      source?.close();
     };
-  }, [conversationId, eventHandlers, eventsHydrated]);
+  }, [conversationId, eventHandlers, eventsHydrated, needLiveEvents]);
 
   useEffect(() => {
     const last = events[events.length - 1];

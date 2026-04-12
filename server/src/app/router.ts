@@ -59,6 +59,29 @@ export async function* runOpenBot(
   // Initialize state
   if (!state.messages) state.messages = [];
 
+  // --- 0. SYSTEM ROUTING ---
+  // If the event type doesn't look like a standard chat event, route it to system.
+  const isChatEvent =
+    event.type === "user:input" ||
+    event.type === "agent:invoke" ||
+    event.type === "agent:handoff" ||
+    event.type === "message:reaction" ||
+    event.type === "run:started" ||
+    event.type === "run:cancelled";
+
+  if (!isChatEvent && event.type.includes(":")) {
+    const system = agentRuntimes.get("system");
+    if (system) {
+      for await (const chunk of system.run(event, {
+        runId: context.runId,
+        state,
+      })) {
+        yield chunk;
+      }
+      return;
+    }
+  }
+
   // --- 1. DISPATCHER: Determine the target agent for this message ---
   let targetAgentId: string | undefined = event.meta?.agentId;
 

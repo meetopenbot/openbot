@@ -16,7 +16,7 @@ export function Onboarding({ defaultModelId, defaultModels }: OnboardingProps) {
     return nextProvider === "openai" ? defaultModelId : "";
   };
 
-  const initialProvider = defaultModelId.startsWith("anthropic/") ? "anthropic" : "openai";
+  const initialProvider = (defaultModelId || "").startsWith("anthropic/") ? "anthropic" : "openai";
   const [provider, setProvider] = useState<ModelProvider>(initialProvider);
   const [model, setModel] = useState(defaultModelId);
   const [models, setModels] = useState<ModelOption[]>([]);

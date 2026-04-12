@@ -16,15 +16,8 @@ import type { ConversationState, ConversationEvent, RunJob } from './types.js';
 import { startAutomationWorker } from '../services/automation-worker.js';
 import { listAutomations, type AutomationRecord } from '../services/automations.js';
 import { findFirstMention } from './router.js';
-import { createIndexRouter } from '../routes/index.js';
-import { createModelsRouter } from '../routes/models.js';
-import { createAutomationsRouter } from '../routes/automations.js';
+import { createEventsRouter } from '../routes/events.js';
 import { createUploadsRouter } from '../routes/uploads.js';
-import { createConfigRouter } from '../routes/config.js';
-import { createConversationsRouter } from '../routes/conversations.js';
-import { createChannelsRouter } from '../routes/channels.js';
-import { createAgentsRouter } from '../routes/agents.js';
-import { createRunsRouter } from '../routes/runs.js';
 import type { ServerContext } from '../routes/context.js';
 
 export interface ServerOptions {
@@ -327,20 +320,12 @@ export async function startServer(options: ServerOptions = {}) {
     },
   };
 
-  app.use('/', createIndexRouter(ctx));
-  app.use('/api', createModelsRouter(ctx));
-  app.use('/api/automations', createAutomationsRouter(ctx));
+  app.use('/api', createEventsRouter(ctx));
   app.use('/api/uploads', createUploadsRouter(ctx));
-  app.use('/api', createConfigRouter(ctx));
-  app.use('/api/conversations', createConversationsRouter(ctx));
-  app.use('/api/channels', createChannelsRouter(ctx));
-  app.use('/api/agents', createAgentsRouter(ctx));
-  app.use('/api', createRunsRouter(ctx));
 
   app.listen(PORT, () => {
     console.log(`\x1b[32mOpenBot server listening at http://localhost:${PORT}\x1b[0m`);
-    console.log(`  - Runs endpoint: POST /api/runs`);
-    console.log(`  - REST endpoints: /api/config, /api/conversations, /api/agents`);
+    console.log(`  - Events endpoint: POST /api/events`);
     if (options.openaiApiKey) console.log('  - Using OpenAI API Key from CLI');
     if (options.anthropicApiKey) console.log('  - Using Anthropic API Key from CLI');
   });
