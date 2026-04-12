@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { generateId } from 'melony';
 import { createOpenBot } from './open-bot.js';
-import { loadConfig, saveConfig, isConfigured, resolvePath, DEFAULT_BASE_DIR } from './config.js';
+import { loadConfig, resolvePath, DEFAULT_BASE_DIR } from './config.js';
 import {
   loadConversationState,
   saveConversationState,
