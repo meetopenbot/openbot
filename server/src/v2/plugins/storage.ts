@@ -13,6 +13,14 @@ export type AgentDetails = Agent & {
   instructions: string;
 };
 
+export type Plugin = {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type Channel = {
   id: string;
   name: string;
@@ -31,6 +39,7 @@ export type ChannelDetails = {
 export interface Storage {
   getChannels: () => Promise<Channel[]>;
   getAgents: () => Promise<Agent[]>;
+  getPlugins: () => Promise<Plugin[]>;
   getAgentDetails: ({ agentId }: { agentId: string }) => Promise<AgentDetails>;
   getEvents: ({ threadId }: { threadId: string }) => Promise<OpenBotEvent[]>;
   getChannelDetails: ({ threadId }: { threadId: string }) => Promise<ChannelDetails>;
@@ -67,6 +76,14 @@ export const storagePlugin =
       yield {
         type: 'plugin:storage:get-agents-result',
         data: { agents },
+      };
+    });
+
+    builder.on('plugin:storage:get-plugins' as OpenBotEvent['type'], async function* () {
+      const plugins = await storage.getPlugins();
+      yield {
+        type: 'plugin:storage:get-plugins-result',
+        data: { plugins },
       };
     });
 

@@ -1,4 +1,4 @@
-import { Agent, AgentDetails, Channel, ChannelDetails } from '../plugins/storage.js';
+import { Agent, AgentDetails, Channel, ChannelDetails, Plugin } from '../plugins/storage.js';
 
 export interface OpenBotState {
   agentId: string;
@@ -75,6 +75,17 @@ export type GetAgentsResultEvent = BaseEvent & {
   };
 };
 
+export type GetPluginsEvent = BaseEvent & {
+  type: 'plugin:storage:get-plugins';
+};
+
+export type GetPluginsResultEvent = BaseEvent & {
+  type: 'plugin:storage:get-plugins-result';
+  data: {
+    plugins: Plugin[];
+  };
+};
+
 export type GetEventsEvent = BaseEvent & {
   type: 'plugin:storage:get-events';
 };
@@ -126,6 +137,8 @@ export type OpenBotEvent =
   | GetChannelDetailsResultEvent
   | GetAgentsEvent
   | GetAgentsResultEvent
+  | GetPluginsEvent
+  | GetPluginsResultEvent
   | GetAgentDetailsEvent
   | GetAgentDetailsResultEvent
   | GetEventsEvent

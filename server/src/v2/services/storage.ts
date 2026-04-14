@@ -3,12 +3,36 @@ import {
   DEFAULT_AGENTS_DIR,
   DEFAULT_BASE_DIR,
   DEFAULT_CHANNELS_DIR,
+  DEFAULT_PLUGINS_DIR,
   resolvePath,
   VARIABLES_FILE,
 } from '../app/config.js';
 import fs from 'node:fs/promises';
-import { Agent, AgentDetails, Channel, ChannelDetails } from '../plugins/storage.js';
+import { Agent, AgentDetails, Channel, ChannelDetails, Plugin } from '../plugins/storage.js';
 import { OpenBotEvent } from '../app/types.js';
+
+const mapNameToPlugin = (name: string): Plugin => ({
+  id: name,
+  name,
+  description: '',
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
+const listPluginsFromDisk = async (): Promise<Plugin[]> => {
+  const pluginsDir = resolvePath(DEFAULT_BASE_DIR + '/' + DEFAULT_PLUGINS_DIR);
+  try {
+    await fs.access(pluginsDir);
+  } catch {
+    await fs.mkdir(pluginsDir, { recursive: true });
+  }
+
+  const plugins = (await fs.readdir(pluginsDir, { withFileTypes: true }))
+    .filter((entry) => !entry.name.startsWith('.') && (entry.isDirectory() || entry.isSymbolicLink()))
+    .map((entry) => mapNameToPlugin(entry.name));
+
+  return plugins;
+};
 
 export const storageService = {
   getChannels: async (): Promise<Channel[]> => {
@@ -77,6 +101,9 @@ export const storageService = {
       createdAt: new Date(),
       updatedAt: new Date(),
     }));
+  },
+  getPlugins: async (): Promise<Plugin[]> => {
+    return listPluginsFromDisk();
   },
   getAgentDetails: async ({ agentId }: { agentId: string }): Promise<AgentDetails> => {
     const agentDir = resolvePath(DEFAULT_BASE_DIR + '/' + DEFAULT_AGENTS_DIR + '/' + agentId);
