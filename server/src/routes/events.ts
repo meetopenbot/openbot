@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { generateId } from 'melony';
 import { normalizeConversationId, loadConversationState, saveConversationState } from '../services/conversation.js';
+import { findFirstMention } from '../app/router.js';
 import type { ConversationEvent } from '../app/types.js';
 import type { ServerContext } from './context.js';
 
@@ -96,9 +97,73 @@ export function createEventsRouter(ctx: ServerContext) {
         return;
       }
 
+      // Track active run and agents for the indicator
+      ctx.activeRuns.add(runId);
+      if (hasConversationScope) {
+        ctx.runConversationById.set(runId, conversationId);
+      }
+      ctx.runAgentsById.set(runId, new Set());
+
+      const agentIds = ctx.runtime.registry.getAgents().map((a: any) => a.id);
       const iterator = ctx.runtime.run(event, { runId, state });
       try {
         for await (const chunk of iterator) {
+          // Track participating agents
+          const chunkAgentId = chunk.meta?.agentId;
+          if (typeof chunkAgentId === 'string' && chunkAgentId) {
+            ctx.runAgentsById.get(runId)?.add(chunkAgentId);
+            if (hasConversationScope) {
+              if (!state.participatingAgents) state.participatingAgents = [];
+              if (!state.participatingAgents.includes(chunkAgentId)) {
+                state.participatingAgents.push(chunkAgentId);
+              }
+            }
+          }
+
+          // --- @MENTION DETECTION ---
+          if (chunk.type === 'agent:output' && hasConversationScope) {
+            const content = chunk.data?.content;
+            const mention = findFirstMention(content, agentIds);
+
+            if (mention && mention !== chunkAgentId) {
+              const fromAgent =
+                typeof chunkAgentId === 'string' && chunkAgentId.trim() !== '' ? chunkAgentId.trim() : 'default';
+              const handoffId = generateId();
+              const invokeId = generateId();
+
+              console.log(`[mention] Handoff: ${fromAgent} → ${mention}`);
+
+              await ctx.appendConversationEvent(conversationId, runId, {
+                type: 'agent:handoff',
+                id: handoffId,
+                data: {
+                  handoffId,
+                  fromAgentId: fromAgent,
+                  toAgentId: mention,
+                  content,
+                },
+                meta: { agentId: fromAgent },
+              } as ConversationEvent);
+
+              ctx.runQueue.push({
+                conversationId,
+                runId: `run_mention_${generateId()}`,
+                event: {
+                  type: 'agent:invoke',
+                  id: invokeId,
+                  data: { content, handoffId },
+                  meta: {
+                    agentId: mention,
+                    invokedByAgentId: fromAgent,
+                  },
+                } as ConversationEvent,
+              });
+              
+              // Ensure the queue starts processing
+              void ctx.processRunQueue();
+            }
+          }
+
           // Skip delta events for log persistence to avoid bloat
           if (hasConversationScope && chunk.type !== 'agent:output-delta') {
             await ctx.appendConversationEvent(conversationId, runId, chunk);
@@ -117,6 +182,9 @@ export function createEventsRouter(ctx: ServerContext) {
         }
         res.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
       } finally {
+        ctx.activeRuns.delete(runId);
+        ctx.runConversationById.delete(runId);
+        ctx.runAgentsById.delete(runId);
         if (hasConversationScope) {
           await saveConversationState(conversationId, state);
         }
@@ -124,9 +192,72 @@ export function createEventsRouter(ctx: ServerContext) {
       }
     } else {
       const results: ConversationEvent[] = [];
+      
+      // Track active run and agents for the indicator (even for non-stream, though usually short-lived)
+      ctx.activeRuns.add(runId);
+      if (hasConversationScope) {
+        ctx.runConversationById.set(runId, conversationId);
+      }
+      ctx.runAgentsById.set(runId, new Set());
+
+      const agentIds = ctx.runtime.registry.getAgents().map((a: any) => a.id);
       const iterator = ctx.runtime.run(event, { runId, state });
       try {
         for await (const chunk of iterator) {
+          // Track participating agents
+          const chunkAgentId = chunk.meta?.agentId;
+          if (typeof chunkAgentId === 'string' && chunkAgentId) {
+            ctx.runAgentsById.get(runId)?.add(chunkAgentId);
+            if (hasConversationScope) {
+              if (!state.participatingAgents) state.participatingAgents = [];
+              if (!state.participatingAgents.includes(chunkAgentId)) {
+                state.participatingAgents.push(chunkAgentId);
+              }
+            }
+          }
+
+          // --- @MENTION DETECTION ---
+          if (chunk.type === 'agent:output' && hasConversationScope) {
+            const content = chunk.data?.content;
+            const mention = findFirstMention(content, agentIds);
+
+            if (mention && mention !== chunkAgentId) {
+              const fromAgent =
+                typeof chunkAgentId === 'string' && chunkAgentId.trim() !== '' ? chunkAgentId.trim() : 'default';
+              const handoffId = generateId();
+              const invokeId = generateId();
+
+              await ctx.appendConversationEvent(conversationId, runId, {
+                type: 'agent:handoff',
+                id: handoffId,
+                data: {
+                  handoffId,
+                  fromAgentId: fromAgent,
+                  toAgentId: mention,
+                  content,
+                },
+                meta: { agentId: fromAgent },
+              } as ConversationEvent);
+
+              ctx.runQueue.push({
+                conversationId,
+                runId: `run_mention_${generateId()}`,
+                event: {
+                  type: 'agent:invoke',
+                  id: invokeId,
+                  data: { content, handoffId },
+                  meta: {
+                    agentId: mention,
+                    invokedByAgentId: fromAgent,
+                  },
+                } as ConversationEvent,
+              });
+
+              // Ensure the queue starts processing
+              void ctx.processRunQueue();
+            }
+          }
+
           if (hasConversationScope && chunk.type !== 'agent:output-delta') {
             await ctx.appendConversationEvent(conversationId, runId, chunk);
           }
@@ -137,6 +268,9 @@ export function createEventsRouter(ctx: ServerContext) {
         console.error('Error in JSON event:', err);
         res.status(500).json({ error: err.message });
       } finally {
+        ctx.activeRuns.delete(runId);
+        ctx.runConversationById.delete(runId);
+        ctx.runAgentsById.delete(runId);
         if (hasConversationScope) {
           await saveConversationState(conversationId, state);
         }

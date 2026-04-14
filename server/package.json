@@ -7,12 +7,12 @@
     "node": ">=20.12.0"
   },
   "scripts": {
-    "dev": "tsx watch src/app/cli.ts server",
+    "dev": "tsx watch src/v2/app/cli.ts server",
     "build": "tsc",
-    "start": "node dist/app/cli.js server"
+    "start": "node dist/v2/app/cli.js server"
   },
   "bin": {
-    "openbot": "./dist/app/cli.js"
+    "openbot": "./dist/v2/app/cli.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.33",
@@ -25,7 +25,7 @@
     "express": "^4.19.2",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.1",
-    "melony": "^0.3.5",
+    "melony": "^0.3.7",
     "zod": "^4.3.5"
   },
   "devDependencies": {

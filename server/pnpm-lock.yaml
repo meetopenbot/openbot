@@ -39,8 +39,8 @@ importers:
         specifier: ^4.1.1
         version: 4.1.1
       melony:
-        specifier: ^0.3.5
-        version: 0.3.5
+        specifier: ^0.3.7
+        version: 0.3.7
       zod:
         specifier: ^4.3.5
         version: 4.3.6
@@ -519,8 +519,8 @@ packages:
     resolution: {integrity: sha512-dq+qelQ9akHpcOl/gUVRTxVIOkAJ1wR3QAvb4RsVjS8oVoFjDGTc679wJYmUmknUF5HwMLOgb5O+a3KxfWapPQ==}
     engines: {node: '>= 0.6'}
 
-  melony@0.3.5:
-    resolution: {integrity: sha512-ipLA580eHLpk7CknF6G2see8za+xQxb6ED/ZNYFPF5hVfQsAMeCKnYXanV0BaK5ZRg2/FX7lbp5NZqREkDfP4Q==}
+  melony@0.3.7:
+    resolution: {integrity: sha512-8Q8hX5pIgoyMgvMi8t3FW2/JhgrMVNDmvoElE7dS0VeuEfhMSbRqtYI7Ej+Wre+8pqqwm/fa/ZEgfC7+3YiP2A==}
     hasBin: true
 
   merge-descriptors@1.0.3:
@@ -1112,7 +1112,7 @@ snapshots:
 
   media-typer@0.3.0: {}
 
-  melony@0.3.5:
+  melony@0.3.7:
     dependencies:
       commander: 14.0.3
       dotenv: 16.6.1
