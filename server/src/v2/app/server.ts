@@ -6,8 +6,8 @@ import { OpenBotEvent, OpenBotState } from './types.js';
 import path from 'path';
 import fs from 'fs/promises';
 import { processService } from '../services/process.js';
-import { createOpenBot } from './open-bot.js';
 import { storageService } from '../services/storage.js';
+import { orchestratorService } from '../services/orchestrator.js';
 import { initPlugins } from './plugins.js';
 import { openBotEventFromQuery } from './utils.js';
 
@@ -98,22 +98,26 @@ export async function startServer(options: ServerOptions = {}) {
 
     res.sendStatus(200);
 
-    const agentRuntime = await createOpenBot({
-      agentId,
-      plugins: ['storage'],
-    });
-
-    // Broadcast each runtime chunk as an SSE "data:" frame to all subscribers of this thread.
-    for await (const chunk of agentRuntime.run(event, { state })) {
+    const onEvent = async (chunk: OpenBotEvent) => {
       await storageService.storeEvent({ threadId, event: chunk });
 
       const threadClients = clients.get(threadId);
       if (threadClients) {
         threadClients.forEach((client) => {
-          client.write(`data: ${JSON.stringify(chunk)}\n\n`);
+          if (!client.writableEnded) {
+            client.write(`data: ${JSON.stringify(chunk)}\n\n`);
+          }
         });
       }
-    }
+    };
+
+    await orchestratorService.executeAgent({
+      agentId,
+      event,
+      state,
+      threadId,
+      onEvent,
+    });
   });
 
   app.get('/api/state', async (req, res) => {
@@ -137,14 +141,17 @@ export async function startServer(options: ServerOptions = {}) {
       agentId,
     };
 
-    const agentRuntime = await createOpenBot({
-      agentId,
-      plugins: ['storage'],
-    });
-
-    for await (const chunk of agentRuntime.run(event, { state })) {
+    const onEvent = async (chunk: OpenBotEvent) => {
       events.push(chunk);
-    }
+    };
+
+    await orchestratorService.executeAgent({
+      agentId,
+      event,
+      state,
+      threadId,
+      onEvent,
+    });
 
     res.json({ events });
   });

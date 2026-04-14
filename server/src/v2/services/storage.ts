@@ -8,6 +8,7 @@ import {
   VARIABLES_FILE,
 } from '../app/config.js';
 import fs from 'node:fs/promises';
+import matter from 'gray-matter';
 import { Agent, AgentDetails, Channel, ChannelDetails, Plugin } from '../plugins/storage.js';
 import { OpenBotEvent } from '../app/types.js';
 
@@ -117,13 +118,15 @@ export const storageService = {
     }
 
     try {
-      const agentMd = await fs.readFile(agentMdPath);
+      const agentMd = await fs.readFile(agentMdPath, 'utf-8');
+      const { data, content: instructions } = matter(agentMd);
 
       return {
         id: agentId,
-        name: agentId,
-        instructions: agentMd.toString(),
-        description: '',
+        name: data.name || agentId,
+        instructions: instructions.trim(),
+        plugins: data.plugins || [],
+        description: data.description || '',
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -133,6 +136,7 @@ export const storageService = {
         id: agentId,
         name: agentId,
         instructions: DEFAULT_AGENT_MD,
+        plugins: [],
         description: '',
         createdAt: new Date(),
         updatedAt: new Date(),

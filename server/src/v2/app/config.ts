@@ -71,7 +71,6 @@ export function loadVariables(): { version: number; variables: StoredVariable[] 
 }
 
 export const DEFAULT_AGENT_MD = `---
-name: Agent
 description: A specialized AI agent
 ---
 

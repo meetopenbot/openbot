@@ -11,6 +11,7 @@ export type Agent = {
 
 export type AgentDetails = Agent & {
   instructions: string;
+  plugins?: (string | { name: string; config?: any })[];
 };
 
 export type Plugin = {

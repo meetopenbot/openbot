@@ -16,7 +16,6 @@ export type UserInputEvent = BaseEvent & {
     content: string;
   };
   meta?: {
-    delegation?: boolean;
     agentId?: string;
   };
 };
@@ -133,11 +132,20 @@ export type AgentOutputEvent = BaseEvent & {
   };
 };
 
+export type AgentDelegateEvent = BaseEvent & {
+  type: 'agent:delegate';
+  data: {
+    agentId: string;
+    content: string;
+  };
+};
+
 export type OpenBotEvent =
   | UserInputEvent
   | UIMessageEvent
   | AgentInputEvent
   | AgentOutputEvent
+  | AgentDelegateEvent
   | GetChannelsEvent
   | GetChannelsResultEvent
   | GetChannelDetailsEvent
