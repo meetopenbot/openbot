@@ -28,7 +28,9 @@ const listPluginsFromDisk = async (): Promise<Plugin[]> => {
   }
 
   const plugins = (await fs.readdir(pluginsDir, { withFileTypes: true }))
-    .filter((entry) => !entry.name.startsWith('.') && (entry.isDirectory() || entry.isSymbolicLink()))
+    .filter(
+      (entry) => !entry.name.startsWith('.') && (entry.isDirectory() || entry.isSymbolicLink()),
+    )
     .map((entry) => mapNameToPlugin(entry.name));
 
   return plugins;
@@ -43,8 +45,7 @@ export const storageService = {
       await fs.mkdir(channelsDir, { recursive: true });
     }
 
-    const channels = (await fs.readdir(channelsDir))
-      .filter(name => !name.startsWith('.'));
+    const channels = (await fs.readdir(channelsDir)).filter((name) => !name.startsWith('.'));
 
     return channels.map((channel) => ({
       id: channel,
@@ -91,8 +92,7 @@ export const storageService = {
       await fs.mkdir(agentsDir, { recursive: true });
     }
 
-    const agents = (await fs.readdir(agentsDir))
-      .filter(name => !name.startsWith('.'));
+    const agents = (await fs.readdir(agentsDir)).filter((name) => !name.startsWith('.'));
 
     return agents.map((agent) => ({
       id: agent,
@@ -116,16 +116,28 @@ export const storageService = {
       await fs.writeFile(agentMdPath, DEFAULT_AGENT_MD);
     }
 
-    const agentMd = await fs.readFile(agentMdPath);
+    try {
+      const agentMd = await fs.readFile(agentMdPath);
 
-    return {
-      id: agentId,
-      name: agentId,
-      instructions: agentMd.toString(),
-      description: '',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+      return {
+        id: agentId,
+        name: agentId,
+        instructions: agentMd.toString(),
+        description: '',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    } catch (error) {
+      console.error(`Failed to read agent MD file for agent ${agentId}`);
+      return {
+        id: agentId,
+        name: agentId,
+        instructions: DEFAULT_AGENT_MD,
+        description: '',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    }
   },
   getEvents: async ({ threadId }: { threadId: string }): Promise<OpenBotEvent[]> => {
     try {

@@ -15,6 +15,10 @@ export type UserInputEvent = BaseEvent & {
   data: {
     content: string;
   };
+  meta?: {
+    delegation?: boolean;
+    agentId?: string;
+  };
 };
 
 export type UIMessageEvent = BaseEvent & {
@@ -25,20 +29,6 @@ export type UIMessageEvent = BaseEvent & {
   };
   meta: {
     agentId?: string;
-  };
-};
-
-export type AISDKInputEvent = BaseEvent & {
-  type: 'plugin:ai-sdk:input';
-  data: {
-    content: string;
-  };
-};
-
-export type AISDKOutputEvent = BaseEvent & {
-  type: 'plugin:ai-sdk:output';
-  data: {
-    content: string;
   };
 };
 
@@ -99,6 +89,9 @@ export type GetEventsResultEvent = BaseEvent & {
 
 export type GetAgentDetailsEvent = BaseEvent & {
   type: 'plugin:storage:get-agent-details';
+  data: {
+    agentId: string;
+  };
 };
 
 export type GetAgentDetailsResultEvent = BaseEvent & {
@@ -126,11 +119,25 @@ export type GetVariablesResultEvent = BaseEvent & {
   };
 };
 
+export type AgentInputEvent = BaseEvent & {
+  type: 'agent:input';
+  data: {
+    content: string;
+  };
+};
+
+export type AgentOutputEvent = BaseEvent & {
+  type: 'agent:output';
+  data: {
+    content: string;
+  };
+};
+
 export type OpenBotEvent =
   | UserInputEvent
   | UIMessageEvent
-  | AISDKInputEvent
-  | AISDKOutputEvent
+  | AgentInputEvent
+  | AgentOutputEvent
   | GetChannelsEvent
   | GetChannelsResultEvent
   | GetChannelDetailsEvent

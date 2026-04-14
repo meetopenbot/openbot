@@ -87,8 +87,8 @@ export const storagePlugin =
       };
     });
 
-    builder.on('plugin:storage:get-agent-details', async function* (_, state) {
-      const agentDetails = await storage.getAgentDetails(state.state);
+    builder.on('plugin:storage:get-agent-details', async function* (event, state) {
+      const agentDetails = await storage.getAgentDetails({ agentId: event.data.agentId });
       yield {
         type: 'plugin:storage:get-agent-details-result',
         data: { agentDetails },

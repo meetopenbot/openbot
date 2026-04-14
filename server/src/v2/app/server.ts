@@ -8,6 +8,8 @@ import fs from 'fs/promises';
 import { processService } from '../services/process.js';
 import { createOpenBot } from './open-bot.js';
 import { storageService } from '../services/storage.js';
+import { initPlugins } from './plugins.js';
+import { openBotEventFromQuery } from './utils.js';
 
 export interface ServerOptions {
   port?: number;
@@ -25,12 +27,13 @@ export async function startServer(options: ServerOptions = {}) {
   const app = express();
   const clients: Map<string, express.Response[]> = new Map();
 
-  const runtime = createOpenBot({ agentId: 'default' });
-
   const agentsDir = path.join(openBotDir, 'agents');
   const pluginsDir = path.join(openBotDir, 'plugins');
+
   await fs.mkdir(agentsDir, { recursive: true });
   await fs.mkdir(pluginsDir, { recursive: true });
+
+  initPlugins(pluginsDir);
 
   app.use(cors());
   app.use(express.json({ limit: '20mb' }));
@@ -85,7 +88,7 @@ export async function startServer(options: ServerOptions = {}) {
     const event = req.body as OpenBotEvent;
     const threadId = (req.get('x-openbot-thread-id') || req.body.threadId || 'default') as string;
     const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
-    const agentId = req.get('x-openbot-agent-id') || 'default';
+    const agentId = 'system';
 
     const state: OpenBotState = {
       threadId,
@@ -95,8 +98,13 @@ export async function startServer(options: ServerOptions = {}) {
 
     res.sendStatus(200);
 
+    const agentRuntime = await createOpenBot({
+      agentId,
+      plugins: ['storage'],
+    });
+
     // Broadcast each runtime chunk as an SSE "data:" frame to all subscribers of this thread.
-    for await (const chunk of runtime.run(event, { state })) {
+    for await (const chunk of agentRuntime.run(event, { state })) {
       await storageService.storeEvent({ threadId, event: chunk });
 
       const threadClients = clients.get(threadId);
@@ -109,10 +117,17 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.get('/api/state', async (req, res) => {
-    const event = req.query as OpenBotEvent;
+    let event: OpenBotEvent;
+    try {
+      event = openBotEventFromQuery(req.query);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Invalid query';
+      res.status(400).json({ error: message });
+      return;
+    }
     const threadId = req.get('x-openbot-thread-id') || 'default';
     const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
-    const agentId = req.get('x-openbot-agent-id') || 'default';
+    const agentId = 'system';
 
     const events: OpenBotEvent[] = [];
 
@@ -122,9 +137,12 @@ export async function startServer(options: ServerOptions = {}) {
       agentId,
     };
 
-    const runtime = createOpenBot({ agentId: state.agentId });
+    const agentRuntime = await createOpenBot({
+      agentId,
+      plugins: ['storage'],
+    });
 
-    for await (const chunk of runtime.run(event, { state })) {
+    for await (const chunk of agentRuntime.run(event, { state })) {
       events.push(chunk);
     }
 
