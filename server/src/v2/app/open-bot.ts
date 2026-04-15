@@ -57,15 +57,17 @@ export const createOpenBot = async ({
           };
           return;
         }
+      } else {
+        // Default behavior (thinking)
+        // System agent should not think
+        yield {
+          type: 'agent:input',
+          data: {
+            content: event.data.content,
+            agentId,
+          },
+        };
       }
-
-      // Default behavior (thinking)
-      yield {
-        type: 'agent:input',
-        data: {
-          content: event.data.content,
-        },
-      };
     })
     .on('agent:output', async function* (event) {
       yield {
@@ -82,8 +84,10 @@ export const createOpenBot = async ({
 
   // Load plugins from config
   for (const p of plugins) {
-    const name = typeof p === 'string' ? p : p.name;
-    const config = typeof p === 'string' ? {} : p.config || {};
+    const name = typeof p === 'string' ? p : p?.name || 'Unknown Plugin';
+    // If the plugin is a string, use the default config
+    // If the plugin is an object, use the config and merge it with the instructions
+    const config = typeof p === 'string' ? {} : typeof p === 'object' ? { instructions, ...p } : {};
     const plugin = await resolvePlugin(name, config, instructions);
     if (plugin) {
       runtime.use(plugin);
@@ -92,4 +96,3 @@ export const createOpenBot = async ({
 
   return runtime.build();
 };
-

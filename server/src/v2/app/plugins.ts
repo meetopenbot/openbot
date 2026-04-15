@@ -55,7 +55,7 @@ export async function resolvePlugin(
       try {
         // Dynamic import needs file:// URL for absolute paths
         const module = await import(pathToFileURL(distPath).href);
-        const factory = module.default || module.plugin;
+        const factory = module.plugin.factory;
 
         if (typeof factory === 'function') {
           console.log(`[plugins] Loaded community plugin "${pluginName}" from ${distPath}`);

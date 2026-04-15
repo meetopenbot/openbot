@@ -33,7 +33,13 @@ export const orchestratorService = {
       plugins: agentDetails.plugins,
     });
 
+    let hasProducedOutput = false;
+
     for await (const chunk of agentRuntime.run(event, { state })) {
+      if (chunk.type === 'agent:output') {
+        hasProducedOutput = true;
+      }
+
       await onEvent(chunk);
 
       // Recursive delegation handling
@@ -50,6 +56,28 @@ export const orchestratorService = {
           onEvent,
         });
       }
+    }
+
+    // If the event was an agent:input but no output or delegation was yielded,
+    // the agent is likely misconfigured (e.g., missing an LLM plugin).
+    if (event.type === 'agent:input' && !hasProducedOutput) {
+      await onEvent({
+        type: 'agent:output',
+        data: {
+          content: `⚠️ **${agentId}** is not configured to handle inputs. Please check its plugin configuration (e.g., missing \`ai-sdk\`).`,
+        },
+      });
+
+      await onEvent({
+        type: 'client:ui:message',
+        data: {
+          content: `⚠️ **${agentId}** is not configured to handle inputs. Please check its plugin configuration (e.g., missing \`ai-sdk\`).`,
+          role: 'assistant',
+        },
+        meta: {
+          agentId,
+        },
+      });
     }
   },
 };

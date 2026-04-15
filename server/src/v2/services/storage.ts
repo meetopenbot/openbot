@@ -11,14 +11,22 @@ import fs from 'node:fs/promises';
 import matter from 'gray-matter';
 import { Agent, AgentDetails, Channel, ChannelDetails, Plugin } from '../plugins/storage.js';
 import { OpenBotEvent } from '../app/types.js';
+import { pathToFileURL } from 'node:url';
 
-const mapNameToPlugin = (name: string): Plugin => ({
+const mapNameToPlugin = (name: string, description: string): Plugin => ({
   id: name,
   name,
-  description: '',
+  description,
   createdAt: new Date(),
   updatedAt: new Date(),
 });
+
+const listBuiltInPlugins = async (): Promise<Plugin[]> => {
+  return [
+    mapNameToPlugin('storage', 'Built-in storage plugin'),
+    mapNameToPlugin('ai-sdk', 'Built-in AI SDK plugin'),
+  ];
+};
 
 const listPluginsFromDisk = async (): Promise<Plugin[]> => {
   const pluginsDir = resolvePath(DEFAULT_BASE_DIR + '/' + DEFAULT_PLUGINS_DIR);
@@ -32,9 +40,13 @@ const listPluginsFromDisk = async (): Promise<Plugin[]> => {
     .filter(
       (entry) => !entry.name.startsWith('.') && (entry.isDirectory() || entry.isSymbolicLink()),
     )
-    .map((entry) => mapNameToPlugin(entry.name));
+    .map(async (entry) => {
+      // get dist/index module and find inside module.plugin.description
+      const module = await import(pathToFileURL(`${pluginsDir}/${entry.name}/dist/index.js`).href);
+      return mapNameToPlugin(module.plugin.name || entry.name, module.plugin.description || '');
+    });
 
-  return plugins;
+  return Promise.all(plugins);
 };
 
 export const storageService = {
@@ -104,7 +116,20 @@ export const storageService = {
     }));
   },
   getPlugins: async (): Promise<Plugin[]> => {
-    return listPluginsFromDisk();
+    const [builtInPlugins, diskPlugins] = await Promise.all([
+      listBuiltInPlugins(),
+      listPluginsFromDisk(),
+    ]);
+
+    const merged = [...builtInPlugins, ...diskPlugins];
+    const deduped = new Map<string, Plugin>();
+    for (const plugin of merged) {
+      if (!deduped.has(plugin.id)) {
+        deduped.set(plugin.id, plugin);
+      }
+    }
+
+    return Array.from(deduped.values());
   },
   getAgentDetails: async ({ agentId }: { agentId: string }): Promise<AgentDetails> => {
     const agentDir = resolvePath(DEFAULT_BASE_DIR + '/' + DEFAULT_AGENTS_DIR + '/' + agentId);
