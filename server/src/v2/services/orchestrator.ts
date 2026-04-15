@@ -1,4 +1,4 @@
-import { createOpenBot } from '../app/open-bot.js';
+import { createOpenBotRuntime } from '../app/open-bot.js';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { storageService } from './storage.js';
 
@@ -17,6 +17,7 @@ export const orchestratorService = {
   executeAgent: async (options: ExecuteAgentOptions): Promise<void> => {
     const { agentId, event, state, threadId, onEvent } = options;
 
+    // agent details
     let agentDetails;
     if (agentId === 'system') {
       agentDetails = {
@@ -27,7 +28,8 @@ export const orchestratorService = {
       agentDetails = await storageService.getAgentDetails({ agentId });
     }
 
-    const agentRuntime = await createOpenBot({
+    // agent runtime
+    const agentRuntime = await createOpenBotRuntime({
       agentId,
       instructions: agentDetails.instructions,
       plugins: agentDetails.plugins,
@@ -35,12 +37,15 @@ export const orchestratorService = {
 
     let hasProducedOutput = false;
 
+    // RUN
     for await (const chunk of agentRuntime.run(event, { state })) {
+      // EVENT
+      await onEvent(chunk);
+
+      // has produced output
       if (chunk.type === 'agent:output') {
         hasProducedOutput = true;
       }
-
-      await onEvent(chunk);
 
       // Recursive delegation handling
       if (chunk.type === 'agent:delegate') {

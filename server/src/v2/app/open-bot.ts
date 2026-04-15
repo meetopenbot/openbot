@@ -21,7 +21,7 @@ function parseMention(content: string) {
   return { agentId: targetAgentId, stripped };
 }
 
-export const createOpenBot = async ({
+export const createOpenBotRuntime = async ({
   agentId,
   instructions,
   plugins = [],
