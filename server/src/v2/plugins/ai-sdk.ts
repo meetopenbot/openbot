@@ -53,7 +53,7 @@ export const aiSdkPlugin =
     const { model: modelString = 'openai/gpt-4o-mini', system, toolDefinitions = {} } = options;
     const model = resolveModel(modelString);
 
-    builder.on('agent:input', async function* (event, context) {
+    builder.on('agent:invoke', async function* (event, context) {
       const result = await generateText({
         model,
         system: typeof system === 'function' ? await system(context) : system,

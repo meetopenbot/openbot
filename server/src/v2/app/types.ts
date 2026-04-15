@@ -10,12 +10,10 @@ export type BaseEvent = {
   type: string;
 };
 
-export type UserInputEvent = BaseEvent & {
-  type: 'user:input';
+export type AgentInvokeEvent = BaseEvent & {
+  type: 'agent:invoke';
   data: {
     content: string;
-  };
-  meta?: {
     agentId?: string;
   };
 };
@@ -118,13 +116,6 @@ export type GetVariablesResultEvent = BaseEvent & {
   };
 };
 
-export type AgentInputEvent = BaseEvent & {
-  type: 'agent:input';
-  data: {
-    content: string;
-  };
-};
-
 export type AgentOutputEvent = BaseEvent & {
   type: 'agent:output';
   data: {
@@ -132,20 +123,10 @@ export type AgentOutputEvent = BaseEvent & {
   };
 };
 
-export type AgentDelegateEvent = BaseEvent & {
-  type: 'agent:delegate';
-  data: {
-    agentId: string;
-    content: string;
-  };
-};
-
 export type OpenBotEvent =
-  | UserInputEvent
+  | AgentInvokeEvent
   | UIMessageEvent
-  | AgentInputEvent
   | AgentOutputEvent
-  | AgentDelegateEvent
   | GetChannelsEvent
   | GetChannelsResultEvent
   | GetChannelDetailsEvent

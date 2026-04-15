@@ -85,10 +85,20 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.post('/api/publish', async (req, res) => {
-    const event = req.body as OpenBotEvent;
+    let event = req.body as OpenBotEvent;
     const threadId = (req.get('x-openbot-thread-id') || req.body.threadId || 'default') as string;
     const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
     const agentId = 'system';
+
+    // If the event is user:input (legacy client), convert it to agent:invoke
+    if ((event as any).type === 'user:input') {
+      event = {
+        type: 'agent:invoke',
+        data: {
+          content: (event as any).data.content,
+        },
+      };
+    }
 
     const state: OpenBotState = {
       threadId,
@@ -111,6 +121,18 @@ export async function startServer(options: ServerOptions = {}) {
       }
     };
 
+    // Store the original user input once as a UI message for the history
+    await onEvent({
+      type: 'client:ui:message',
+      data: {
+        content: (req.body as any).data?.content || '',
+        role: 'user',
+      },
+      meta: {
+        agentId: 'system',
+      },
+    });
+
     await orchestratorService.executeAgent({
       agentId,
       event,
@@ -124,6 +146,15 @@ export async function startServer(options: ServerOptions = {}) {
     let event: OpenBotEvent;
     try {
       event = openBotEventFromQuery(req.query);
+      // If the event is user:input (legacy client), convert it to agent:invoke
+      if ((event as any).type === 'user:input') {
+        event = {
+          type: 'agent:invoke',
+          data: {
+            content: (event as any).data.content,
+          },
+        };
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Invalid query';
       res.status(400).json({ error: message });

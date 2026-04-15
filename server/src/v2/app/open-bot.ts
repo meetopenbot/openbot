@@ -31,25 +31,16 @@ export const createOpenBotRuntime = async ({
   plugins?: (string | { name: string; config?: any })[];
 }): Promise<Runtime<OpenBotState, OpenBotEvent>> => {
   const runtime = melony<OpenBotState, OpenBotEvent>()
-    .on('user:input', async function* (event) {
-      // 1. Yield the user message
-      yield {
-        type: 'client:ui:message',
-        data: {
-          content: event.data.content,
-          role: 'user',
-        },
-        meta: {
-          agentId,
-        },
-      };
+    .on('agent:invoke', async function* (event) {
+      const { content, agentId: targetAgentId } = event.data;
 
-      // 2. Handle delegation or direct input
-      if (agentId === 'system') {
-        const mention = parseMention(event.data.content);
+      // 1. Mentions are parsed only by the 'system' agent when no specific target is set.
+      if (agentId === 'system' && !targetAgentId) {
+        const mention = parseMention(content);
         if (mention) {
+          // Re-invoke the specific agent mentioned. 
           yield {
-            type: 'agent:delegate',
+            type: 'agent:invoke',
             data: {
               agentId: mention.agentId,
               content: mention.stripped,
@@ -57,16 +48,6 @@ export const createOpenBotRuntime = async ({
           };
           return;
         }
-      } else {
-        // Default behavior (thinking)
-        // System agent should not think
-        yield {
-          type: 'agent:input',
-          data: {
-            content: event.data.content,
-            agentId,
-          },
-        };
       }
     })
     .on('agent:output', async function* (event) {

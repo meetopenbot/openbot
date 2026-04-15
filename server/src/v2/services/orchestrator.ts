@@ -36,6 +36,7 @@ export const orchestratorService = {
     });
 
     let hasProducedOutput = false;
+    let hasInvokedOther = false;
 
     // RUN
     for await (const chunk of agentRuntime.run(event, { state })) {
@@ -47,25 +48,26 @@ export const orchestratorService = {
         hasProducedOutput = true;
       }
 
-      // Recursive delegation handling
-      if (chunk.type === 'agent:delegate') {
-        const { agentId: targetAgentId, content: targetContent } = chunk.data;
-        await orchestratorService.executeAgent({
-          agentId: targetAgentId,
-          event: {
-            type: 'agent:input',
-            data: { content: targetContent },
-          },
-          state: { ...state, agentId: targetAgentId },
-          threadId,
-          onEvent,
-        });
+      // Recursive invocation handling
+      if (chunk.type === 'agent:invoke') {
+        const { agentId: targetAgentId } = chunk.data;
+
+        // If the runtime yielded an event targeting a DIFFERENT agent, we recurse.
+        if (targetAgentId && targetAgentId !== agentId) {
+          hasInvokedOther = true;
+          await orchestratorService.executeAgent({
+            ...options,
+            agentId: targetAgentId,
+            event: chunk,
+            state: { ...state, agentId: targetAgentId },
+          });
+        }
       }
     }
 
-    // If the event was an agent:input but no output or delegation was yielded,
+    // If the event was an agent:invoke but no output or further invocation was yielded,
     // the agent is likely misconfigured (e.g., missing an LLM plugin).
-    if (event.type === 'agent:input' && !hasProducedOutput) {
+    if (event.type === 'agent:invoke' && !hasProducedOutput && !hasInvokedOther) {
       await onEvent({
         type: 'agent:output',
         data: {
