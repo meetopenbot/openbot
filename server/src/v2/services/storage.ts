@@ -4,6 +4,7 @@ import {
   DEFAULT_BASE_DIR,
   DEFAULT_CHANNELS_DIR,
   DEFAULT_PLUGINS_DIR,
+  loadConfig,
   resolvePath,
   VARIABLES_FILE,
 } from '../app/config.js';
@@ -21,6 +22,11 @@ const mapNameToPlugin = (name: string, description: string): Plugin => ({
   updatedAt: new Date(),
 });
 
+const resolveBaseDir = () => {
+  const config = loadConfig();
+  return resolvePath(config.baseDir || DEFAULT_BASE_DIR);
+};
+
 const listBuiltInPlugins = async (): Promise<Plugin[]> => {
   return [
     mapNameToPlugin('storage', 'Built-in storage plugin'),
@@ -29,7 +35,7 @@ const listBuiltInPlugins = async (): Promise<Plugin[]> => {
 };
 
 const listPluginsFromDisk = async (): Promise<Plugin[]> => {
-  const pluginsDir = resolvePath(DEFAULT_BASE_DIR + '/' + DEFAULT_PLUGINS_DIR);
+  const pluginsDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_PLUGINS_DIR);
   try {
     await fs.access(pluginsDir);
   } catch {
@@ -51,7 +57,7 @@ const listPluginsFromDisk = async (): Promise<Plugin[]> => {
 
 export const storageService = {
   getChannels: async (): Promise<Channel[]> => {
-    const channelsDir = resolvePath(DEFAULT_BASE_DIR + '/' + DEFAULT_CHANNELS_DIR);
+    const channelsDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR);
     try {
       await fs.access(channelsDir);
     } catch {
@@ -69,7 +75,7 @@ export const storageService = {
     }));
   },
   getChannelDetails: async ({ threadId }: { threadId: string }): Promise<ChannelDetails> => {
-    const threadDir = resolvePath(DEFAULT_BASE_DIR + '/' + DEFAULT_CHANNELS_DIR + '/' + threadId);
+    const threadDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + threadId);
     const specPath = `${threadDir}/SPEC.md`;
     const statePath = `${threadDir}/state.json`;
 
@@ -98,7 +104,7 @@ export const storageService = {
     };
   },
   getAgents: async (): Promise<Agent[]> => {
-    const agentsDir = resolvePath(DEFAULT_BASE_DIR + '/' + DEFAULT_AGENTS_DIR);
+    const agentsDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_AGENTS_DIR);
     try {
       await fs.access(agentsDir);
     } catch {
@@ -132,7 +138,7 @@ export const storageService = {
     return Array.from(deduped.values());
   },
   getAgentDetails: async ({ agentId }: { agentId: string }): Promise<AgentDetails> => {
-    const agentDir = resolvePath(DEFAULT_BASE_DIR + '/' + DEFAULT_AGENTS_DIR + '/' + agentId);
+    const agentDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_AGENTS_DIR + '/' + agentId);
     const agentMdPath = `${agentDir}/AGENT.md`;
 
     try {
@@ -172,7 +178,7 @@ export const storageService = {
     try {
       const events = await fs.readFile(
         resolvePath(
-          DEFAULT_BASE_DIR + '/' + DEFAULT_CHANNELS_DIR + '/' + threadId + '/events.jsonl',
+          resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + threadId + '/events.jsonl',
         ),
       );
 
@@ -195,7 +201,7 @@ export const storageService = {
     event: OpenBotEvent;
   }): Promise<void> => {
     try {
-      const threadDir = resolvePath(DEFAULT_BASE_DIR + '/' + DEFAULT_CHANNELS_DIR + '/' + threadId);
+      const threadDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + threadId);
       await fs.mkdir(threadDir, { recursive: true });
       await fs.appendFile(`${threadDir}/events.jsonl`, `${JSON.stringify(event)}\n`);
     } catch (error) {
@@ -203,7 +209,7 @@ export const storageService = {
     }
   },
   getVariables: async (): Promise<Record<string, string>> => {
-    const variables = await fs.readFile(resolvePath(DEFAULT_BASE_DIR + '/' + VARIABLES_FILE));
+    const variables = await fs.readFile(resolvePath(resolveBaseDir() + '/' + VARIABLES_FILE));
 
     return JSON.parse(variables.toString()) as Record<string, string>;
   },
