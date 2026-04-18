@@ -146,28 +146,33 @@ export const storageService = {
     const specPath = `${threadDir}/SPEC.md`;
     const statePath = `${threadDir}/state.json`;
 
+    let spec = '';
     try {
-      await fs.access(specPath);
-    } catch {
-      await fs.mkdir(threadDir, { recursive: true });
-      await fs.writeFile(specPath, '');
+      spec = await fs.readFile(specPath, 'utf-8');
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        console.error(`Failed to read spec file for channel ${channelId} thread ${threadId}`, error);
+      }
     }
 
+    let state = {};
     try {
-      await fs.access(statePath);
-    } catch {
-      await fs.mkdir(threadDir, { recursive: true });
-      await fs.writeFile(statePath, '{}');
+      const stateContent = await fs.readFile(statePath, 'utf-8');
+      state = JSON.parse(stateContent);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        console.error(
+          `Failed to read state file for channel ${channelId} thread ${threadId}`,
+          error,
+        );
+      }
     }
-
-    const channelSpec = await fs.readFile(specPath);
-    const channelState = await fs.readFile(statePath);
 
     const details: ChannelDetails = {
       id: threadId || channelId,
       name: threadId || channelId,
-      spec: channelSpec.toString(),
-      state: JSON.parse(channelState.toString()),
+      spec,
+      state,
     };
 
     if (!threadId) {
@@ -324,7 +329,10 @@ export const storageService = {
             if (threadId && threadSet.has(threadId)) {
               return {
                 ...event,
-                threadId,
+                meta: {
+                  ...(event as any)?.meta,
+                  hasThread: true,
+                },
               };
             }
 
@@ -337,8 +345,10 @@ export const storageService = {
       }
 
       return events;
-    } catch (error) {
-      console.error(`Failed to get events for channel ${channelId} thread ${threadId}`);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        console.error(`Failed to get events for channel ${channelId} thread ${threadId}`, error);
+      }
       return [];
     }
   },
