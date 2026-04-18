@@ -103,6 +103,35 @@ export const storageService = {
       state: JSON.parse(channelState.toString()),
     };
   },
+  patchChannelState: async ({
+    threadId,
+    state: patch,
+  }: {
+    threadId: string;
+    state: unknown;
+  }): Promise<void> => {
+    const threadDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + threadId);
+    const statePath = `${threadDir}/state.json`;
+
+    try {
+      // 1. Fetch current details to get the existing state
+      const currentDetails = await storageService.getChannelDetails({ threadId });
+      const currentState = (currentDetails.state as Record<string, unknown>) || {};
+
+      // 2. Perform a shallow merge (patch)
+      const newState = {
+        ...currentState,
+        ...(patch as Record<string, unknown>),
+      };
+
+      // 3. Write back the merged state
+      await fs.mkdir(threadDir, { recursive: true });
+      await fs.writeFile(statePath, JSON.stringify(newState, null, 2));
+    } catch (error) {
+      console.error(`Failed to patch channel state for thread ${threadId}`, error);
+      throw error;
+    }
+  },
   getAgents: async (): Promise<Agent[]> => {
     const agentsDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_AGENTS_DIR);
     try {

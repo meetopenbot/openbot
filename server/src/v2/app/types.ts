@@ -4,6 +4,8 @@ export interface OpenBotState {
   agentId: string;
   runId: string;
   threadId: string;
+  agentDetails?: AgentDetails;
+  channelDetails?: ChannelDetails;
 }
 
 export type BaseEvent = {
@@ -30,69 +32,69 @@ export type UIMessageEvent = BaseEvent & {
 };
 
 export type GetChannelsEvent = BaseEvent & {
-  type: 'plugin:storage:get-channels';
+  type: 'action:storage:get-channels';
 };
 
 export type GetChannelsResultEvent = BaseEvent & {
-  type: 'plugin:storage:get-channels-result';
+  type: 'action:storage:get-channels-result';
   data: {
     channels: Channel[];
   };
 };
 
 export type GetChannelDetailsEvent = BaseEvent & {
-  type: 'plugin:storage:get-channel-details';
+  type: 'action:storage:get-channel-details';
 };
 
 export type GetChannelDetailsResultEvent = BaseEvent & {
-  type: 'plugin:storage:get-channel-details-result';
+  type: 'action:storage:get-channel-details-result';
   data: {
     channelDetails: ChannelDetails;
   };
 };
 
 export type GetAgentsEvent = BaseEvent & {
-  type: 'plugin:storage:get-agents';
+  type: 'action:storage:get-agents';
 };
 
 export type GetAgentsResultEvent = BaseEvent & {
-  type: 'plugin:storage:get-agents-result';
+  type: 'action:storage:get-agents-result';
   data: {
     agents: Agent[];
   };
 };
 
 export type GetPluginsEvent = BaseEvent & {
-  type: 'plugin:storage:get-plugins';
+  type: 'action:storage:get-plugins';
 };
 
 export type GetPluginsResultEvent = BaseEvent & {
-  type: 'plugin:storage:get-plugins-result';
+  type: 'action:storage:get-plugins-result';
   data: {
     plugins: Plugin[];
   };
 };
 
 export type GetEventsEvent = BaseEvent & {
-  type: 'plugin:storage:get-events';
+  type: 'action:storage:get-events';
 };
 
 export type GetEventsResultEvent = BaseEvent & {
-  type: 'plugin:storage:get-events-result';
+  type: 'action:storage:get-events-result';
   data: {
     events: OpenBotEvent[];
   };
 };
 
 export type GetAgentDetailsEvent = BaseEvent & {
-  type: 'plugin:storage:get-agent-details';
+  type: 'action:storage:get-agent-details';
   data: {
     agentId: string;
   };
 };
 
 export type GetAgentDetailsResultEvent = BaseEvent & {
-  type: 'plugin:storage:get-agent-details-result';
+  type: 'action:storage:get-agent-details-result';
   data: {
     agentDetails: AgentDetails;
   };
@@ -106,13 +108,27 @@ export type StreamThreadEvent = BaseEvent & {
 };
 
 export type GetVariablesEvent = BaseEvent & {
-  type: 'plugin:storage:get-variables';
+  type: 'action:storage:get-variables';
 };
 
 export type GetVariablesResultEvent = BaseEvent & {
-  type: 'plugin:storage:get-variables-result';
+  type: 'action:storage:get-variables-result';
   data: {
     variables: Record<string, string>;
+  };
+};
+
+export type PatchChannelStateEvent = BaseEvent & {
+  type: 'action:storage:patch-channel-state';
+  data: {
+    state: unknown;
+  };
+};
+
+export type PatchChannelStateResultEvent = BaseEvent & {
+  type: 'action:storage:patch-channel-state-result';
+  data: {
+    success: boolean;
   };
 };
 
@@ -141,4 +157,6 @@ export type OpenBotEvent =
   | GetEventsResultEvent
   | StreamThreadEvent
   | GetVariablesEvent
-  | GetVariablesResultEvent;
+  | GetVariablesResultEvent
+  | PatchChannelStateEvent
+  | PatchChannelStateResultEvent;

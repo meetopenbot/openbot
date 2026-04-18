@@ -29,7 +29,6 @@ export function initPlugins(dir?: string) {
 export async function resolvePlugin(
   pluginName: string,
   config: any = {},
-  instructions?: string,
 ): Promise<MelonyPlugin<OpenBotState, OpenBotEvent> | null> {
   // 1. Built-in plugins
   switch (pluginName) {
@@ -37,7 +36,6 @@ export async function resolvePlugin(
       return storagePlugin({ storage: storageService, ...config });
     case 'ai-sdk':
       return aiSdkPlugin({
-        system: instructions || config.system,
         ...config,
       });
   }

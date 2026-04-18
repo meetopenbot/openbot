@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { DEFAULT_BASE_DIR, loadConfig, loadVariables, resolvePath } from '../app/config.js';
-import { OpenBotEvent, OpenBotState } from './types.js';
+import { OpenBotEvent } from './types.js';
 import path from 'path';
 import fs from 'fs/promises';
 import { processService } from '../services/process.js';
@@ -100,12 +100,6 @@ export async function startServer(options: ServerOptions = {}) {
       };
     }
 
-    const state: OpenBotState = {
-      threadId,
-      runId,
-      agentId,
-    };
-
     res.sendStatus(200);
 
     const onEvent = async (chunk: OpenBotEvent) => {
@@ -134,9 +128,9 @@ export async function startServer(options: ServerOptions = {}) {
     });
 
     await orchestratorService.executeAgent({
+      runId,
       agentId,
       event,
-      state,
       threadId,
       onEvent,
     });
@@ -166,20 +160,14 @@ export async function startServer(options: ServerOptions = {}) {
 
     const events: OpenBotEvent[] = [];
 
-    const state: OpenBotState = {
-      threadId,
-      runId,
-      agentId,
-    };
-
     const onEvent = async (chunk: OpenBotEvent) => {
       events.push(chunk);
     };
 
     await orchestratorService.executeAgent({
+      runId,
       agentId,
       event,
-      state,
       threadId,
       onEvent,
     });

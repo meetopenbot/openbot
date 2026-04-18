@@ -51,12 +51,36 @@ export const aiSdkPlugin =
   (options: AISDKPluginOptions): MelonyPlugin<OpenBotState, OpenBotEvent> =>
   (builder) => {
     const { model: modelString = 'openai/gpt-4o-mini', system, toolDefinitions = {} } = options;
+
     const model = resolveModel(modelString);
 
     builder.on('agent:invoke', async function* (event, context) {
+      const { agentDetails, channelDetails } = context.state;
+
+      let systemPrompt = '';
+
+      if (agentDetails) {
+        systemPrompt += `## AGENT NAME\n${agentDetails.name}\n\n`;
+        systemPrompt += `## AGENT SPECIFICATION\n${agentDetails.instructions}\n\n`;
+      }
+
+      if (channelDetails) {
+        systemPrompt += `## CHANNEL NAME\n${channelDetails.name}\n\n`;
+        systemPrompt += `## CHANNEL SPECIFICATION\n${channelDetails.spec}\n\n`;
+        systemPrompt += `## CHANNEL STATE\n${JSON.stringify(channelDetails.state, null, 2)}\n\n`;
+      }
+
+      if (system && typeof system === 'string') {
+        systemPrompt += `## SYSTEM INSTRUCTIONS\n${system}`;
+      }
+
+      if (system && typeof system === 'function') {
+        systemPrompt += await system(context);
+      }
+
       const result = await generateText({
         model,
-        system: typeof system === 'function' ? await system(context) : system,
+        system: systemPrompt,
         messages: [
           {
             role: 'user',

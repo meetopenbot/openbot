@@ -30,3 +30,22 @@ export function openBotEventFromQuery(query: express.Request['query']): OpenBotE
     throw new Error('Query parameter "data" must be valid JSON when provided');
   }
 }
+
+/**
+ * Detects mentions in the text, returns the first agentId found,
+ * and the content with ALL mentions removed.
+ */
+export function parseMention(content: string) {
+  const mentionPattern = /@([a-z0-9-_]+)/gi;
+  const matches = [...content.matchAll(mentionPattern)];
+
+  if (matches.length === 0) return null;
+
+  // Route to the FIRST mention
+  const targetAgentId = matches[0][1].toLowerCase();
+
+  // Strip ALL mentions from the text to keep the agent prompt clean
+  const stripped = content.replace(mentionPattern, '').trim();
+
+  return { agentId: targetAgentId, stripped };
+}

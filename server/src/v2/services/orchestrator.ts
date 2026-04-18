@@ -1,11 +1,12 @@
 import { createOpenBotRuntime } from '../app/open-bot.js';
-import { OpenBotEvent, OpenBotState } from '../app/types.js';
+import { OpenBotEvent } from '../app/types.js';
+import { AgentDetails, ChannelDetails } from '../plugins/storage.js';
 import { storageService } from './storage.js';
 
 export interface ExecuteAgentOptions {
+  runId: string;
   agentId: string;
   event: OpenBotEvent;
-  state: OpenBotState;
   threadId: string;
   onEvent: (chunk: OpenBotEvent) => Promise<void>;
 }
@@ -15,31 +16,60 @@ export const orchestratorService = {
    * Executes an agent runtime and handles recursive delegation.
    */
   executeAgent: async (options: ExecuteAgentOptions): Promise<void> => {
-    const { agentId, event, state, threadId, onEvent } = options;
+    const { runId, agentId, event, threadId, onEvent } = options;
 
     // agent details
     let agentDetails;
     if (agentId === 'system') {
       agentDetails = {
-        instructions: '',
-        plugins: ['storage'],
+        name: 'OpenBot',
+        instructions:
+          'You are OpenBot, the primary AI assistant and orchestrator of this workspace. Your goal is to help users onboard, answer questions about the system, and suggest specialized agents for specific tasks.\n\n' +
+          '### How to use OpenBot:\n' +
+          '1. **General Chat**: Just type your message here, and I will help you.\n' +
+          '2. **Specialized Agents**: You can @mention specialized agents for specific tasks. For example, use `@os` for terminal commands and file operations.\n' +
+          '3. **Channels**: Channels are shared spaces where multiple agents can participate. You can create new channels for different topics.\n' +
+          '4. **Local-First**: OpenBot runs entirely on your machine. Your data stays private and local.\n\n' +
+          'If you need to know what agents or plugins are installed, I can help you find that information.',
+        plugins: ['ai-sdk', 'storage'],
       };
     } else {
-      agentDetails = await storageService.getAgentDetails({ agentId });
+      try {
+        agentDetails = await storageService.getAgentDetails({ agentId });
+      } catch (error) {
+        console.warn(`[orchestrator] Failed to load agent details for agent: ${agentId}`, error);
+      }
+    }
+
+    let channelDetails;
+    // channel spec and state
+    if (threadId && threadId !== 'default') {
+      try {
+        channelDetails = await storageService.getChannelDetails({ threadId });
+      } catch (error) {
+        console.warn(
+          `[orchestrator] Failed to load channel details for thread: ${threadId}`,
+          error,
+        );
+      }
     }
 
     // agent runtime
     const agentRuntime = await createOpenBotRuntime({
-      agentId,
-      instructions: agentDetails.instructions,
-      plugins: agentDetails.plugins,
+      state: {
+        runId,
+        agentId,
+        threadId,
+        agentDetails: agentDetails as AgentDetails,
+        channelDetails: channelDetails as ChannelDetails,
+      },
     });
 
     let hasProducedOutput = false;
     let hasInvokedOther = false;
 
     // RUN
-    for await (const chunk of agentRuntime.run(event, { state })) {
+    for await (const chunk of agentRuntime.run(event)) {
       // EVENT
       await onEvent(chunk);
 
@@ -59,7 +89,6 @@ export const orchestratorService = {
             ...options,
             agentId: targetAgentId,
             event: chunk,
-            state: { ...state, agentId: targetAgentId },
           });
         }
       }
