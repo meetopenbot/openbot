@@ -9,7 +9,7 @@ import { processService } from '../services/process.js';
 import { storageService } from '../services/storage.js';
 import { orchestratorService } from '../services/orchestrator.js';
 import { initPlugins } from './plugins.js';
-import { openBotEventFromQuery } from './utils.js';
+import { ensureEventId, openBotEventFromQuery } from './utils.js';
 
 export interface ServerOptions {
   port?: number;
@@ -35,11 +35,28 @@ export async function startServer(options: ServerOptions = {}) {
 
   initPlugins(pluginsDir);
 
+  const getContext = (req: express.Request) => {
+    const xChannelId =
+      req.get('x-openbot-channel-id') || req.query.channelId || (req.body && req.body.channelId);
+    const xThreadId =
+      req.get('x-openbot-thread-id') || req.query.threadId || (req.body && req.body.threadId);
+
+    if (xChannelId) {
+      return { channelId: xChannelId as string, threadId: xThreadId as string | undefined };
+    }
+    // Fallback: if only threadId is provided, it's actually the channelId in the new model
+    return { channelId: (xThreadId || 'default') as string, threadId: undefined };
+  };
+
+  const getClientKey = (channelId: string, threadId?: string) =>
+    threadId ? `${channelId}:${threadId}` : channelId;
+
   app.use(cors());
   app.use(express.json({ limit: '20mb' }));
 
   app.get('/api/events', (req, res) => {
-    const threadId = (req.get('x-openbot-thread-id') || req.query.threadId || 'default') as string;
+    const { channelId, threadId } = getContext(req);
+    const clientKey = getClientKey(channelId, threadId);
 
     // SSE response headers: keep the HTTP connection open and unbuffered.
     res.setHeader('Content-Type', 'text/event-stream');
@@ -56,10 +73,10 @@ export async function startServer(options: ServerOptions = {}) {
     res.write(': connected\n\n');
 
     // Track all active SSE subscribers for fan-out in /api/publish.
-    if (!clients.has(threadId)) {
-      clients.set(threadId, []);
+    if (!clients.has(clientKey)) {
+      clients.set(clientKey, []);
     }
-    clients.get(threadId)!.push(res);
+    clients.get(clientKey)!.push(res);
 
     // Keep connection alive through intermediaries that close idle streams.
     const heartbeat = setInterval(() => {
@@ -71,14 +88,14 @@ export async function startServer(options: ServerOptions = {}) {
     req.on('close', () => {
       // Cleanup heartbeat + subscriber when the client disconnects.
       clearInterval(heartbeat);
-      const threadClients = clients.get(threadId);
+      const threadClients = clients.get(clientKey);
       if (threadClients) {
         const index = threadClients.indexOf(res);
         if (index !== -1) {
           threadClients.splice(index, 1);
         }
         if (threadClients.length === 0) {
-          clients.delete(threadId);
+          clients.delete(clientKey);
         }
       }
     });
@@ -86,7 +103,8 @@ export async function startServer(options: ServerOptions = {}) {
 
   app.post('/api/publish', async (req, res) => {
     let event = req.body as OpenBotEvent;
-    const threadId = (req.get('x-openbot-thread-id') || req.body.threadId || 'default') as string;
+    const { channelId, threadId } = getContext(req);
+    const clientKey = getClientKey(channelId, threadId);
     const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
     const agentId = 'system';
 
@@ -103,9 +121,10 @@ export async function startServer(options: ServerOptions = {}) {
     res.sendStatus(200);
 
     const onEvent = async (chunk: OpenBotEvent) => {
-      await storageService.storeEvent({ threadId, event: chunk });
+      ensureEventId(chunk);
+      await storageService.storeEvent({ channelId, threadId, event: chunk });
 
-      const threadClients = clients.get(threadId);
+      const threadClients = clients.get(clientKey);
       if (threadClients) {
         threadClients.forEach((client) => {
           if (!client.writableEnded) {
@@ -131,6 +150,7 @@ export async function startServer(options: ServerOptions = {}) {
       runId,
       agentId,
       event,
+      channelId,
       threadId,
       onEvent,
     });
@@ -154,7 +174,7 @@ export async function startServer(options: ServerOptions = {}) {
       res.status(400).json({ error: message });
       return;
     }
-    const threadId = req.get('x-openbot-thread-id') || 'default';
+    const { channelId, threadId } = getContext(req);
     const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
     const agentId = 'system';
 
@@ -168,6 +188,7 @@ export async function startServer(options: ServerOptions = {}) {
       runId,
       agentId,
       event,
+      channelId,
       threadId,
       onEvent,
     });

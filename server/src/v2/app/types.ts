@@ -1,14 +1,16 @@
-import { Agent, AgentDetails, Channel, ChannelDetails, Plugin } from '../plugins/storage.js';
+import { Agent, AgentDetails, Channel, ChannelDetails, Plugin, Thread } from '../plugins/storage.js';
 
 export interface OpenBotState {
   agentId: string;
   runId: string;
-  threadId: string;
+  channelId: string;
+  threadId?: string;
   agentDetails?: AgentDetails;
   channelDetails?: ChannelDetails;
 }
 
 export type BaseEvent = {
+  id?: string;
   type: string;
 };
 
@@ -39,6 +41,20 @@ export type GetChannelsResultEvent = BaseEvent & {
   type: 'action:storage:get-channels-result';
   data: {
     channels: Channel[];
+  };
+};
+
+export type GetThreadsEvent = BaseEvent & {
+  type: 'action:storage:get-threads';
+  data: {
+    channelId: string;
+  };
+};
+
+export type GetThreadsResultEvent = BaseEvent & {
+  type: 'action:storage:get-threads-result';
+  data: {
+    threads: Thread[];
   };
 };
 
@@ -103,7 +119,8 @@ export type GetAgentDetailsResultEvent = BaseEvent & {
 export type StreamThreadEvent = BaseEvent & {
   type: 'stream:thread';
   data: {
-    threadId: string;
+    channelId: string;
+    threadId?: string;
   };
 };
 
@@ -145,6 +162,8 @@ export type OpenBotEvent =
   | AgentOutputEvent
   | GetChannelsEvent
   | GetChannelsResultEvent
+  | GetThreadsEvent
+  | GetThreadsResultEvent
   | GetChannelDetailsEvent
   | GetChannelDetailsResultEvent
   | GetAgentsEvent

@@ -7,7 +7,8 @@ export interface ExecuteAgentOptions {
   runId: string;
   agentId: string;
   event: OpenBotEvent;
-  threadId: string;
+  channelId: string;
+  threadId?: string;
   onEvent: (chunk: OpenBotEvent) => Promise<void>;
 }
 
@@ -16,7 +17,7 @@ export const orchestratorService = {
    * Executes an agent runtime and handles recursive delegation.
    */
   executeAgent: async (options: ExecuteAgentOptions): Promise<void> => {
-    const { runId, agentId, event, threadId, onEvent } = options;
+    const { runId, agentId, event, channelId, threadId, onEvent } = options;
 
     // agent details
     let agentDetails;
@@ -43,12 +44,12 @@ export const orchestratorService = {
 
     let channelDetails;
     // channel spec and state
-    if (threadId && threadId !== 'default') {
+    if (channelId && channelId !== 'default') {
       try {
-        channelDetails = await storageService.getChannelDetails({ threadId });
+        channelDetails = await storageService.getChannelDetails({ channelId, threadId });
       } catch (error) {
         console.warn(
-          `[orchestrator] Failed to load channel details for thread: ${threadId}`,
+          `[orchestrator] Failed to load channel details for channel ${channelId} thread: ${threadId}`,
           error,
         );
       }
@@ -59,6 +60,7 @@ export const orchestratorService = {
       state: {
         runId,
         agentId,
+        channelId,
         threadId,
         agentDetails: agentDetails as AgentDetails,
         channelDetails: channelDetails as ChannelDetails,

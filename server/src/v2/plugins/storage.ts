@@ -28,6 +28,15 @@ export type Channel = {
   description: string;
   createdAt: Date;
   updatedAt: Date;
+  recentThreads?: Thread[];
+};
+
+export type Thread = {
+  id: string;
+  name: string;
+  channelId: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type ChannelDetails = {
@@ -35,16 +44,26 @@ export type ChannelDetails = {
   name: string;
   spec: string;
   state: unknown;
+  threads?: Thread[];
 };
 
 export interface Storage {
   getChannels: () => Promise<Channel[]>;
+  getThreads: ({ channelId }: { channelId: string }) => Promise<Thread[]>;
   getAgents: () => Promise<Agent[]>;
   getPlugins: () => Promise<Plugin[]>;
   getAgentDetails: ({ agentId }: { agentId: string }) => Promise<AgentDetails>;
-  getEvents: ({ threadId }: { threadId: string }) => Promise<OpenBotEvent[]>;
-  getChannelDetails: ({ threadId }: { threadId: string }) => Promise<ChannelDetails>;
-  patchChannelState: ({ threadId, state }: { threadId: string; state: unknown }) => Promise<void>;
+  getEvents: ({ channelId, threadId }: { channelId: string; threadId?: string }) => Promise<OpenBotEvent[]>;
+  getChannelDetails: ({ channelId, threadId }: { channelId: string; threadId?: string }) => Promise<ChannelDetails>;
+  patchChannelState: ({
+    channelId,
+    threadId,
+    state,
+  }: {
+    channelId: string;
+    threadId?: string;
+    state: unknown;
+  }) => Promise<void>;
   getVariables: () => Promise<Record<string, string>>;
 }
 
@@ -62,6 +81,14 @@ export const storagePlugin =
       yield {
         type: 'action:storage:get-channels-result',
         data: { channels },
+      };
+    });
+
+    builder.on('action:storage:get-threads', async function* (event) {
+      const threads = await storage.getThreads({ channelId: event.data.channelId });
+      yield {
+        type: 'action:storage:get-threads-result',
+        data: { threads },
       };
     });
 
@@ -116,6 +143,7 @@ export const storagePlugin =
     builder.on('action:storage:patch-channel-state', async function* (event, state) {
       try {
         await storage.patchChannelState({
+          channelId: state.state.channelId,
           threadId: state.state.threadId,
           state: event.data.state,
         });

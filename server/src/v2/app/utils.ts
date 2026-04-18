@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'node:crypto';
 import { OpenBotEvent } from './types.js';
 
 /** Express query values are always strings; parse JSON `data` for typed events. */
@@ -29,6 +30,16 @@ export function openBotEventFromQuery(query: express.Request['query']): OpenBotE
   } catch {
     throw new Error('Query parameter "data" must be valid JSON when provided');
   }
+}
+
+/**
+ * Ensures the event has a unique ID.
+ */
+export function ensureEventId(event: OpenBotEvent): OpenBotEvent {
+  if (!event.id) {
+    event.id = crypto.randomUUID();
+  }
+  return event;
 }
 
 /**

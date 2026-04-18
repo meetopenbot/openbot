@@ -9,8 +9,17 @@ import {
   VARIABLES_FILE,
 } from '../app/config.js';
 import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import matter from 'gray-matter';
-import { Agent, AgentDetails, Channel, ChannelDetails, Plugin } from '../plugins/storage.js';
+import {
+  Agent,
+  AgentDetails,
+  Channel,
+  ChannelDetails,
+  Plugin,
+  Thread,
+} from '../plugins/storage.js';
 import { OpenBotEvent } from '../app/types.js';
 import { pathToFileURL } from 'node:url';
 
@@ -25,6 +34,11 @@ const mapNameToPlugin = (name: string, description: string): Plugin => ({
 const resolveBaseDir = () => {
   const config = loadConfig();
   return resolvePath(config.baseDir || DEFAULT_BASE_DIR);
+};
+
+const getConversationDir = (channelId: string, threadId?: string) => {
+  const base = resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + channelId);
+  return threadId ? `${base}/threads/${threadId}` : base;
 };
 
 const listBuiltInPlugins = async (): Promise<Plugin[]> => {
@@ -64,18 +78,71 @@ export const storageService = {
       await fs.mkdir(channelsDir, { recursive: true });
     }
 
-    const channels = (await fs.readdir(channelsDir)).filter((name) => !name.startsWith('.'));
+    const channelNames = (await fs.readdir(channelsDir)).filter((name) => !name.startsWith('.'));
 
-    return channels.map((channel) => ({
-      id: channel,
-      name: channel,
-      description: '',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
+    const channels = await Promise.all(
+      channelNames.map(async (name) => {
+        const channel: Channel = {
+          id: name,
+          name: name,
+          description: '',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        try {
+          // Fetch up to 5 most recent threads for the sidebar
+          const allThreads = await storageService.getThreads({ channelId: name });
+          channel.recentThreads = allThreads
+            .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+            .slice(0, 5);
+        } catch {
+          channel.recentThreads = [];
+        }
+
+        return channel;
+      }),
+    );
+
+    return channels;
   },
-  getChannelDetails: async ({ threadId }: { threadId: string }): Promise<ChannelDetails> => {
-    const threadDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + threadId);
+  getThreads: async ({ channelId }: { channelId: string }): Promise<Thread[]> => {
+    const threadsDir = resolvePath(
+      resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + channelId + '/threads',
+    );
+    try {
+      await fs.access(threadsDir);
+    } catch {
+      return [];
+    }
+
+    const threadNames = (await fs.readdir(threadsDir)).filter((name) => !name.startsWith('.'));
+
+    const threads = await Promise.all(
+      threadNames.map(async (name) => {
+        const threadPath = path.join(threadsDir, name);
+        const stats = await fs.stat(threadPath);
+
+        return {
+          id: name,
+          name: name,
+          channelId,
+          createdAt: stats.birthtime,
+          updatedAt: stats.mtime,
+        };
+      }),
+    );
+
+    return threads;
+  },
+  getChannelDetails: async ({
+    channelId,
+    threadId,
+  }: {
+    channelId: string;
+    threadId?: string;
+  }): Promise<ChannelDetails> => {
+    const threadDir = getConversationDir(channelId, threadId);
     const specPath = `${threadDir}/SPEC.md`;
     const statePath = `${threadDir}/state.json`;
 
@@ -96,26 +163,34 @@ export const storageService = {
     const channelSpec = await fs.readFile(specPath);
     const channelState = await fs.readFile(statePath);
 
-    return {
-      id: threadId,
-      name: threadId,
+    const details: ChannelDetails = {
+      id: threadId || channelId,
+      name: threadId || channelId,
       spec: channelSpec.toString(),
       state: JSON.parse(channelState.toString()),
     };
+
+    if (!threadId) {
+      details.threads = await storageService.getThreads({ channelId });
+    }
+
+    return details;
   },
   patchChannelState: async ({
+    channelId,
     threadId,
     state: patch,
   }: {
-    threadId: string;
+    channelId: string;
+    threadId?: string;
     state: unknown;
   }): Promise<void> => {
-    const threadDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + threadId);
+    const threadDir = getConversationDir(channelId, threadId);
     const statePath = `${threadDir}/state.json`;
 
     try {
       // 1. Fetch current details to get the existing state
-      const currentDetails = await storageService.getChannelDetails({ threadId });
+      const currentDetails = await storageService.getChannelDetails({ channelId, threadId });
       const currentState = (currentDetails.state as Record<string, unknown>) || {};
 
       // 2. Perform a shallow merge (patch)
@@ -128,7 +203,10 @@ export const storageService = {
       await fs.mkdir(threadDir, { recursive: true });
       await fs.writeFile(statePath, JSON.stringify(newState, null, 2));
     } catch (error) {
-      console.error(`Failed to patch channel state for thread ${threadId}`, error);
+      console.error(
+        `Failed to patch channel state for channel ${channelId} thread ${threadId}`,
+        error,
+      );
       throw error;
     }
   },
@@ -203,38 +281,88 @@ export const storageService = {
       };
     }
   },
-  getEvents: async ({ threadId }: { threadId: string }): Promise<OpenBotEvent[]> => {
+  getEvents: async ({
+    channelId,
+    threadId,
+  }: {
+    channelId: string;
+    threadId?: string;
+  }): Promise<OpenBotEvent[]> => {
     try {
-      const events = await fs.readFile(
-        resolvePath(
-          resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + threadId + '/events.jsonl',
-        ),
-      );
+      const threadDir = getConversationDir(channelId, threadId);
+      const eventsPath = `${threadDir}/events.jsonl`;
+      const eventsData = await fs.readFile(eventsPath);
 
-      return events
+      const events = eventsData
         .toString()
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean)
-        .map((line) => JSON.parse(line) as OpenBotEvent);
+        .map((line) => {
+          const event = JSON.parse(line) as OpenBotEvent;
+          if (!event.id) {
+            event.id = crypto.randomUUID();
+          }
+          return event;
+        });
+
+      // If we are at the channel level (no threadId), check which events have threads
+      if (!threadId) {
+        const threadsDir = resolvePath(
+          resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + channelId + '/threads',
+        );
+        try {
+          const threadDirs = await fs.readdir(threadsDir);
+          const threadSet = new Set(threadDirs);
+
+          return events.map((event) => {
+            // Check if this event has a threadId associated with it
+            // The frontend provides the threadId, and it matches the directory name on disk
+            const threadId = event.id;
+
+            // If an explicit threadId exists and has a directory, use it
+            if (threadId && threadSet.has(threadId)) {
+              return {
+                ...event,
+                threadId,
+              };
+            }
+
+            return event;
+          });
+        } catch {
+          // No threads folder or other error, just return events as is
+          return events;
+        }
+      }
+
+      return events;
     } catch (error) {
-      console.error(`Failed to get events for thread ${threadId}`);
+      console.error(`Failed to get events for channel ${channelId} thread ${threadId}`);
       return [];
     }
   },
   storeEvent: async ({
+    channelId,
     threadId,
     event,
   }: {
-    threadId: string;
+    channelId: string;
+    threadId?: string;
     event: OpenBotEvent;
   }): Promise<void> => {
     try {
-      const threadDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + threadId);
+      const threadDir = getConversationDir(channelId, threadId);
       await fs.mkdir(threadDir, { recursive: true });
+
+      // Ensure the event has a unique ID
+      if (!event.id) {
+        event.id = crypto.randomUUID();
+      }
+
       await fs.appendFile(`${threadDir}/events.jsonl`, `${JSON.stringify(event)}\n`);
     } catch (error) {
-      console.error(`Failed to store event for thread ${threadId}`, error);
+      console.error(`Failed to store event for channel ${channelId} thread ${threadId}`, error);
     }
   },
   getVariables: async (): Promise<Record<string, string>> => {
