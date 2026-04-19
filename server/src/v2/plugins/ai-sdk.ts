@@ -57,6 +57,9 @@ export const aiSdkPlugin =
     builder.on('agent:invoke', async function* (event, context) {
       const { agentDetails, channelDetails } = context.state;
 
+      // extract threadId if model decides to reply in a thread
+      const threadId = event.meta?.threadId || context.state.threadId;
+
       let systemPrompt = '';
 
       if (agentDetails) {
@@ -90,11 +93,29 @@ export const aiSdkPlugin =
         tools: toolDefinitions,
       });
 
-      yield {
-        type: 'agent:output',
-        data: {
-          content: result.text,
-        },
-      };
+      const toolCalls = result.toolCalls ?? [];
+
+      if (toolCalls && toolCalls.length > 0) {
+        for (const toolCall of toolCalls) {
+          yield {
+            type: `action:${toolCall.toolName}` as OpenBotEvent['type'],
+            data: toolCall.input,
+            meta: {
+              toolCallId: toolCall.toolCallId,
+              agentId: context.state.agentId,
+              threadId,
+            },
+          };
+        }
+      }
+
+      if (result.text) {
+        yield {
+          type: 'agent:output',
+          data: {
+            content: result.text,
+          },
+        };
+      }
     });
   };

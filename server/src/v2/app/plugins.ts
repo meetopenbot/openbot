@@ -7,6 +7,7 @@ import { aiSdkPlugin } from '../plugins/ai-sdk.js';
 import { storagePlugin } from '../plugins/storage.js';
 import { storageService } from '../services/storage.js';
 import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from './config.js';
+import { threadsPlugin } from '../plugins/threads.js';
 
 let pluginsDir: string | null = null;
 
@@ -38,6 +39,8 @@ export async function resolvePlugin(
       return aiSdkPlugin({
         ...config,
       });
+    case 'threads':
+      return threadsPlugin();
   }
 
   // 2. Search for external plugins in the initialized plugins directory

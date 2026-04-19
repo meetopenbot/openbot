@@ -1,6 +1,7 @@
 import { createOpenBotRuntime } from '../app/open-bot.js';
-import { OpenBotEvent } from '../app/types.js';
+import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { AgentDetails, ChannelDetails } from '../plugins/storage.js';
+import { threadToolDefinitions } from '../plugins/threads.js';
 import { storageService } from './storage.js';
 
 export interface ExecuteAgentOptions {
@@ -9,7 +10,7 @@ export interface ExecuteAgentOptions {
   event: OpenBotEvent;
   channelId: string;
   threadId?: string;
-  onEvent: (chunk: OpenBotEvent) => Promise<void>;
+  onEvent: (chunk: OpenBotEvent, state: OpenBotState) => Promise<void>;
 }
 
 export const orchestratorService = {
@@ -32,7 +33,17 @@ export const orchestratorService = {
           '3. **Channels**: Channels are shared spaces where multiple agents can participate. You can create new channels for different topics.\n' +
           '4. **Local-First**: OpenBot runs entirely on your machine. Your data stays private and local.\n\n' +
           'If you need to know what agents or plugins are installed, I can help you find that information.',
-        plugins: ['ai-sdk', 'storage'],
+        plugins: [
+          {
+            name: 'ai-sdk',
+            config: {
+              model: 'openai/gpt-4o-mini',
+              toolDefinitions: { ...threadToolDefinitions },
+            },
+          },
+          { name: 'storage', config: { storage: storageService } },
+          { name: 'threads', config: {} },
+        ],
       };
     } else {
       try {
@@ -55,25 +66,30 @@ export const orchestratorService = {
       }
     }
 
-    // agent runtime
+    // Single state object for the run. Melony clones `initialState` via structuredClone when
+    // `run()` is called without `options.state`; plugin configs may hold Zod schemas or other
+    // non-cloneable values, so we always pass this reference into `run()` to skip cloning.
+    const agentState: OpenBotState = {
+      runId,
+      agentId,
+      channelId,
+      threadId,
+      triggerEvent: event,
+      agentDetails: agentDetails as AgentDetails,
+      channelDetails: channelDetails as ChannelDetails,
+    };
+
     const agentRuntime = await createOpenBotRuntime({
-      state: {
-        runId,
-        agentId,
-        channelId,
-        threadId,
-        agentDetails: agentDetails as AgentDetails,
-        channelDetails: channelDetails as ChannelDetails,
-      },
+      state: agentState,
     });
 
     let hasProducedOutput = false;
     let hasInvokedOther = false;
 
     // RUN
-    for await (const chunk of agentRuntime.run(event)) {
+    for await (const chunk of agentRuntime.run(event, { state: agentState, runId })) {
       // EVENT
-      await onEvent(chunk);
+      await onEvent(chunk, agentState);
 
       // has produced output
       if (chunk.type === 'agent:output') {
@@ -99,23 +115,29 @@ export const orchestratorService = {
     // If the event was an agent:invoke but no output or further invocation was yielded,
     // the agent is likely misconfigured (e.g., missing an LLM plugin).
     if (event.type === 'agent:invoke' && !hasProducedOutput && !hasInvokedOther) {
-      await onEvent({
-        type: 'agent:output',
-        data: {
-          content: `⚠️ **${agentId}** is not configured to handle inputs. Please check its plugin configuration (e.g., missing \`ai-sdk\`).`,
+      await onEvent(
+        {
+          type: 'agent:output',
+          data: {
+            content: `⚠️ **${agentId}** is not configured to handle inputs. Please check its plugin configuration (e.g., missing \`ai-sdk\`).`,
+          },
         },
-      });
+        agentState,
+      );
 
-      await onEvent({
-        type: 'client:ui:message',
-        data: {
-          content: `⚠️ **${agentId}** is not configured to handle inputs. Please check its plugin configuration (e.g., missing \`ai-sdk\`).`,
-          role: 'assistant',
+      await onEvent(
+        {
+          type: 'client:ui:message',
+          data: {
+            content: `⚠️ **${agentId}** is not configured to handle inputs. Please check its plugin configuration (e.g., missing \`ai-sdk\`).`,
+            role: 'assistant',
+          },
+          meta: {
+            agentId,
+          },
         },
-        meta: {
-          agentId,
-        },
-      });
+        agentState,
+      );
     }
   },
 };

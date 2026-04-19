@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { DEFAULT_BASE_DIR, loadConfig, loadVariables, resolvePath } from '../app/config.js';
-import { OpenBotEvent } from './types.js';
+import { OpenBotEvent, OpenBotState, UIMessageEvent } from './types.js';
 import path from 'path';
 import fs from 'fs/promises';
 import { processService } from '../services/process.js';
@@ -104,27 +104,29 @@ export async function startServer(options: ServerOptions = {}) {
   app.post('/api/publish', async (req, res) => {
     let event = req.body as OpenBotEvent;
     const { channelId, threadId } = getContext(req);
-    const clientKey = getClientKey(channelId, threadId);
     const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
     const agentId = 'system';
 
-    // If the event is user:input (legacy client), convert it to agent:invoke
-    if ((event as any).type === 'user:input') {
-      event = {
-        type: 'agent:invoke',
-        data: {
-          content: (event as any).data.content,
-        },
-      };
-    }
+    // ensure the event has a unique id once it published so we might use it as a threadId later
+    ensureEventId(event);
 
     res.sendStatus(200);
 
-    const onEvent = async (chunk: OpenBotEvent) => {
+    const onEvent = async (chunk: OpenBotEvent, state?: OpenBotState) => {
       ensureEventId(chunk);
-      await storageService.storeEvent({ channelId, threadId, event: chunk });
 
-      const threadClients = clients.get(clientKey);
+      // overried the channelId and threadId if provided in the meta of the yielded event
+      const targetChannelId = state?.channelId || channelId;
+      const targetThreadId = state?.threadId || threadId;
+      const targetClientKey = getClientKey(targetChannelId, targetThreadId);
+
+      await storageService.storeEvent({
+        channelId: targetChannelId,
+        threadId: targetThreadId,
+        event: chunk,
+      });
+
+      const threadClients = clients.get(targetClientKey);
       if (threadClients) {
         threadClients.forEach((client) => {
           if (!client.writableEnded) {
@@ -134,8 +136,8 @@ export async function startServer(options: ServerOptions = {}) {
       }
     };
 
-    // Store the original user input once as a UI message for the history
-    await onEvent({
+    // define the client UI user message event
+    const clientUIUserMessage: UIMessageEvent = {
       type: 'client:ui:message',
       data: {
         content: (req.body as any).data?.content || '',
@@ -144,7 +146,27 @@ export async function startServer(options: ServerOptions = {}) {
       meta: {
         agentId: 'system',
       },
-    });
+    };
+
+    // ensure the event has a unique id once it published so we might use it as a threadId later
+    ensureEventId(clientUIUserMessage);
+
+    // Store the original user input once as a UI message for the history
+    await onEvent(clientUIUserMessage);
+
+    // If the event is user:input (legacy client), convert it to agent:invoke
+    if ((event as any).type === 'user:input') {
+      event = {
+        ...event,
+        type: 'agent:invoke',
+        data: {
+          content: (event as any).data.content,
+        },
+        meta: {
+          threadId: clientUIUserMessage.id,
+        },
+      };
+    }
 
     await orchestratorService.executeAgent({
       runId,

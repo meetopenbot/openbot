@@ -1,4 +1,11 @@
-import { Agent, AgentDetails, Channel, ChannelDetails, Plugin, Thread } from '../plugins/storage.js';
+import {
+  Agent,
+  AgentDetails,
+  Channel,
+  ChannelDetails,
+  Plugin,
+  Thread,
+} from '../plugins/storage.js';
 
 export interface OpenBotState {
   agentId: string;
@@ -7,11 +14,13 @@ export interface OpenBotState {
   threadId?: string;
   agentDetails?: AgentDetails;
   channelDetails?: ChannelDetails;
+  triggerEvent?: OpenBotEvent;
 }
 
 export type BaseEvent = {
   id?: string;
   type: string;
+  meta?: any;
 };
 
 export type AgentInvokeEvent = BaseEvent & {
@@ -156,6 +165,30 @@ export type AgentOutputEvent = BaseEvent & {
   };
 };
 
+export type CreateThreadEvent = BaseEvent & {
+  type: 'action:create_thread';
+  data: {
+    threadTitle: string;
+  };
+  meta: {
+    toolCallId: string;
+    agentId: string;
+    threadId: string;
+  };
+};
+
+export type CreateThreadResultEvent = BaseEvent & {
+  type: 'action:create_thread:result';
+  data: {
+    success: boolean;
+    threadId: string;
+    threadTitle: string;
+  };
+  meta: {
+    threadId: string;
+  };
+};
+
 export type OpenBotEvent =
   | AgentInvokeEvent
   | UIMessageEvent
@@ -178,4 +211,6 @@ export type OpenBotEvent =
   | GetVariablesEvent
   | GetVariablesResultEvent
   | PatchChannelStateEvent
-  | PatchChannelStateResultEvent;
+  | PatchChannelStateResultEvent
+  | CreateThreadEvent
+  | CreateThreadResultEvent;

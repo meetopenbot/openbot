@@ -41,6 +41,7 @@ export const createOpenBotRuntime = async ({
         },
         meta: {
           agentId,
+          threadId: event.meta?.threadId,
         },
       };
     });
@@ -50,7 +51,7 @@ export const createOpenBotRuntime = async ({
     const name = typeof p === 'string' ? p : p?.name || 'Unknown Plugin';
     // If the plugin is a string, use the default config
     // If the plugin is an object, use the config and merge it with the instructions
-    const config = typeof p === 'string' ? {} : typeof p === 'object' ? { ...p } : {};
+    const config = typeof p === 'string' ? {} : typeof p === 'object' ? { ...p.config } : {};
     const plugin = await resolvePlugin(name, config);
 
     // register the plugin
