@@ -39,6 +39,14 @@ export type Thread = {
   updatedAt: Date;
 };
 
+export type ThreadDetails = {
+  id: string;
+  name: string;
+  channelId: string;
+  spec: string;
+  state: unknown;
+};
+
 export type ChannelDetails = {
   id: string;
   name: string;
@@ -50,18 +58,32 @@ export type ChannelDetails = {
 export interface Storage {
   getChannels: () => Promise<Channel[]>;
   getThreads: ({ channelId }: { channelId: string }) => Promise<Thread[]>;
+  getThreadDetails: ({
+    channelId,
+    threadId,
+  }: {
+    channelId: string;
+    threadId: string;
+  }) => Promise<ThreadDetails>;
   getAgents: () => Promise<Agent[]>;
   getPlugins: () => Promise<Plugin[]>;
   getAgentDetails: ({ agentId }: { agentId: string }) => Promise<AgentDetails>;
   getEvents: ({ channelId, threadId }: { channelId: string; threadId?: string }) => Promise<OpenBotEvent[]>;
-  getChannelDetails: ({ channelId, threadId }: { channelId: string; threadId?: string }) => Promise<ChannelDetails>;
+  getChannelDetails: ({ channelId }: { channelId: string }) => Promise<ChannelDetails>;
   patchChannelState: ({
+    channelId,
+    state,
+  }: {
+    channelId: string;
+    state: unknown;
+  }) => Promise<void>;
+  patchThreadState: ({
     channelId,
     threadId,
     state,
   }: {
     channelId: string;
-    threadId?: string;
+    threadId: string;
     state: unknown;
   }) => Promise<void>;
   getVariables: () => Promise<Record<string, string>>;
@@ -93,7 +115,7 @@ export const storagePlugin =
     });
 
     builder.on('action:storage:get-channel-details', async function* (_, state) {
-      const channelDetails = await storage.getChannelDetails(state.state);
+      const channelDetails = await storage.getChannelDetails({ channelId: state.state.channelId });
       yield {
         type: 'action:storage:get-channel-details-result',
         data: { channelDetails },
@@ -144,7 +166,6 @@ export const storagePlugin =
       try {
         await storage.patchChannelState({
           channelId: state.state.channelId,
-          threadId: state.state.threadId,
           state: event.data.state,
         });
         yield {
@@ -154,6 +175,29 @@ export const storagePlugin =
       } catch (error) {
         yield {
           type: 'action:storage:patch-channel-state-result',
+          data: { success: false },
+        };
+      }
+    });
+
+    builder.on('action:storage:patch-thread-state', async function* (event, state) {
+      try {
+        if (!state.state.threadId) {
+          throw new Error('Missing threadId in state for patch-thread-state');
+        }
+
+        await storage.patchThreadState({
+          channelId: state.state.channelId,
+          threadId: state.state.threadId,
+          state: event.data.state,
+        });
+        yield {
+          type: 'action:storage:patch-thread-state-result',
+          data: { success: true },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:storage:patch-thread-state-result',
           data: { success: false },
         };
       }

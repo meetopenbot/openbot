@@ -1,6 +1,6 @@
 import { createOpenBotRuntime } from '../app/open-bot.js';
 import { OpenBotEvent, OpenBotState, ShortTermMessage } from '../app/types.js';
-import { AgentDetails, ChannelDetails } from '../plugins/storage.js';
+import { AgentDetails, ChannelDetails, ThreadDetails } from '../plugins/storage.js';
 import { threadToolDefinitions } from '../plugins/threads.js';
 import { storageService } from './storage.js';
 
@@ -57,10 +57,22 @@ export const orchestratorService = {
     // channel spec and state
     if (channelId && channelId !== 'default') {
       try {
-        channelDetails = await storageService.getChannelDetails({ channelId, threadId });
+        channelDetails = await storageService.getChannelDetails({ channelId });
       } catch (error) {
         console.warn(
-          `[orchestrator] Failed to load channel details for channel ${channelId} thread: ${threadId}`,
+          `[orchestrator] Failed to load channel details for channel ${channelId}`,
+          error,
+        );
+      }
+    }
+
+    let threadDetails;
+    if (channelId && threadId) {
+      try {
+        threadDetails = await storageService.getThreadDetails({ channelId, threadId });
+      } catch (error) {
+        console.warn(
+          `[orchestrator] Failed to load thread details for channel ${channelId} thread: ${threadId}`,
           error,
         );
       }
@@ -101,6 +113,7 @@ export const orchestratorService = {
       triggerEvent: event,
       agentDetails: agentDetails as AgentDetails,
       channelDetails: channelDetails as ChannelDetails,
+      threadDetails: threadDetails as ThreadDetails,
       shortTermMessages,
     };
 

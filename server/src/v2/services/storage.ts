@@ -19,6 +19,7 @@ import {
   ChannelDetails,
   Plugin,
   Thread,
+  ThreadDetails,
 } from '../plugins/storage.js';
 import { OpenBotEvent } from '../app/types.js';
 import { pathToFileURL } from 'node:url';
@@ -122,10 +123,26 @@ export const storageService = {
       threadNames.map(async (name) => {
         const threadPath = path.join(threadsDir, name);
         const stats = await fs.stat(threadPath);
+        const threadStatePath = path.join(threadPath, 'state.json');
+        let threadDisplayName = name;
+
+        try {
+          const threadStateRaw = await fs.readFile(threadStatePath, 'utf-8');
+          const threadState = JSON.parse(threadStateRaw) as Record<string, unknown>;
+          const generatedName =
+            typeof threadState.generatedName === 'string' ? threadState.generatedName.trim() : '';
+          if (generatedName) {
+            threadDisplayName = generatedName;
+          }
+        } catch (error: any) {
+          if (error.code !== 'ENOENT') {
+            console.error(`Failed to read thread state for channel ${channelId} thread ${name}`, error);
+          }
+        }
 
         return {
           id: name,
-          name: name,
+          name: threadDisplayName,
           channelId,
           createdAt: stats.birthtime,
           updatedAt: stats.mtime,
@@ -135,13 +152,13 @@ export const storageService = {
 
     return threads;
   },
-  getChannelDetails: async ({
+  getThreadDetails: async ({
     channelId,
     threadId,
   }: {
     channelId: string;
-    threadId?: string;
-  }): Promise<ChannelDetails> => {
+    threadId: string;
+  }): Promise<ThreadDetails> => {
     const threadDir = getConversationDir(channelId, threadId);
     const specPath = `${threadDir}/SPEC.md`;
     const statePath = `${threadDir}/state.json`;
@@ -151,7 +168,7 @@ export const storageService = {
       spec = await fs.readFile(specPath, 'utf-8');
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
-        console.error(`Failed to read spec file for channel ${channelId} thread ${threadId}`, error);
+        console.error(`Failed to read thread spec for channel ${channelId} thread ${threadId}`, error);
       }
     }
 
@@ -161,33 +178,94 @@ export const storageService = {
       state = JSON.parse(stateContent);
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
-        console.error(
-          `Failed to read state file for channel ${channelId} thread ${threadId}`,
-          error,
-        );
+        console.error(`Failed to read thread state for channel ${channelId} thread ${threadId}`, error);
+      }
+    }
+
+    const generatedName =
+      typeof (state as Record<string, unknown>).generatedName === 'string'
+        ? ((state as Record<string, unknown>).generatedName as string).trim()
+        : '';
+
+    return {
+      id: threadId,
+      name: generatedName || threadId,
+      channelId,
+      spec,
+      state,
+    };
+  },
+  getChannelDetails: async ({ channelId }: { channelId: string }): Promise<ChannelDetails> => {
+    const channelDir = getConversationDir(channelId);
+    const specPath = `${channelDir}/SPEC.md`;
+    const statePath = `${channelDir}/state.json`;
+
+    let spec = '';
+    try {
+      spec = await fs.readFile(specPath, 'utf-8');
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        console.error(`Failed to read spec file for channel ${channelId}`, error);
+      }
+    }
+
+    let state = {};
+    try {
+      const stateContent = await fs.readFile(statePath, 'utf-8');
+      state = JSON.parse(stateContent);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        console.error(`Failed to read state file for channel ${channelId}`, error);
       }
     }
 
     const details: ChannelDetails = {
-      id: threadId || channelId,
-      name: threadId || channelId,
+      id: channelId,
+      name: channelId,
       spec,
       state,
     };
 
-    if (!threadId) {
-      details.threads = await storageService.getThreads({ channelId });
-    }
+    details.threads = await storageService.getThreads({ channelId });
 
     return details;
   },
   patchChannelState: async ({
     channelId,
+    state: patch,
+  }: {
+    channelId: string;
+    state: unknown;
+  }): Promise<void> => {
+    const channelDir = getConversationDir(channelId);
+    const statePath = `${channelDir}/state.json`;
+
+    try {
+      // 1. Fetch current details to get the existing state
+      const currentDetails = await storageService.getChannelDetails({ channelId });
+      const currentState = (currentDetails.state as Record<string, unknown>) || {};
+
+      // 2. Perform a shallow merge (patch)
+      const newState = {
+        ...currentState,
+        ...(patch as Record<string, unknown>),
+      };
+
+      // 3. Write back the merged state
+      await fs.mkdir(channelDir, { recursive: true });
+      await fs.writeFile(statePath, JSON.stringify(newState, null, 2));
+    } catch (error) {
+      console.error(`Failed to patch channel state for channel ${channelId}`, error);
+      throw error;
+    }
+  },
+  patchThreadState: async ({
+    channelId,
     threadId,
     state: patch,
   }: {
     channelId: string;
-    threadId?: string;
+    threadId: string;
     state: unknown;
   }): Promise<void> => {
     const threadDir = getConversationDir(channelId, threadId);
@@ -195,7 +273,7 @@ export const storageService = {
 
     try {
       // 1. Fetch current details to get the existing state
-      const currentDetails = await storageService.getChannelDetails({ channelId, threadId });
+      const currentDetails = await storageService.getThreadDetails({ channelId, threadId });
       const currentState = (currentDetails.state as Record<string, unknown>) || {};
 
       // 2. Perform a shallow merge (patch)
@@ -209,7 +287,7 @@ export const storageService = {
       await fs.writeFile(statePath, JSON.stringify(newState, null, 2));
     } catch (error) {
       console.error(
-        `Failed to patch channel state for channel ${channelId} thread ${threadId}`,
+        `Failed to patch thread state for channel ${channelId} thread ${threadId}`,
         error,
       );
       throw error;

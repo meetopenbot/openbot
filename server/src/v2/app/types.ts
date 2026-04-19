@@ -5,6 +5,7 @@ import {
   ChannelDetails,
   Plugin,
   Thread,
+  ThreadDetails,
 } from '../plugins/storage.js';
 
 export interface OpenBotState {
@@ -14,6 +15,7 @@ export interface OpenBotState {
   threadId?: string;
   agentDetails?: AgentDetails;
   channelDetails?: ChannelDetails;
+  threadDetails?: ThreadDetails;
   triggerEvent?: OpenBotEvent;
   shortTermMessages?: ShortTermMessage[];
 }
@@ -164,6 +166,20 @@ export type PatchChannelStateResultEvent = BaseEvent & {
   };
 };
 
+export type PatchThreadStateEvent = BaseEvent & {
+  type: 'action:storage:patch-thread-state';
+  data: {
+    state: unknown;
+  };
+};
+
+export type PatchThreadStateResultEvent = BaseEvent & {
+  type: 'action:storage:patch-thread-state-result';
+  data: {
+    success: boolean;
+  };
+};
+
 export type AgentOutputEvent = BaseEvent & {
   type: 'agent:output';
   data: {
@@ -218,5 +234,7 @@ export type OpenBotEvent =
   | GetVariablesResultEvent
   | PatchChannelStateEvent
   | PatchChannelStateResultEvent
+  | PatchThreadStateEvent
+  | PatchThreadStateResultEvent
   | CreateThreadEvent
   | CreateThreadResultEvent;

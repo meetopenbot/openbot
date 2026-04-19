@@ -81,6 +81,12 @@ async function buildSystemPrompt(
     sections.push(`## CHANNEL STATE\n${JSON.stringify(state.channelDetails.state, null, 2)}`);
   }
 
+  if (state.threadDetails) {
+    sections.push(`## THREAD NAME\n${state.threadDetails.name}`);
+    sections.push(`## THREAD SPECIFICATION\n${state.threadDetails.spec}`);
+    sections.push(`## THREAD STATE\n${JSON.stringify(state.threadDetails.state, null, 2)}`);
+  }
+
   if (system && typeof system === 'string') {
     sections.push(`## SYSTEM INSTRUCTIONS\n${system}`);
   }
@@ -110,6 +116,9 @@ export const aiSdkPlugin =
       const systemPrompt = await buildSystemPrompt(context.state, system, context);
       const history = context.state.shortTermMessages ?? [];
       const messagesForModel = appendUniqueUserMessage(history, event.data.content);
+      
+      console.log('systemPrompt', systemPrompt);
+      console.log('messagesForModel', JSON.stringify(messagesForModel, null, 2));
 
       const result = await generateText({
         model,
@@ -124,7 +133,7 @@ export const aiSdkPlugin =
 
       if (toolCalls.length > 0) {
         for (const toolCall of toolCalls) {
-          yield {
+          const toolEvent = {
             type: `action:${toolCall.toolName}` as OpenBotEvent['type'],
             data: toolCall.input,
             meta: {
@@ -132,7 +141,8 @@ export const aiSdkPlugin =
               agentId: context.state.agentId,
               threadId,
             },
-          };
+          } as unknown as OpenBotEvent;
+          yield toolEvent;
         }
       }
 
