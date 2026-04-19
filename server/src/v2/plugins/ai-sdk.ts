@@ -3,7 +3,7 @@ import { generateText, type LanguageModel } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
-import { OpenBotEvent, OpenBotState } from '../app/types.js';
+import { OpenBotEvent, OpenBotState, ShortTermMessage } from '../app/types.js';
 
 export interface AISDKPluginOptions {
   /**
@@ -42,6 +42,56 @@ function resolveModel(modelString: string): LanguageModel {
   }
 }
 
+function trimShortTermMessages(messages: ShortTermMessage[], maxMessages = 20): ShortTermMessage[] {
+  if (messages.length <= maxMessages) {
+    return messages;
+  }
+  return messages.slice(-maxMessages);
+}
+
+function appendUniqueUserMessage(
+  history: ShortTermMessage[],
+  content: string,
+): ShortTermMessage[] {
+  const last = history[history.length - 1];
+  const isDuplicateUserMessage = last?.role === 'user' && last.content === content;
+
+  return isDuplicateUserMessage ? history : [...history, { role: 'user', content }];
+}
+
+function appendAssistantMessage(history: ShortTermMessage[], content: string): ShortTermMessage[] {
+  return [...history, { role: 'assistant', content }];
+}
+
+async function buildSystemPrompt(
+  state: OpenBotState,
+  system?: string | ((context: RuntimeContext) => string | Promise<string>),
+  context?: RuntimeContext,
+): Promise<string> {
+  const sections: string[] = [];
+
+  if (state.agentDetails) {
+    sections.push(`## AGENT NAME\n${state.agentDetails.name}`);
+    sections.push(`## AGENT SPECIFICATION\n${state.agentDetails.instructions}`);
+  }
+
+  if (state.channelDetails) {
+    sections.push(`## CHANNEL NAME\n${state.channelDetails.name}`);
+    sections.push(`## CHANNEL SPECIFICATION\n${state.channelDetails.spec}`);
+    sections.push(`## CHANNEL STATE\n${JSON.stringify(state.channelDetails.state, null, 2)}`);
+  }
+
+  if (system && typeof system === 'string') {
+    sections.push(`## SYSTEM INSTRUCTIONS\n${system}`);
+  }
+
+  if (system && typeof system === 'function' && context) {
+    sections.push(await system(context));
+  }
+
+  return sections.join('\n\n');
+}
+
 /**
  * AI SDK Plugin for Melony.
  * Automatically handles text events and routes them through an AI SDK using Vercel AI SDK.
@@ -55,47 +105,24 @@ export const aiSdkPlugin =
     const model = resolveModel(modelString);
 
     builder.on('agent:invoke', async function* (event, context) {
-      const { agentDetails, channelDetails } = context.state;
-
       // extract threadId if model decides to reply in a thread
       const threadId = event.meta?.threadId || context.state.threadId;
-
-      let systemPrompt = '';
-
-      if (agentDetails) {
-        systemPrompt += `## AGENT NAME\n${agentDetails.name}\n\n`;
-        systemPrompt += `## AGENT SPECIFICATION\n${agentDetails.instructions}\n\n`;
-      }
-
-      if (channelDetails) {
-        systemPrompt += `## CHANNEL NAME\n${channelDetails.name}\n\n`;
-        systemPrompt += `## CHANNEL SPECIFICATION\n${channelDetails.spec}\n\n`;
-        systemPrompt += `## CHANNEL STATE\n${JSON.stringify(channelDetails.state, null, 2)}\n\n`;
-      }
-
-      if (system && typeof system === 'string') {
-        systemPrompt += `## SYSTEM INSTRUCTIONS\n${system}`;
-      }
-
-      if (system && typeof system === 'function') {
-        systemPrompt += await system(context);
-      }
+      const systemPrompt = await buildSystemPrompt(context.state, system, context);
+      const history = context.state.shortTermMessages ?? [];
+      const messagesForModel = appendUniqueUserMessage(history, event.data.content);
 
       const result = await generateText({
         model,
         system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: event.data.content,
-          },
-        ],
+        messages: messagesForModel,
         tools: toolDefinitions,
       });
 
+      context.state.shortTermMessages = trimShortTermMessages(messagesForModel);
+
       const toolCalls = result.toolCalls ?? [];
 
-      if (toolCalls && toolCalls.length > 0) {
+      if (toolCalls.length > 0) {
         for (const toolCall of toolCalls) {
           yield {
             type: `action:${toolCall.toolName}` as OpenBotEvent['type'],
@@ -110,6 +137,10 @@ export const aiSdkPlugin =
       }
 
       if (result.text) {
+        context.state.shortTermMessages = trimShortTermMessages(
+          appendAssistantMessage(context.state.shortTermMessages ?? [], result.text),
+        );
+
         yield {
           type: 'agent:output',
           data: {

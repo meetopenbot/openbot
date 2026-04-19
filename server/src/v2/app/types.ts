@@ -15,7 +15,13 @@ export interface OpenBotState {
   agentDetails?: AgentDetails;
   channelDetails?: ChannelDetails;
   triggerEvent?: OpenBotEvent;
+  shortTermMessages?: ShortTermMessage[];
 }
+
+export type ShortTermMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
 
 export type BaseEvent = {
   id?: string;

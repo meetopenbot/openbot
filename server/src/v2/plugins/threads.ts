@@ -26,7 +26,12 @@ export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (bu
     yield {
       type: 'agent:invoke',
       data: {
-        content: `Thread created with ID ${event.meta?.threadId}. Please reply to the thread.`,
+        content:
+          `Tool call \`create_thread\` completed successfully.\n` +
+          `- toolCallId: ${event.meta?.toolCallId}\n` +
+          `- threadId: ${event.meta?.threadId}\n` +
+          `- threadTitle: ${event.data.threadTitle}\n\n` +
+          'Continue the conversation in this thread.',
       },
       meta: {
         threadId: event.meta?.threadId,
