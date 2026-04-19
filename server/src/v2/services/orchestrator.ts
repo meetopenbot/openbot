@@ -78,30 +78,6 @@ export const orchestratorService = {
       }
     }
 
-    // Keep a small recent message window as short-term memory for the LLM.
-    const shortTermMessages = await (async (): Promise<ShortTermMessage[]> => {
-      try {
-        const events = await storageService.getEvents({ channelId, threadId });
-        return events
-          .filter(
-            (e): e is Extract<OpenBotEvent, { type: 'client:ui:message' }> =>
-              e.type === 'client:ui:message',
-          )
-          .map((e) => ({
-            role: e.data.role,
-            content: e.data.content,
-          }))
-          .filter((m) => m.content?.trim().length > 0)
-          .slice(-20);
-      } catch (error) {
-        console.warn(
-          `[orchestrator] Failed to load short-term memory for channel ${channelId} thread ${threadId}`,
-          error,
-        );
-        return [];
-      }
-    })();
-
     // Single state object for the run. Melony clones `initialState` via structuredClone when
     // `run()` is called without `options.state`; plugin configs may hold Zod schemas or other
     // non-cloneable values, so we always pass this reference into `run()` to skip cloning.
@@ -114,7 +90,6 @@ export const orchestratorService = {
       agentDetails: agentDetails as AgentDetails,
       channelDetails: channelDetails as ChannelDetails,
       threadDetails: threadDetails as ThreadDetails,
-      shortTermMessages,
     };
 
     const agentRuntime = await createOpenBotRuntime({

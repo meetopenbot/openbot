@@ -1,5 +1,5 @@
 import { MelonyPlugin, RuntimeContext } from 'melony';
-import { generateText, type LanguageModel } from 'ai';
+import { generateText, ModelMessage, type LanguageModel } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
@@ -40,27 +40,6 @@ function resolveModel(modelString: string): LanguageModel {
     default:
       throw new Error(`Unsupported AI provider: "${provider}"`);
   }
-}
-
-function trimShortTermMessages(messages: ShortTermMessage[], maxMessages = 20): ShortTermMessage[] {
-  if (messages.length <= maxMessages) {
-    return messages;
-  }
-  return messages.slice(-maxMessages);
-}
-
-function appendUniqueUserMessage(
-  history: ShortTermMessage[],
-  content: string,
-): ShortTermMessage[] {
-  const last = history[history.length - 1];
-  const isDuplicateUserMessage = last?.role === 'user' && last.content === content;
-
-  return isDuplicateUserMessage ? history : [...history, { role: 'user', content }];
-}
-
-function appendAssistantMessage(history: ShortTermMessage[], content: string): ShortTermMessage[] {
-  return [...history, { role: 'assistant', content }];
 }
 
 async function buildSystemPrompt(
@@ -114,20 +93,21 @@ export const aiSdkPlugin =
       // extract threadId if model decides to reply in a thread
       const threadId = event.meta?.threadId || context.state.threadId;
       const systemPrompt = await buildSystemPrompt(context.state, system, context);
-      const history = context.state.shortTermMessages ?? [];
-      const messagesForModel = appendUniqueUserMessage(history, event.data.content);
-      
-      console.log('systemPrompt', systemPrompt);
-      console.log('messagesForModel', JSON.stringify(messagesForModel, null, 2));
+
+      context.state.shortTermMessages = [
+        ...(context.state.shortTermMessages ?? []),
+        {
+          role: event.data?.role || 'user',
+          content: (event as any)?.data?.content || '',
+        },
+      ];
 
       const result = await generateText({
         model,
         system: systemPrompt,
-        messages: messagesForModel,
+        messages: context.state.shortTermMessages,
         tools: toolDefinitions,
       });
-
-      context.state.shortTermMessages = trimShortTermMessages(messagesForModel);
 
       const toolCalls = result.toolCalls ?? [];
 
@@ -147,9 +127,10 @@ export const aiSdkPlugin =
       }
 
       if (result.text) {
-        context.state.shortTermMessages = trimShortTermMessages(
-          appendAssistantMessage(context.state.shortTermMessages ?? [], result.text),
-        );
+        context.state.shortTermMessages = [
+          ...(context.state.shortTermMessages ?? []),
+          { role: 'assistant', content: result.text },
+        ];
 
         yield {
           type: 'agent:output',
@@ -158,5 +139,7 @@ export const aiSdkPlugin =
           },
         };
       }
+
+      console.log('shortTermMessages', JSON.stringify(context.state.shortTermMessages, null, 2));
     });
   };

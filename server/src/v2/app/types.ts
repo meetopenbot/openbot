@@ -21,7 +21,7 @@ export interface OpenBotState {
 }
 
 export type ShortTermMessage = {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
 };
 
@@ -34,6 +34,7 @@ export type BaseEvent = {
 export type AgentInvokeEvent = BaseEvent & {
   type: 'agent:invoke';
   data: {
+    role?: 'user' | 'assistant' | 'system';
     content: string;
     agentId?: string;
   };
@@ -183,7 +184,7 @@ export type PatchThreadStateResultEvent = BaseEvent & {
 export type AgentOutputEvent = BaseEvent & {
   type: 'agent:output';
   data: {
-    content: string;
+    content: string | any[];
   };
 };
 

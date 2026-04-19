@@ -16,13 +16,13 @@ export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (bu
     context.state.threadId = threadId;
 
     // persist the thread title so we can use it later
-    if (channelId && threadId && event.data.threadTitle?.trim()) {
+    if (channelId && threadId && (event as any).data.threadTitle?.trim()) {
       try {
         await storageService.patchThreadState({
           channelId,
           threadId,
           state: {
-            generatedName: event.data.threadTitle.trim(),
+            generatedName: (event as any).data.threadTitle.trim(),
           },
         });
 
@@ -44,26 +44,26 @@ export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (bu
       data: {
         success: true,
         threadId: event.meta?.threadId,
-        threadTitle: event.data.threadTitle,
+        threadTitle: (event as any).data.threadTitle,
       },
       meta: {
         threadId: event.meta?.threadId,
       },
-    };
+    } as any;
 
     // invoke the next agent in the thread
     yield {
       type: 'agent:invoke',
       data: {
-        content:
-          `Tool call \`create_thread\` completed successfully.\n` +
-          `- toolCallId: ${event.meta?.toolCallId}\n` +
-          `- threadId: ${event.meta?.threadId}\n` +
-          `- threadTitle: ${event.data.threadTitle}\n\n` +
-          'Continue the conversation in this thread.',
+        role: 'system',
+        content: `Tool call \`create_thread\` completed successfully.\n`,
       },
       meta: {
         threadId: event.meta?.threadId,
+        agentId: context.state.agentId,
+        channelId: context.state.channelId,
+        toolCallId: event.meta?.toolCallId,
+        toolName: 'create_thread',
       },
     };
   });
