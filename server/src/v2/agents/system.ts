@@ -3,10 +3,22 @@ import { threadToolDefinitions } from '../plugins/threads.js';
 import { delegationToolDefinitions } from '../plugins/delegation.js';
 import { storageToolDefinitions } from '../plugins/storage.js';
 import { storageService } from '../services/storage.js';
+import { readFileSync } from 'node:fs';
+
+const SYSTEM_ICON_DATA_URL = (() => {
+  try {
+    const svg = readFileSync(new URL('../assets/icon.svg', import.meta.url), 'utf-8').trim();
+    if (!svg.startsWith('<svg')) return undefined;
+    return `data:image/svg+xml;base64,${Buffer.from(svg, 'utf-8').toString('base64')}`;
+  } catch {
+    return undefined;
+  }
+})();
 
 export const getSystemAgentDetails = (): AgentDetails => ({
   id: 'system',
   name: 'OpenBot',
+  image: SYSTEM_ICON_DATA_URL,
   instructions:
     'You are OpenBot, the primary AI assistant and orchestrator of this workspace. Your goal is to help users onboard, answer questions about the system, and suggest specialized agents for specific tasks.\n\n' +
     '### How to use OpenBot:\n' +
@@ -31,7 +43,7 @@ export const getSystemAgentDetails = (): AgentDetails => ({
     { name: 'threads', config: {} },
     { name: 'delegation', config: {} },
   ],
-  description: 'System orchestrator agent',
+  description: 'System coordinator agent',
   createdAt: new Date(),
   updatedAt: new Date(),
 });

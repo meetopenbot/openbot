@@ -446,7 +446,23 @@ export const storageService = {
       }),
     );
 
-    return agents;
+    const system = getSystemAgentDetails();
+    const builtInSystemAgent: Agent = {
+      id: system.id,
+      name: system.name,
+      description: system.description || '',
+      image: system.image,
+      createdAt: system.createdAt,
+      updatedAt: system.updatedAt,
+    };
+
+    const deduped = new Map<string, Agent>();
+    deduped.set(builtInSystemAgent.id, builtInSystemAgent);
+    for (const agent of agents) {
+      if (!deduped.has(agent.id)) deduped.set(agent.id, agent);
+    }
+
+    return Array.from(deduped.values());
   },
   getPlugins: async (): Promise<Plugin[]> => {
     const [builtInPlugins, diskPlugins] = await Promise.all([
