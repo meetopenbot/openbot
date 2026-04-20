@@ -184,7 +184,18 @@ export type PatchThreadStateResultEvent = BaseEvent & {
 export type AgentOutputEvent = BaseEvent & {
   type: 'agent:output';
   data: {
-    content: string | any[];
+    content: string;
+  };
+};
+
+export type AgentDelegateEvent = BaseEvent & {
+  type: 'agent:delegate';
+  data: {
+    agentId: string;
+    content: string;
+  };
+  meta: {
+    threadId: string;
   };
 };
 
@@ -212,10 +223,30 @@ export type CreateThreadResultEvent = BaseEvent & {
   };
 };
 
+export type DelegateEvent = BaseEvent & {
+  type: 'action:delegate';
+  data: {
+    agentId: string;
+    content: string;
+  };
+  meta: {
+    toolCallId: string;
+  };
+};
+
+export type UserInputEvent = BaseEvent & {
+  type: 'user:input';
+  data: {
+    content: string;
+  };
+};
+
 export type OpenBotEvent =
+  | UserInputEvent
   | AgentInvokeEvent
   | UIMessageEvent
   | AgentOutputEvent
+  | AgentDelegateEvent
   | GetChannelsEvent
   | GetChannelsResultEvent
   | GetThreadsEvent
@@ -238,4 +269,5 @@ export type OpenBotEvent =
   | PatchThreadStateEvent
   | PatchThreadStateResultEvent
   | CreateThreadEvent
-  | CreateThreadResultEvent;
+  | CreateThreadResultEvent
+  | DelegateEvent;

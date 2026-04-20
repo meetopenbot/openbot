@@ -7,9 +7,9 @@ import path from 'path';
 import fs from 'fs/promises';
 import { processService } from '../services/process.js';
 import { storageService } from '../services/storage.js';
-import { orchestratorService } from '../services/orchestrator.js';
-import { initPlugins } from './plugins.js';
-import { ensureEventId, openBotEventFromQuery } from './utils.js';
+import { coordinatorService } from '../services/coordinator.js';
+import { initPlugins } from '../registry/plugins.js';
+import { ensureEventId, openBotEventFromQuery, parseMention } from './utils.js';
 
 export interface ServerOptions {
   port?: number;
@@ -102,20 +102,15 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.post('/api/publish', async (req, res) => {
-    let event = req.body as OpenBotEvent;
+    const event = req.body as OpenBotEvent;
     const { channelId, threadId } = getContext(req);
     const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
-    const agentId = 'system';
-
-    // ensure the event has a unique id once it published so we might use it as a threadId later
-    ensureEventId(event);
 
     res.sendStatus(200);
 
     const onEvent = async (chunk: OpenBotEvent, state?: OpenBotState) => {
       ensureEventId(chunk);
 
-      // overried the channelId and threadId if provided in the meta of the yielded event
       const targetChannelId = state?.channelId || channelId;
       const targetThreadId = state?.threadId || threadId;
       const targetClientKey = getClientKey(targetChannelId, targetThreadId);
@@ -136,41 +131,8 @@ export async function startServer(options: ServerOptions = {}) {
       }
     };
 
-    // define the client UI user message event
-    const clientUIUserMessage: UIMessageEvent = {
-      type: 'client:ui:message',
-      data: {
-        content: (req.body as any).data?.content || '',
-        role: 'user',
-      },
-      meta: {
-        agentId: 'system',
-      },
-    };
-
-    // ensure the event has a unique id once it published so we might use it as a threadId later
-    ensureEventId(clientUIUserMessage);
-
-    // Store the original user input once as a UI message for the history
-    await onEvent(clientUIUserMessage);
-
-    // If the event is user:input (legacy client), convert it to agent:invoke
-    if ((event as any).type === 'user:input') {
-      event = {
-        ...event,
-        type: 'agent:invoke',
-        data: {
-          content: (event as any).data.content,
-        },
-        meta: {
-          threadId: clientUIUserMessage.id,
-        },
-      };
-    }
-
-    await orchestratorService.executeAgent({
+    await coordinatorService.dispatch({
       runId,
-      agentId,
       event,
       channelId,
       threadId,
@@ -182,33 +144,22 @@ export async function startServer(options: ServerOptions = {}) {
     let event: OpenBotEvent;
     try {
       event = openBotEventFromQuery(req.query);
-      // If the event is user:input (legacy client), convert it to agent:invoke
-      if ((event as any).type === 'user:input') {
-        event = {
-          type: 'agent:invoke',
-          data: {
-            content: (event as any).data.content,
-          },
-        };
-      }
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Invalid query';
       res.status(400).json({ error: message });
       return;
     }
+
     const { channelId, threadId } = getContext(req);
     const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
-    const agentId = 'system';
-
     const events: OpenBotEvent[] = [];
 
     const onEvent = async (chunk: OpenBotEvent) => {
       events.push(chunk);
     };
 
-    await orchestratorService.executeAgent({
+    await coordinatorService.dispatch({
       runId,
-      agentId,
       event,
       channelId,
       threadId,

@@ -21,7 +21,8 @@ import {
   Thread,
   ThreadDetails,
 } from '../plugins/storage.js';
-import { OpenBotEvent } from '../app/types.js';
+import { getSystemAgentDetails } from '../agents/system.js';
+import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { pathToFileURL } from 'node:url';
 
 const mapNameToPlugin = (name: string, description: string): Plugin => ({
@@ -301,15 +302,32 @@ export const storageService = {
       await fs.mkdir(agentsDir, { recursive: true });
     }
 
-    const agents = (await fs.readdir(agentsDir)).filter((name) => !name.startsWith('.'));
+    const agentIds = (await fs.readdir(agentsDir)).filter((name) => !name.startsWith('.'));
 
-    return agents.map((agent) => ({
-      id: agent,
-      name: agent,
-      description: '',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
+    const agents = await Promise.all(
+      agentIds.map(async (id) => {
+        try {
+          const details = await storageService.getAgentDetails({ agentId: id });
+          return {
+            id,
+            name: details.name || id,
+            description: details.description || '',
+            createdAt: details.createdAt,
+            updatedAt: details.updatedAt,
+          };
+        } catch {
+          return {
+            id,
+            name: id,
+            description: '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+        }
+      }),
+    );
+
+    return agents;
   },
   getPlugins: async (): Promise<Plugin[]> => {
     const [builtInPlugins, diskPlugins] = await Promise.all([
@@ -457,5 +475,62 @@ export const storageService = {
     const variables = await fs.readFile(resolvePath(resolveBaseDir() + '/' + VARIABLES_FILE));
 
     return JSON.parse(variables.toString()) as Record<string, string>;
+  },
+
+  /**
+   * Hydrates the full OpenBot state from disk/storage before a run.
+   */
+  getOpenBotState: async (options: {
+    runId: string;
+    agentId: string;
+    channelId: string;
+    threadId?: string;
+    event: OpenBotEvent;
+  }): Promise<OpenBotState> => {
+    const { runId, agentId, channelId, threadId, event } = options;
+
+    let agentDetails: AgentDetails;
+    if (agentId === 'system') {
+      agentDetails = getSystemAgentDetails();
+    } else {
+      try {
+        agentDetails = await storageService.getAgentDetails({ agentId });
+      } catch (error) {
+        console.warn(`[storage] Failed to load agent details for agent: ${agentId}`, error);
+        throw error;
+      }
+    }
+
+    let channelDetails;
+    if (channelId && channelId !== 'default') {
+      try {
+        channelDetails = await storageService.getChannelDetails({ channelId });
+      } catch (error) {
+        console.warn(`[storage] Failed to load channel details for channel ${channelId}`, error);
+      }
+    }
+
+    let threadDetails;
+    if (channelId && threadId) {
+      try {
+        threadDetails = await storageService.getThreadDetails({ channelId, threadId });
+      } catch (error) {
+        console.warn(
+          `[storage] Failed to load thread details for channel ${channelId} thread: ${threadId}`,
+          error,
+        );
+      }
+    }
+
+    return {
+      runId,
+      agentId,
+      channelId,
+      threadId,
+      triggerEvent: event,
+      agentDetails: agentDetails as AgentDetails,
+      channelDetails: channelDetails as ChannelDetails,
+      threadDetails: threadDetails as ThreadDetails,
+    };
   },
 };
