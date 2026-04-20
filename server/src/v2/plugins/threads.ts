@@ -9,8 +9,14 @@ import { storageService } from '../services/storage.js';
  */
 export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
   builder.on('action:create_thread', async function* (event, context) {
+    // we take the threadId from the meta so the next agent:invoke event will reply in the same thread
     const threadId = event.meta?.threadId;
     const channelId = context.state.channelId;
+
+    if (!threadId) {
+      console.warn('[threads] Cannot create thread: meta.threadId is missing');
+      return;
+    }
 
     // override the threadId in the state so the next agent:invoke event will reply in the same thread
     context.state.threadId = threadId;
@@ -43,35 +49,20 @@ export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (bu
       type: 'action:create_thread:result',
       data: {
         success: true,
-        threadId: event.meta?.threadId,
+        threadId,
         threadTitle: (event as any).data.threadTitle,
       },
       meta: {
-        threadId: event.meta?.threadId,
+        threadId,
       },
     } as any;
-
-    // invoke the next agent in the thread
-    yield {
-      type: 'agent:invoke',
-      data: {
-        role: 'system',
-        content: `Tool call \`create_thread\` completed successfully.\n`,
-      },
-      meta: {
-        threadId: event.meta?.threadId,
-        agentId: context.state.agentId,
-        channelId: context.state.channelId,
-        toolCallId: event.meta?.toolCallId,
-        toolName: 'create_thread',
-      },
-    };
   });
 };
 
 export const threadToolDefinitions = {
   create_thread: {
-    description: 'Create a new thread',
+    description:
+      'Create a new thread. Use this when you think the user intent is complex and should be split into multiple steps. If user asks basic questions, no need to create a thread.',
     inputSchema: z.object({
       threadTitle: z.string(),
     }),

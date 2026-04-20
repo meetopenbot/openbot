@@ -188,17 +188,6 @@ export type AgentOutputEvent = BaseEvent & {
   };
 };
 
-export type AgentDelegateEvent = BaseEvent & {
-  type: 'agent:delegate';
-  data: {
-    agentId: string;
-    content: string;
-  };
-  meta: {
-    threadId: string;
-  };
-};
-
 export type CreateThreadEvent = BaseEvent & {
   type: 'action:create_thread';
   data: {
@@ -246,7 +235,6 @@ export type OpenBotEvent =
   | AgentInvokeEvent
   | UIMessageEvent
   | AgentOutputEvent
-  | AgentDelegateEvent
   | GetChannelsEvent
   | GetChannelsResultEvent
   | GetThreadsEvent

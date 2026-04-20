@@ -1,42 +1,14 @@
-import { MelonyPlugin, Runtime } from 'melony';
+import { MelonyPlugin } from 'melony';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
-import { parseMention } from '../app/utils.js';
 import { storageService } from '../services/storage.js';
 
 /**
  * Agent Plugin for OpenBot.
  * Handles the base agent logic:
- * 1. Mentions/Routing (@agent)
- * 2. Delegation yielding
- * 3. Standard Output (Formatting for UI)
- * 4. Instruction Enhancement (Adding available agents to system prompt)
+ * 1. Standard Output (Formatting for UI)
+ * 2. Instruction Enhancement (Adding available agents to system prompt)
  */
 export const agentPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
-  builder.on('agent:invoke', async function* (event, { state }) {
-    const { agentId } = state;
-    const { content, agentId: targetAgentId } = event.data;
-
-    // 1. Mentions are parsed only by the 'system' agent when no specific target is set.
-    if (agentId === 'system' && !targetAgentId) {
-      const mention = parseMention(content);
-      if (mention) {
-        yield {
-          type: 'agent:invoke',
-          data: {
-            agentId: mention.agentId,
-            content: mention.stripped,
-          },
-        };
-        return;
-      }
-    }
-
-    // Delegation yielding: coordinatorService will catch this and start a new agent
-    if (targetAgentId && targetAgentId !== agentId) {
-      yield event;
-    }
-  });
-
   builder.on('agent:output', async function* (event, { state }) {
     yield {
       type: 'client:ui:message',

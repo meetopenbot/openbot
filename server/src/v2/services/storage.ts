@@ -1,5 +1,4 @@
 import {
-  DEFAULT_AGENT_MD,
   DEFAULT_AGENTS_DIR,
   DEFAULT_BASE_DIR,
   DEFAULT_CHANNELS_DIR,
@@ -352,8 +351,9 @@ export const storageService = {
     try {
       await fs.access(agentMdPath);
     } catch {
-      await fs.mkdir(agentDir, { recursive: true });
-      await fs.writeFile(agentMdPath, DEFAULT_AGENT_MD);
+      const error = new Error(`Agent "${agentId}" does not exist.`);
+      (error as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
+      throw error;
     }
 
     try {
@@ -370,16 +370,8 @@ export const storageService = {
         updatedAt: new Date(),
       };
     } catch (error) {
-      console.error(`Failed to read agent MD file for agent ${agentId}`);
-      return {
-        id: agentId,
-        name: agentId,
-        instructions: DEFAULT_AGENT_MD,
-        plugins: [],
-        description: '',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      console.error(`Failed to read agent MD file for agent ${agentId}`, error);
+      throw error;
     }
   },
   getEvents: async ({
