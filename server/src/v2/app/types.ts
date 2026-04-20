@@ -48,6 +48,9 @@ export type UIMessageEvent = BaseEvent & {
   };
   meta: {
     agentId?: string;
+    userId?: string;
+    userName?: string;
+    userAvatarUrl?: string;
   };
 };
 
@@ -281,6 +284,11 @@ export type UserInputEvent = BaseEvent & {
   type: 'user:input';
   data: {
     content: string;
+  };
+  meta?: {
+    userId?: string;
+    userName?: string;
+    userAvatarUrl?: string;
   };
 };
 

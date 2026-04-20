@@ -76,6 +76,9 @@ export const coordinatorService = {
         },
         meta: {
           agentId: 'system',
+          userId: event.meta?.userId,
+          userName: event.meta?.userName,
+          userAvatarUrl: event.meta?.userAvatarUrl,
         },
       };
       ensureEventId(uiUserMessage);
