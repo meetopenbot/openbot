@@ -57,6 +57,58 @@ export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (bu
       },
     } as any;
   });
+
+  builder.on('action:create_channel', async function* (event) {
+    const rawChannelId = ((event as any).data.channelId || '').trim();
+    const channelSpec = typeof (event as any).data.spec === 'string' ? (event as any).data.spec : '';
+
+    if (!rawChannelId) {
+      yield {
+        type: 'action:create_channel:result',
+        data: {
+          success: false,
+          channelId: '',
+          channelUrl: '',
+        },
+      } as any;
+      return;
+    }
+
+    const channelUrl = `/channels/${rawChannelId}`;
+
+    try {
+      await storageService.createChannel({
+        channelId: rawChannelId,
+        spec: channelSpec,
+      });
+
+      yield {
+        type: 'action:create_channel:result',
+        data: {
+          success: true,
+          channelId: rawChannelId,
+          channelUrl,
+        },
+      } as any;
+
+      yield {
+        type: 'agent:output',
+        data: {
+          content: `Created channel \`${rawChannelId}\`.\n\n[Open channel](${channelUrl})`,
+        },
+        meta: event.meta,
+      } as any;
+    } catch (error) {
+      yield {
+        type: 'action:create_channel:result',
+        data: {
+          success: false,
+          channelId: rawChannelId,
+          channelUrl,
+        },
+      } as any;
+    }
+  });
 };
 
 export const threadToolDefinitions = {
@@ -65,6 +117,15 @@ export const threadToolDefinitions = {
       'Create a new thread. Use this when you think the user intent is complex and should be split into multiple steps. If user asks basic questions, no need to create a thread.',
     inputSchema: z.object({
       threadTitle: z.string(),
+    }),
+  },
+  create_channel: {
+    description: 'Create a new channel. Use this when you think the user intent is completelly different from the current channel and should be split into multiple channels. Before creating, always notify with details and ask for confirmation. If user asks basic questions, no need to create a channel.',
+    inputSchema: z.object({
+      channelId: z
+        .string()
+        .describe('Unique channel ID. Example: product-launch, backend-platform, or channel_roadmap.'),
+      spec: z.string().optional().describe('Optional initial markdown content for the channel spec.'),
     }),
   },
 };

@@ -1,6 +1,7 @@
 import { AgentDetails } from '../plugins/storage.js';
 import { threadToolDefinitions } from '../plugins/threads.js';
 import { delegationToolDefinitions } from '../plugins/delegation.js';
+import { storageToolDefinitions } from '../plugins/storage.js';
 import { storageService } from '../services/storage.js';
 
 export const getSystemAgentDetails = (): AgentDetails => ({
@@ -19,7 +20,11 @@ export const getSystemAgentDetails = (): AgentDetails => ({
       name: 'ai-sdk',
       config: {
         model: 'openai/gpt-4o-mini',
-        toolDefinitions: { ...threadToolDefinitions, ...delegationToolDefinitions },
+        toolDefinitions: {
+          ...threadToolDefinitions,
+          ...delegationToolDefinitions,
+          ...storageToolDefinitions,
+        },
       },
     },
     { name: 'storage', config: { storage: storageService } },

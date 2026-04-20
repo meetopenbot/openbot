@@ -181,6 +181,38 @@ export type PatchThreadStateResultEvent = BaseEvent & {
   };
 };
 
+export type PatchChannelDetailsEvent = BaseEvent & {
+  type: 'action:patch_channel_details';
+  data: {
+    state?: Record<string, unknown>;
+    spec?: string;
+  };
+};
+
+export type PatchChannelDetailsResultEvent = BaseEvent & {
+  type: 'action:patch_channel_details:result';
+  data: {
+    success: boolean;
+    updatedFields: ('state' | 'spec')[];
+  };
+};
+
+export type PatchThreadDetailsEvent = BaseEvent & {
+  type: 'action:patch_thread_details';
+  data: {
+    state?: Record<string, unknown>;
+    spec?: string;
+  };
+};
+
+export type PatchThreadDetailsResultEvent = BaseEvent & {
+  type: 'action:patch_thread_details:result';
+  data: {
+    success: boolean;
+    updatedFields: ('state' | 'spec')[];
+  };
+};
+
 export type AgentOutputEvent = BaseEvent & {
   type: 'agent:output';
   data: {
@@ -209,6 +241,28 @@ export type CreateThreadResultEvent = BaseEvent & {
   };
   meta: {
     threadId: string;
+  };
+};
+
+export type CreateChannelEvent = BaseEvent & {
+  type: 'action:create_channel';
+  data: {
+    channelId: string;
+    spec?: string;
+  };
+  meta?: {
+    toolCallId?: string;
+    agentId?: string;
+    threadId?: string;
+  };
+};
+
+export type CreateChannelResultEvent = BaseEvent & {
+  type: 'action:create_channel:result';
+  data: {
+    success: boolean;
+    channelId: string;
+    channelUrl: string;
   };
 };
 
@@ -256,6 +310,12 @@ export type OpenBotEvent =
   | PatchChannelStateResultEvent
   | PatchThreadStateEvent
   | PatchThreadStateResultEvent
+  | PatchChannelDetailsEvent
+  | PatchChannelDetailsResultEvent
+  | PatchThreadDetailsEvent
+  | PatchThreadDetailsResultEvent
   | CreateThreadEvent
   | CreateThreadResultEvent
+  | CreateChannelEvent
+  | CreateChannelResultEvent
   | DelegateEvent;

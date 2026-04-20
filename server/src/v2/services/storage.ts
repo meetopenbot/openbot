@@ -37,6 +37,55 @@ const resolveBaseDir = () => {
   return resolvePath(config.baseDir || DEFAULT_BASE_DIR);
 };
 
+const AGENT_SVG_CANDIDATE_NAMES = ['avatar.svg', 'icon.svg', 'image.svg', 'logo.svg'] as const;
+
+const toSvgDataUrl = (svg: string) => `data:image/svg+xml;base64,${Buffer.from(svg, 'utf-8').toString('base64')}`;
+
+const tryReadSvgDataUrl = async (filePath: string): Promise<string | null> => {
+  try {
+    const svg = await fs.readFile(filePath, 'utf-8');
+    const trimmed = svg.trim();
+    if (!trimmed.startsWith('<svg')) return null;
+    return toSvgDataUrl(trimmed);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Auto-discovers an agent SVG avatar and returns it as a data URL.
+ *
+ * Search order:
+ * 1) <agent>/assets/avatar.svg|icon.svg|image.svg|logo.svg
+ * 2) <agent>/avatar.svg|icon.svg|image.svg|logo.svg
+ * 3) first *.svg in <agent>/assets
+ * 4) first *.svg in <agent>
+ */
+const resolveAgentImageDataUrl = async (agentDir: string): Promise<string | undefined> => {
+  const preferredDirs = [path.join(agentDir, 'assets'), agentDir];
+
+  for (const dir of preferredDirs) {
+    for (const fileName of AGENT_SVG_CANDIDATE_NAMES) {
+      const dataUrl = await tryReadSvgDataUrl(path.join(dir, fileName));
+      if (dataUrl) return dataUrl;
+    }
+  }
+
+  for (const dir of preferredDirs) {
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      const firstSvg = entries.find((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.svg'));
+      if (!firstSvg) continue;
+      const dataUrl = await tryReadSvgDataUrl(path.join(dir, firstSvg.name));
+      if (dataUrl) return dataUrl;
+    } catch {
+      // ignore missing/unreadable folders
+    }
+  }
+
+  return undefined;
+};
+
 const getConversationDir = (channelId: string, threadId?: string) => {
   const base = resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + channelId);
   return threadId ? `${base}/threads/${threadId}` : base;
@@ -106,6 +155,38 @@ export const storageService = {
     );
 
     return channels;
+  },
+  createChannel: async ({
+    channelId,
+    spec,
+  }: {
+    channelId: string;
+    spec?: string;
+  }): Promise<void> => {
+    const normalizedChannelId = channelId.trim();
+    if (!normalizedChannelId) {
+      throw new Error('channelId is required');
+    }
+
+    const channelDir = getConversationDir(normalizedChannelId);
+    const specPath = `${channelDir}/SPEC.md`;
+    const statePath = `${channelDir}/state.json`;
+
+    try {
+      await fs.access(channelDir);
+      throw new Error(`Channel "${normalizedChannelId}" already exists`);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+
+    await fs.mkdir(channelDir, { recursive: true });
+    await fs.writeFile(
+      specPath,
+      spec?.trim() || `# ${normalizedChannelId}\n\nDefine the goals and rules for this channel here.\n`,
+    );
+    await fs.writeFile(statePath, JSON.stringify({}, null, 2));
   },
   getThreads: async ({ channelId }: { channelId: string }): Promise<Thread[]> => {
     const threadsDir = resolvePath(
@@ -293,6 +374,44 @@ export const storageService = {
       throw error;
     }
   },
+  patchChannelSpec: async ({
+    channelId,
+    spec,
+  }: {
+    channelId: string;
+    spec: string;
+  }): Promise<void> => {
+    const channelDir = getConversationDir(channelId);
+    const specPath = `${channelDir}/SPEC.md`;
+
+    try {
+      await fs.mkdir(channelDir, { recursive: true });
+      await fs.writeFile(specPath, spec);
+    } catch (error) {
+      console.error(`Failed to patch channel spec for channel ${channelId}`, error);
+      throw error;
+    }
+  },
+  patchThreadSpec: async ({
+    channelId,
+    threadId,
+    spec,
+  }: {
+    channelId: string;
+    threadId: string;
+    spec: string;
+  }): Promise<void> => {
+    const threadDir = getConversationDir(channelId, threadId);
+    const specPath = `${threadDir}/SPEC.md`;
+
+    try {
+      await fs.mkdir(threadDir, { recursive: true });
+      await fs.writeFile(specPath, spec);
+    } catch (error) {
+      console.error(`Failed to patch thread spec for channel ${channelId} thread ${threadId}`, error);
+      throw error;
+    }
+  },
   getAgents: async (): Promise<Agent[]> => {
     const agentsDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_AGENTS_DIR);
     try {
@@ -311,6 +430,7 @@ export const storageService = {
             id,
             name: details.name || id,
             description: details.description || '',
+            image: details.image,
             createdAt: details.createdAt,
             updatedAt: details.updatedAt,
           };
@@ -359,6 +479,7 @@ export const storageService = {
     try {
       const agentMd = await fs.readFile(agentMdPath, 'utf-8');
       const { data, content: instructions } = matter(agentMd);
+      const discoveredImage = await resolveAgentImageDataUrl(agentDir);
 
       return {
         id: agentId,
@@ -366,6 +487,7 @@ export const storageService = {
         instructions: instructions.trim(),
         plugins: data.plugins || [],
         description: data.description || '',
+        image: discoveredImage,
         createdAt: new Date(),
         updatedAt: new Date(),
       };

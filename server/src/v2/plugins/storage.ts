@@ -1,10 +1,12 @@
 import { MelonyPlugin } from 'melony';
 import { OpenBotState, OpenBotEvent } from '../app/types.js';
+import z from 'zod';
 
 export type Agent = {
   id: string;
   name: string;
   description: string;
+  image?: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -57,6 +59,13 @@ export type ChannelDetails = {
 
 export interface Storage {
   getChannels: () => Promise<Channel[]>;
+  createChannel: ({
+    channelId,
+    spec,
+  }: {
+    channelId: string;
+    spec?: string;
+  }) => Promise<void>;
   getThreads: ({ channelId }: { channelId: string }) => Promise<Thread[]>;
   getThreadDetails: ({
     channelId,
@@ -86,12 +95,47 @@ export interface Storage {
     threadId: string;
     state: unknown;
   }) => Promise<void>;
+  patchChannelSpec: ({ channelId, spec }: { channelId: string; spec: string }) => Promise<void>;
+  patchThreadSpec: ({
+    channelId,
+    threadId,
+    spec,
+  }: {
+    channelId: string;
+    threadId: string;
+    spec: string;
+  }) => Promise<void>;
   getVariables: () => Promise<Record<string, string>>;
 }
 
 export interface StoragePluginOptions {
   storage: Storage;
 }
+
+export const storageToolDefinitions = {
+  patch_channel_details: {
+    description: 'Patch current channel details (state and/or spec).',
+    inputSchema: z
+      .object({
+        state: z.record(z.string(), z.unknown()).optional(),
+        spec: z.string().optional(),
+      })
+      .refine((value) => value.state !== undefined || value.spec !== undefined, {
+        message: 'Provide at least one of state or spec.',
+      }),
+  },
+  patch_thread_details: {
+    description: 'Patch current thread details (state and/or spec).',
+    inputSchema: z
+      .object({
+        state: z.record(z.string(), z.unknown()).optional(),
+        spec: z.string().optional(),
+      })
+      .refine((value) => value.state !== undefined || value.spec !== undefined, {
+        message: 'Provide at least one of state or spec.',
+      }),
+  },
+};
 
 export const storagePlugin =
   (options: StoragePluginOptions): MelonyPlugin<OpenBotState, OpenBotEvent> =>
@@ -199,6 +243,97 @@ export const storagePlugin =
         yield {
           type: 'action:storage:patch-thread-state-result',
           data: { success: false },
+        };
+      }
+    });
+
+    builder.on('action:patch_channel_details', async function* (event, context) {
+      const updatedFields: ('state' | 'spec')[] = [];
+
+      try {
+        if ((event.data as any).state !== undefined) {
+          await storage.patchChannelState({
+            channelId: context.state.channelId,
+            state: (event.data as any).state,
+          });
+          updatedFields.push('state');
+        }
+
+        if (typeof (event.data as any).spec === 'string') {
+          await storage.patchChannelSpec({
+            channelId: context.state.channelId,
+            spec: (event.data as any).spec,
+          });
+          updatedFields.push('spec');
+        }
+
+        context.state.channelDetails = await storage.getChannelDetails({
+          channelId: context.state.channelId,
+        });
+
+        yield {
+          type: 'action:patch_channel_details:result',
+          data: {
+            success: true,
+            updatedFields,
+          },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:patch_channel_details:result',
+          data: {
+            success: false,
+            updatedFields,
+          },
+        };
+      }
+    });
+
+    builder.on('action:patch_thread_details', async function* (event, context) {
+      const updatedFields: ('state' | 'spec')[] = [];
+
+      try {
+        if (!context.state.threadId) {
+          throw new Error('Missing threadId in state for patch_thread_details');
+        }
+
+        if ((event.data as any).state !== undefined) {
+          await storage.patchThreadState({
+            channelId: context.state.channelId,
+            threadId: context.state.threadId,
+            state: (event.data as any).state,
+          });
+          updatedFields.push('state');
+        }
+
+        if (typeof (event.data as any).spec === 'string') {
+          await storage.patchThreadSpec({
+            channelId: context.state.channelId,
+            threadId: context.state.threadId,
+            spec: (event.data as any).spec,
+          });
+          updatedFields.push('spec');
+        }
+
+        context.state.threadDetails = await storage.getThreadDetails({
+          channelId: context.state.channelId,
+          threadId: context.state.threadId,
+        });
+
+        yield {
+          type: 'action:patch_thread_details:result',
+          data: {
+            success: true,
+            updatedFields,
+          },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:patch_thread_details:result',
+          data: {
+            success: false,
+            updatedFields,
+          },
         };
       }
     });
