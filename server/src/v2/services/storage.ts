@@ -24,10 +24,11 @@ import { getSystemAgentDetails } from '../agents/system.js';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { pathToFileURL } from 'node:url';
 
-const mapNameToPlugin = (name: string, description: string): Plugin => ({
+const mapNameToPlugin = (name: string, description: string, image?: string): Plugin => ({
   id: name,
   name,
   description,
+  image,
   createdAt: new Date(),
   updatedAt: new Date(),
 });
@@ -37,7 +38,7 @@ const resolveBaseDir = () => {
   return resolvePath(config.baseDir || DEFAULT_BASE_DIR);
 };
 
-const AGENT_SVG_CANDIDATE_NAMES = ['avatar.svg', 'icon.svg', 'image.svg', 'logo.svg'] as const;
+const ENTITY_SVG_CANDIDATE_NAMES = ['avatar.svg', 'icon.svg', 'image.svg', 'logo.svg'] as const;
 
 const toSvgDataUrl = (svg: string) => `data:image/svg+xml;base64,${Buffer.from(svg, 'utf-8').toString('base64')}`;
 
@@ -53,19 +54,19 @@ const tryReadSvgDataUrl = async (filePath: string): Promise<string | null> => {
 };
 
 /**
- * Auto-discovers an agent SVG avatar and returns it as a data URL.
+ * Auto-discovers an entity SVG avatar and returns it as a data URL.
  *
  * Search order:
- * 1) <agent>/assets/avatar.svg|icon.svg|image.svg|logo.svg
- * 2) <agent>/avatar.svg|icon.svg|image.svg|logo.svg
- * 3) first *.svg in <agent>/assets
- * 4) first *.svg in <agent>
+ * 1) <entity>/assets/avatar.svg|icon.svg|image.svg|logo.svg
+ * 2) <entity>/avatar.svg|icon.svg|image.svg|logo.svg
+ * 3) first *.svg in <entity>/assets
+ * 4) first *.svg in <entity>
  */
-const resolveAgentImageDataUrl = async (agentDir: string): Promise<string | undefined> => {
-  const preferredDirs = [path.join(agentDir, 'assets'), agentDir];
+const resolveEntityImageDataUrl = async (entityDir: string): Promise<string | undefined> => {
+  const preferredDirs = [path.join(entityDir, 'assets'), entityDir];
 
   for (const dir of preferredDirs) {
-    for (const fileName of AGENT_SVG_CANDIDATE_NAMES) {
+    for (const fileName of ENTITY_SVG_CANDIDATE_NAMES) {
       const dataUrl = await tryReadSvgDataUrl(path.join(dir, fileName));
       if (dataUrl) return dataUrl;
     }
@@ -113,7 +114,9 @@ const listPluginsFromDisk = async (): Promise<Plugin[]> => {
     .map(async (entry) => {
       // get dist/index module and find inside module.plugin.description
       const module = await import(pathToFileURL(`${pluginsDir}/${entry.name}/dist/index.js`).href);
-      return mapNameToPlugin(module.plugin.name || entry.name, module.plugin.description || '');
+      const pluginDir = path.join(pluginsDir, entry.name);
+      const image = await resolveEntityImageDataUrl(pluginDir);
+      return mapNameToPlugin(module.plugin.name || entry.name, module.plugin.description || '', image);
     });
 
   return Promise.all(plugins);
@@ -495,7 +498,7 @@ export const storageService = {
     try {
       const agentMd = await fs.readFile(agentMdPath, 'utf-8');
       const { data, content: instructions } = matter(agentMd);
-      const discoveredImage = await resolveAgentImageDataUrl(agentDir);
+      const discoveredImage = await resolveEntityImageDataUrl(agentDir);
 
       return {
         id: agentId,
