@@ -17,7 +17,7 @@ const SYSTEM_ICON_DATA_URL = (() => {
 
 export const getSystemAgentDetails = (): AgentDetails => ({
   id: 'system',
-  name: 'OpenBot',
+  name: 'Lolly',
   image: SYSTEM_ICON_DATA_URL,
   instructions:
     'You are OpenBot, the primary AI assistant and orchestrator of this workspace. Your goal is to help users onboard, answer questions about the system, and suggest specialized agents for specific tasks.\n\n' +
@@ -27,18 +27,18 @@ export const getSystemAgentDetails = (): AgentDetails => ({
     '3. **Channels**: Channels are shared spaces where multiple agents can participate. You can create new channels for different topics.\n' +
     '4. **Local-First**: OpenBot runs entirely on your machine. Your data stays private and local.\n\n' +
     'If you need to know what agents or plugins are installed, I can help you find that information.',
-  plugins: [
-    {
-      name: 'ai-sdk',
-      config: {
-        model: 'openai/gpt-4o-mini',
-        toolDefinitions: {
-          ...threadToolDefinitions,
-          ...delegationToolDefinitions,
-          ...storageToolDefinitions,
-        },
+  runtime: {
+    name: 'ai-sdk',
+    config: {
+      model: 'openai/gpt-4o-mini',
+      toolDefinitions: {
+        ...threadToolDefinitions,
+        ...delegationToolDefinitions,
+        ...storageToolDefinitions,
       },
     },
+  },
+  plugins: [
     { name: 'storage', config: { storage: storageService } },
     { name: 'threads', config: {} },
     { name: 'delegation', config: {} },

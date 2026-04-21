@@ -185,3 +185,10 @@ export const aiSdkPlugin =
       }
     });
   };
+
+export const plugin = {
+  name: 'ai-sdk',
+  description: 'Built-in AI SDK plugin',
+  kind: 'runtime' as const,
+  factory: aiSdkPlugin,
+};

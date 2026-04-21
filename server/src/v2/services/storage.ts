@@ -17,6 +17,7 @@ import {
   Channel,
   ChannelDetails,
   Plugin,
+  PluginKind,
   Thread,
   ThreadDetails,
 } from '../plugins/storage.js';
@@ -24,10 +25,16 @@ import { getSystemAgentDetails } from '../agents/system.js';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { pathToFileURL } from 'node:url';
 
-const mapNameToPlugin = (name: string, description: string, image?: string): Plugin => ({
+const mapNameToPlugin = (
+  name: string,
+  description: string,
+  kind: PluginKind = 'tool',
+  image?: string,
+): Plugin => ({
   id: name,
   name,
   description,
+  kind,
   image,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -95,7 +102,9 @@ const getConversationDir = (channelId: string, threadId?: string) => {
 const listBuiltInPlugins = async (): Promise<Plugin[]> => {
   return [
     mapNameToPlugin('storage', 'Built-in storage plugin'),
-    mapNameToPlugin('ai-sdk', 'Built-in AI SDK plugin'),
+    mapNameToPlugin('ai-sdk', 'Built-in AI SDK plugin', 'runtime'),
+    mapNameToPlugin('threads', 'Built-in threads plugin'),
+    mapNameToPlugin('delegation', 'Built-in delegation plugin'),
   ];
 };
 
@@ -116,7 +125,12 @@ const listPluginsFromDisk = async (): Promise<Plugin[]> => {
       const module = await import(pathToFileURL(`${pluginsDir}/${entry.name}/dist/index.js`).href);
       const pluginDir = path.join(pluginsDir, entry.name);
       const image = await resolveEntityImageDataUrl(pluginDir);
-      return mapNameToPlugin(module.plugin.name || entry.name, module.plugin.description || '', image);
+      return mapNameToPlugin(
+        module.plugin.name || entry.name,
+        module.plugin.description || '',
+        module.plugin.kind || 'tool',
+        image,
+      );
     });
 
   return Promise.all(plugins);
@@ -434,6 +448,7 @@ export const storageService = {
             name: details.name || id,
             description: details.description || '',
             image: details.image,
+            runtime: details.runtime,
             createdAt: details.createdAt,
             updatedAt: details.updatedAt,
           };
@@ -455,6 +470,7 @@ export const storageService = {
       name: system.name,
       description: system.description || '',
       image: system.image,
+      runtime: system.runtime,
       createdAt: system.createdAt,
       updatedAt: system.updatedAt,
     };
@@ -504,6 +520,7 @@ export const storageService = {
         id: agentId,
         name: data.name || agentId,
         instructions: instructions.trim(),
+        runtime: data.runtime,
         plugins: data.plugins || [],
         description: data.description || '',
         image: discoveredImage,

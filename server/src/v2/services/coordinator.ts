@@ -36,14 +36,25 @@ async function createAgentRuntime(
     initialState: state,
   }).use(agentPlugin());
 
-  // 3. Load additional plugins from agent config
-  for (const p of state.agentDetails?.plugins || []) {
+  // 3. Normalize plugin specs:
+  // - runtime can be a single spec or an array (for backward/forward compatibility)
+  // - plugins remains supported as additional specs
+  const runtimeSpecs = Array.isArray(state.agentDetails?.runtime)
+    ? state.agentDetails.runtime
+    : state.agentDetails?.runtime
+      ? [state.agentDetails.runtime]
+      : [];
+  const pluginSpecs = [...runtimeSpecs, ...(state.agentDetails?.plugins || [])];
+
+  // 4. Load normalized plugins
+  for (const p of pluginSpecs) {
     const name = typeof p === 'string' ? p : p?.name;
-    if (!name) continue;
+    if (!name || typeof name !== 'string') {
+      continue;
+    }
 
-    const config = typeof p === 'string' ? {} : { ...p.config };
+    const config = typeof p === 'string' ? {} : { ...(p.config || {}) };
     const plugin = await resolvePlugin(name, config);
-
     if (plugin) {
       runtime.use(plugin);
     }

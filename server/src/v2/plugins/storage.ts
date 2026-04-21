@@ -2,17 +2,30 @@ import { MelonyPlugin } from 'melony';
 import { OpenBotState, OpenBotEvent } from '../app/types.js';
 import z from 'zod';
 
+export type PluginKind = 'runtime' | 'tool';
+
+export type PluginMetadata = {
+  name: string;
+  description: string;
+  kind?: PluginKind;
+  factory: (config?: any) => MelonyPlugin<any, any>;
+  toolDefinitions?: Record<string, any>;
+  [key: string]: any;
+};
+
 export type Agent = {
   id: string;
   name: string;
   description: string;
   image?: string;
+  runtime?: string | { name: string; config?: any };
   createdAt: Date;
   updatedAt: Date;
 };
 
 export type AgentDetails = Agent & {
   instructions: string;
+  runtime?: string | { name: string; config?: any };
   plugins?: (string | { name: string; config?: any })[];
 };
 
@@ -21,6 +34,7 @@ export type Plugin = {
   name: string;
   description: string;
   image?: string;
+  kind: PluginKind;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -339,3 +353,10 @@ export const storagePlugin =
       }
     });
   };
+
+export const plugin = {
+  name: 'storage',
+  description: 'Built-in storage plugin',
+  factory: storagePlugin,
+  toolDefinitions: storageToolDefinitions,
+};

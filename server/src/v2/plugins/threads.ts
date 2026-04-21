@@ -131,8 +131,8 @@ export const threadToolDefinitions = {
 };
 
 export const plugin = {
-  name: 'storage',
-  description: 'Storage plugin',
+  name: 'threads',
+  description: 'Threads plugin',
   version: '1.0.0',
   author: 'OpenBot',
   license: 'MIT',
