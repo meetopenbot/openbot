@@ -9,6 +9,15 @@ export interface MelonyConfig {
   image?: string;
   baseDir?: string;
   port?: number;
+  mcpServers?: MCPServerConfig[];
+}
+
+export interface MCPServerConfig {
+  id: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
 }
 
 export interface StoredVariable {

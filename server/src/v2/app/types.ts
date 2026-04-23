@@ -280,6 +280,43 @@ export type DelegateEvent = BaseEvent & {
   };
 };
 
+export type MCPListToolsEvent = BaseEvent & {
+  type: 'action:mcp_list_tools';
+  data: {
+    serverId: string;
+  };
+};
+
+export type MCPListToolsResultEvent = BaseEvent & {
+  type: 'action:mcp_list_tools:result';
+  data: {
+    success: boolean;
+    serverId: string;
+    tools: Array<{ name: string; description?: string; inputSchema?: unknown }>;
+    error?: string;
+  };
+};
+
+export type MCPCallEvent = BaseEvent & {
+  type: 'action:mcp_call';
+  data: {
+    serverId: string;
+    toolName: string;
+    args?: Record<string, unknown>;
+  };
+};
+
+export type MCPCallResultEvent = BaseEvent & {
+  type: 'action:mcp_call:result';
+  data: {
+    success: boolean;
+    serverId: string;
+    toolName: string;
+    result?: unknown;
+    error?: string;
+  };
+};
+
 export type UserInputEvent = BaseEvent & {
   type: 'user:input';
   data: {
@@ -326,4 +363,8 @@ export type OpenBotEvent =
   | CreateThreadResultEvent
   | CreateChannelEvent
   | CreateChannelResultEvent
-  | DelegateEvent;
+  | DelegateEvent
+  | MCPListToolsEvent
+  | MCPListToolsResultEvent
+  | MCPCallEvent
+  | MCPCallResultEvent;

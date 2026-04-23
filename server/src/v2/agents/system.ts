@@ -2,6 +2,7 @@ import { AgentDetails } from '../plugins/storage.js';
 import { threadToolDefinitions } from '../plugins/threads.js';
 import { delegationToolDefinitions } from '../plugins/delegation.js';
 import { storageToolDefinitions } from '../plugins/storage.js';
+import { mcpToolDefinitions } from '../plugins/mcp.js';
 import { storageService } from '../services/storage.js';
 import { readFileSync } from 'node:fs';
 
@@ -35,6 +36,7 @@ export const getSystemAgentDetails = (): AgentDetails => ({
         ...threadToolDefinitions,
         ...delegationToolDefinitions,
         ...storageToolDefinitions,
+        ...mcpToolDefinitions,
       },
     },
   },
@@ -42,6 +44,7 @@ export const getSystemAgentDetails = (): AgentDetails => ({
     { name: 'storage', config: { storage: storageService } },
     { name: 'threads', config: {} },
     { name: 'delegation', config: {} },
+    { name: 'mcp', config: {} },
   ],
   description: 'System coordinator agent',
   createdAt: new Date(),

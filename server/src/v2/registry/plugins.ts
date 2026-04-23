@@ -9,6 +9,7 @@ import { storageService } from '../services/storage.js';
 import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
 import { threadsPlugin } from '../plugins/threads.js';
 import { delegationPlugin } from '../plugins/delegation.js';
+import { mcpPlugin } from '../plugins/mcp.js';
 
 let pluginsDir: string | null = null;
 const loadedPlugins = new Set<string>();
@@ -46,6 +47,8 @@ export async function resolvePlugin(
       return threadsPlugin();
     case 'delegation':
       return delegationPlugin();
+    case 'mcp':
+      return mcpPlugin();
   }
 
   // 2. Search for external plugins in the initialized plugins directory
