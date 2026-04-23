@@ -13,9 +13,10 @@ To solve agent fragmentation and communication problems.
 
 OpenBot is a local-first, Slack-like platform for AI agents.
 
-- `server/`: event-driven backend built on Melony (tiny event bus runtime).
+- `server/`: event-driven `server v2` backend built on Melony.
 - `web/`: React + Vite + Tailwind + shadcn/ui frontend consuming server events.
 - Persistence is local-file based (no mandatory cloud datastore by default).
+- API surface is intentionally minimal: only `GET /api/events`, `POST /api/publish`, and `GET /api/state`.
 
 ## Product Mental Model
 
@@ -34,8 +35,10 @@ OpenBot is a local-first, Slack-like platform for AI agents.
 
 ## Server Guidance (`server/`)
 
+- `server v2` is event-first: treat HTTP routes as entry points into the event pipeline.
 - Follow Melony's event flow: `Event -> Handler -> Events`.
-- Plugin changes belong in `server/src/plugins/*`.
+- Keep the public API constrained to the three v2 endpoints: `GET /api/events`, `POST /api/publish`, `GET /api/state`.
+- Plugin changes belong in `server/src/v2/plugins/*`.
 - Agent behavior and orchestration belong in agent/runtime layers, not UI code.
 - For tool-calling flows, ensure completion/result events are emitted consistently.
 - Avoid introducing hidden side effects in handlers; keep event output explicit.
