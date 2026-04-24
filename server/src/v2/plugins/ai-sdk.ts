@@ -60,7 +60,7 @@ async function buildSystemPrompt(
   if (state.channelDetails) {
     sections.push(`## CHANNEL NAME\n${state.channelDetails.name}`);
     sections.push(`## CHANNEL SPECIFICATION\n${state.channelDetails.spec}`);
-    sections.push(`## CHANNEL STATE\n${JSON.stringify(state.channelDetails.state, null, 2)}`);
+    // sections.push(`## CHANNEL STATE\n${JSON.stringify(state.channelDetails.state, null, 2)}`);
 
     if (storage) {
       try {
@@ -81,7 +81,7 @@ async function buildSystemPrompt(
   if (state.threadDetails) {
     sections.push(`## THREAD NAME\n${state.threadDetails.name}`);
     sections.push(`## THREAD SPECIFICATION\n${state.threadDetails.spec}`);
-    sections.push(`## THREAD STATE\n${JSON.stringify(state.threadDetails.state, null, 2)}`);
+    // sections.push(`## THREAD STATE\n${JSON.stringify(state.threadDetails.state, null, 2)}`);
 
     if (storage && state.threadId) {
       try {

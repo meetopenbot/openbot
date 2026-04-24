@@ -3,6 +3,7 @@ import { threadToolDefinitions } from '../plugins/threads.js';
 import { delegationToolDefinitions } from '../plugins/delegation.js';
 import { storageToolDefinitions } from '../plugins/storage.js';
 import { mcpToolDefinitions } from '../plugins/mcp.js';
+import { uiToolDefinitions } from '../plugins/ui.js';
 import { storageService } from '../services/storage.js';
 import { readFileSync } from 'node:fs';
 
@@ -30,6 +31,7 @@ export const getSystemAgentDetails = (): AgentDetails => ({
     '### Workflow Guidelines:\n' +
     '- **Complex Tasks**: When a task is complex, create a new thread using `create_thread`. Provide an `initialState` with a `todos` list to track progress and a `spec` to define the goal.\n' +
     '- **Todo Schema**: Keep todo items simple. Each item should have a short `id`, a clear `task` description, and a `status` (e.g., "pending", "in_progress", "done").\n' +
+    '- **Interactive Widgets**: Use `render_ui_widget` to give the user a visual progress bar (`kind: "todo_list"`), request permissions (`kind: "approval"`), or gather structured data (`kind: "form"`).\n' +
     '- **Delegation**: When delegating to another agent, reference the relevant Task ID from the thread state. Update the task status (e.g., using `patch_thread_details`) as progress is made.\n\n' +
     'If you need to know what agents or plugins are installed, I can help you find that information.',
   runtime: {
@@ -41,6 +43,7 @@ export const getSystemAgentDetails = (): AgentDetails => ({
         ...delegationToolDefinitions,
         ...storageToolDefinitions,
         ...mcpToolDefinitions,
+        ...uiToolDefinitions,
       },
     },
   },
@@ -49,6 +52,7 @@ export const getSystemAgentDetails = (): AgentDetails => ({
     { name: 'threads', config: {} },
     { name: 'delegation', config: {} },
     { name: 'mcp', config: {} },
+    { name: 'ui', config: {} },
   ],
   description: 'System coordinator agent',
   createdAt: new Date(),

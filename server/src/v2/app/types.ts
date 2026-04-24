@@ -303,6 +303,25 @@ export type CreateChannelResultEvent = BaseEvent & {
   };
 };
 
+export type UIWidgetEvent = BaseEvent & {
+  type: 'client:ui:widget';
+  data: {
+    widgetId: string;
+    kind: 'approval' | 'todo_list' | 'form';
+    title?: string;
+    props: Record<string, unknown>;
+  };
+};
+
+export type RenderUIWidgetEvent = BaseEvent & {
+  type: 'action:render_ui_widget';
+  data: {
+    kind: 'approval' | 'todo_list' | 'form';
+    title?: string;
+    props: Record<string, unknown>;
+  };
+};
+
 export type DelegateEvent = BaseEvent & {
   type: 'action:delegate';
   data: {
@@ -400,6 +419,8 @@ export type OpenBotEvent =
   | CreateThreadResultEvent
   | CreateChannelEvent
   | CreateChannelResultEvent
+  | UIWidgetEvent
+  | RenderUIWidgetEvent
   | DelegateEvent
   | MCPListToolsEvent
   | MCPListToolsResultEvent

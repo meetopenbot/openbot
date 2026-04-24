@@ -77,13 +77,7 @@ export type ChannelDetails = {
 
 export interface Storage {
   getChannels: () => Promise<Channel[]>;
-  createChannel: ({
-    channelId,
-    spec,
-  }: {
-    channelId: string;
-    spec?: string;
-  }) => Promise<void>;
+  createChannel: ({ channelId, spec }: { channelId: string; spec?: string }) => Promise<void>;
   getThreads: ({ channelId }: { channelId: string }) => Promise<Thread[]>;
   getThreadDetails: ({
     channelId,
@@ -95,15 +89,15 @@ export interface Storage {
   getAgents: () => Promise<Agent[]>;
   getPlugins: () => Promise<Plugin[]>;
   getAgentDetails: ({ agentId }: { agentId: string }) => Promise<AgentDetails>;
-  getEvents: ({ channelId, threadId }: { channelId: string; threadId?: string }) => Promise<OpenBotEvent[]>;
-  getChannelDetails: ({ channelId }: { channelId: string }) => Promise<ChannelDetails>;
-  patchChannelState: ({
+  getEvents: ({
     channelId,
-    state,
+    threadId,
   }: {
     channelId: string;
-    state: unknown;
-  }) => Promise<void>;
+    threadId?: string;
+  }) => Promise<OpenBotEvent[]>;
+  getChannelDetails: ({ channelId }: { channelId: string }) => Promise<ChannelDetails>;
+  patchChannelState: ({ channelId, state }: { channelId: string; state: unknown }) => Promise<void>;
   patchThreadState: ({
     channelId,
     threadId,
@@ -135,8 +129,18 @@ export const storageToolDefinitions = {
     description: 'Patch current channel details (state and/or spec).',
     inputSchema: z
       .object({
-        state: z.record(z.string(), z.unknown()).optional(),
-        spec: z.string().optional(),
+        state: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .describe(
+            'JSON state object for the channel. Use this for structured data like `todos` or metadata.',
+          ),
+        spec: z
+          .string()
+          .optional()
+          .describe(
+            'Markdown content for the channel specification (SPEC.md). Use this for goals and rules.',
+          ),
       })
       .refine((value) => value.state !== undefined || value.spec !== undefined, {
         message: 'Provide at least one of state or spec.',
@@ -146,8 +150,18 @@ export const storageToolDefinitions = {
     description: 'Patch current thread details (state and/or spec).',
     inputSchema: z
       .object({
-        state: z.record(z.string(), z.unknown()).optional(),
-        spec: z.string().optional(),
+        state: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .describe(
+            'JSON state object for the thread. Use this for structured data like `todos` or progress tracking.',
+          ),
+        spec: z
+          .string()
+          .optional()
+          .describe(
+            'Markdown content for the thread specification (SPEC.md). Use this for detailed plans and goals.',
+          ),
       })
       .refine((value) => value.state !== undefined || value.spec !== undefined, {
         message: 'Provide at least one of state or spec.',
@@ -358,12 +372,26 @@ export const storagePlugin =
             updatedFields,
           },
         };
+
+        yield {
+          type: 'agent:output',
+          data: {
+            content: `Thread details updated: ${updatedFields.join(', ')}`,
+          },
+        };
       } catch (error) {
         yield {
           type: 'action:patch_thread_details:result',
           data: {
             success: false,
             updatedFields,
+          },
+        };
+
+        yield {
+          type: 'agent:output',
+          data: {
+            content: `Failed to update thread details: ${error instanceof Error ? error.message : 'Unknown error'}`,
           },
         };
       }

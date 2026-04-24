@@ -10,6 +10,7 @@ import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
 import { threadsPlugin } from '../plugins/threads.js';
 import { delegationPlugin } from '../plugins/delegation.js';
 import { mcpPlugin } from '../plugins/mcp.js';
+import { uiPlugin } from '../plugins/ui.js';
 
 let pluginsDir: string | null = null;
 const loadedPlugins = new Set<string>();
@@ -49,6 +50,8 @@ export async function resolvePlugin(
       return delegationPlugin();
     case 'mcp':
       return mcpPlugin();
+    case 'ui':
+      return uiPlugin();
   }
 
   // 2. Search for external plugins in the initialized plugins directory

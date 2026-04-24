@@ -292,7 +292,7 @@ export const coordinatorService = {
       for await (const chunk of agentRuntime.run(event, { state: agentState, runId })) {
         await onEvent(chunk, agentState);
 
-        if (chunk.type === 'agent:output') {
+        if (chunk.type === 'agent:output' || chunk.type.startsWith('action:')) {
           hasProducedOutput = true;
         }
       }
@@ -311,7 +311,7 @@ export const coordinatorService = {
       );
     }
 
-    // Fallback for agents that don't produce output
+    // Fallback for agents that don't produce output (e.g. misconfigured or silent)
     if (event.type === 'agent:invoke' && !hasProducedOutput) {
       const warning = `⚠️ **${agentId}** is not configured to handle inputs. Please check its plugin configuration.`;
 
