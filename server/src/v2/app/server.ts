@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import z from 'zod';
 import { DEFAULT_BASE_DIR, loadConfig, loadVariables, resolvePath } from '../app/config.js';
 import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
 import path from 'path';
@@ -16,6 +17,15 @@ export interface ServerOptions {
 }
 
 export async function startServer(options: ServerOptions = {}) {
+  const publishEventSchema = z
+    .object({
+      id: z.string().optional(),
+      type: z.string().min(1, 'Event type is required'),
+      data: z.unknown().optional(),
+      meta: z.unknown().optional(),
+    })
+    .passthrough();
+
   const config = loadConfig();
   const variables = loadVariables();
 
@@ -146,11 +156,22 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.post('/api/publish', async (req, res) => {
-    const event = req.body as OpenBotEvent;
-    const { channelId, threadId } = getContext(req);
-    const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
+    const parseResult = publishEventSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      res.status(400).json({
+        error: 'Invalid publish event payload',
+        details: parseResult.error.issues.map((issue) => issue.message),
+      });
+      return;
+    }
 
-    res.sendStatus(200);
+    const event = parseResult.data as OpenBotEvent;
+    const { channelId, threadId } = getContext(req);
+    if (!channelId || !channelId.trim()) {
+      res.status(400).json({ error: 'channelId is required' });
+      return;
+    }
+    const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
 
     const onEvent = async (chunk: OpenBotEvent, state?: OpenBotState) => {
       ensureEventId(chunk);
@@ -183,13 +204,25 @@ export async function startServer(options: ServerOptions = {}) {
       }
     };
 
-    await coordinatorService.dispatch({
-      runId,
-      event,
-      channelId,
-      threadId,
-      onEvent,
-    });
+    try {
+      await coordinatorService.dispatch({
+        runId,
+        event,
+        channelId,
+        threadId,
+        onEvent,
+      });
+      res.sendStatus(200);
+    } catch (error) {
+      console.error('[publish] Failed to dispatch event', {
+        runId,
+        channelId,
+        threadId,
+        eventType: event.type,
+        error,
+      });
+      res.status(500).json({ error: 'Failed to process publish event' });
+    }
   });
 
   app.get('/api/state', async (req, res) => {

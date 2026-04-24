@@ -5,6 +5,7 @@ import {
   DEFAULT_PLUGINS_DIR,
   loadConfig,
   resolvePath,
+  StoredVariable,
   VARIABLES_FILE,
 } from '../app/config.js';
 import fs from 'node:fs/promises';
@@ -113,6 +114,25 @@ const readJsonFile = async <T>(filePath: string, fallback: T): Promise<T> => {
     if ((e as { code?: string })?.code === 'ENOENT') return fallback;
     throw e;
   }
+};
+
+const toVariablesRecord = (raw: unknown): Record<string, string> => {
+  if (!raw || typeof raw !== 'object') {
+    return {};
+  }
+
+  // Current format: { version: number, variables: StoredVariable[] }
+  if ('variables' in raw && Array.isArray((raw as { variables?: unknown }).variables)) {
+    const entries = (raw as { variables: StoredVariable[] }).variables
+      .filter((variable) => typeof variable?.key === 'string')
+      .map((variable) => [variable.key, String(variable.value ?? '')] as const);
+    return Object.fromEntries(entries);
+  }
+
+  // Legacy format: { [key: string]: string }
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).map(([key, value]) => [key, String(value ?? '')]),
+  );
 };
 
 const listBuiltInPlugins = async (): Promise<Plugin[]> => {
@@ -664,12 +684,13 @@ export const storageService = {
       await fs.appendFile(`${threadDir}/events.jsonl`, `${JSON.stringify(event)}\n`);
     } catch (error) {
       console.error(`Failed to store event for channel ${channelId} thread ${threadId}`, error);
+      throw error;
     }
   },
   getVariables: async (): Promise<Record<string, string>> => {
-    const variables = await fs.readFile(resolvePath(resolveBaseDir() + '/' + VARIABLES_FILE));
-
-    return JSON.parse(variables.toString()) as Record<string, string>;
+    const variablesFilePath = resolvePath(resolveBaseDir() + '/' + VARIABLES_FILE);
+    const raw = await readJsonFile<unknown>(variablesFilePath, {});
+    return toVariablesRecord(raw);
   },
 
   /**
