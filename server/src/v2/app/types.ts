@@ -40,20 +40,6 @@ export type AgentInvokeEvent = BaseEvent & {
   };
 };
 
-export type UIMessageEvent = BaseEvent & {
-  type: 'client:ui:message';
-  data: {
-    content: string;
-    role: 'user' | 'assistant';
-  };
-  meta: {
-    agentId?: string;
-    userId?: string;
-    userName?: string;
-    userAvatarUrl?: string;
-  };
-};
-
 export type GetChannelsEvent = BaseEvent & {
   type: 'action:storage:get-channels';
 };
@@ -385,7 +371,6 @@ export type UserInputEvent = BaseEvent & {
 export type OpenBotEvent =
   | UserInputEvent
   | AgentInvokeEvent
-  | UIMessageEvent
   | AgentOutputEvent
   | AgentRunStartEvent
   | AgentRunEndEvent

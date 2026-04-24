@@ -1,7 +1,6 @@
 import { melony, Runtime } from 'melony';
-import { OpenBotEvent, OpenBotState, UIMessageEvent } from '../app/types.js';
+import { AgentInvokeEvent, OpenBotEvent, OpenBotState } from '../app/types.js';
 import { resolvePlugin } from '../registry/plugins.js';
-import { agentPlugin, enhanceInstructions } from '../plugins/agent.js';
 import { storageService } from './storage.js';
 import { ensureEventId, parseMention } from '../app/utils.js';
 
@@ -23,6 +22,31 @@ export interface DispatchOptions {
 }
 
 /**
+ * Enhances agent instructions with a list of other available agents.
+ */
+export async function enhanceInstructions(state: OpenBotState) {
+  const { agentId, agentDetails } = state;
+  if (!agentDetails) return;
+
+  try {
+    const agents = await storageService.getAgents();
+    const otherAgents = agents.filter((a) => a.id !== agentId);
+    if (otherAgents.length === 0) return;
+
+    const agentsList = otherAgents
+      .map((a) => `- **${a.id}**${a.description ? `: ${a.description}` : ''}`)
+      .join('\n');
+
+    const header = '### Available Agents for Delegation:';
+    if (!agentDetails.instructions.includes(header)) {
+      agentDetails.instructions += `\n\n${header}\n${agentsList}\n\nYou can use the \`delegate\` tool to task these agents. Use their ID (the bold part) when delegating.`;
+    }
+  } catch (error) {
+    console.warn('[agent] Failed to enhance instructions', error);
+  }
+}
+
+/**
  * Factory for creating an OpenBot Melony Runtime.
  */
 async function createAgentRuntime(
@@ -34,7 +58,7 @@ async function createAgentRuntime(
   // 2. Initialize runtime with the agent plugin
   const runtime = melony<OpenBotState, OpenBotEvent>({
     initialState: state,
-  }).use(agentPlugin());
+  });
 
   // 3. Normalize plugin specs:
   // - runtime can be a single spec or an array (for backward/forward compatibility)
@@ -78,9 +102,9 @@ export const coordinatorService = {
     // 1. Convert user:input (or other raw inputs) to agent:invoke and handle @mentions
     const rawContent = (event as any).data?.content || '';
     if (event.type === 'user:input' || event.type === 'agent:invoke') {
-      // Create a UI message event for the history representing the user's input
-      const uiUserMessage: UIMessageEvent = {
-        type: 'client:ui:message',
+      const normalizedInvokeEvent: AgentInvokeEvent = {
+        type: 'agent:invoke',
+        id: event.id,
         data: {
           content: rawContent,
           role: 'user',
@@ -92,7 +116,9 @@ export const coordinatorService = {
           userAvatarUrl: event.meta?.userAvatarUrl,
         },
       };
-      ensureEventId(uiUserMessage);
+      finalEvent = normalizedInvokeEvent;
+
+      ensureEventId(finalEvent);
 
       // 1. Store the user's input in the current context (main channel or existing thread)
       const initialState = await storageService.getOpenBotState({
@@ -104,7 +130,7 @@ export const coordinatorService = {
       });
 
       // 2. Propagate the user's input to the event bus
-      await onEvent(uiUserMessage, initialState);
+      await onEvent(finalEvent, initialState);
 
       // 3. Detect mentions and trigger delegation/routing
       const mention = parseMention(rawContent);
@@ -120,7 +146,7 @@ export const coordinatorService = {
           meta: {
             ...(event.meta || {}),
             // The threadId in meta is the anchor for new threads (Slack-style)
-            threadId: currentThreadId || uiUserMessage.id,
+            threadId: currentThreadId || finalEvent.id,
           },
         };
       } else {
@@ -134,7 +160,7 @@ export const coordinatorService = {
           meta: {
             ...(event.meta || {}),
             // The threadId in meta is the anchor for new threads (Slack-style)
-            threadId: currentThreadId || uiUserMessage.id,
+            threadId: currentThreadId || finalEvent.id,
           },
         };
       }
@@ -255,17 +281,7 @@ export const coordinatorService = {
           },
           fallbackState,
         );
-        await onEvent(
-          {
-            type: 'client:ui:message',
-            data: {
-              content: warning,
-              role: 'assistant',
-            },
-            meta: { agentId: 'system', threadId },
-          },
-          fallbackState,
-        );
+
         return;
       }
       throw error;
@@ -316,17 +332,6 @@ export const coordinatorService = {
       const warning = `⚠️ **${agentId}** is not configured to handle inputs. Please check its plugin configuration.`;
 
       await onEvent({ type: 'agent:output', data: { content: warning } }, agentState);
-      await onEvent(
-        {
-          type: 'client:ui:message',
-          data: {
-            content: warning,
-            role: 'assistant',
-          },
-          meta: { agentId },
-        },
-        agentState,
-      );
     }
   },
 };
