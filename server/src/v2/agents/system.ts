@@ -1,5 +1,4 @@
 import { AgentDetails } from '../plugins/storage.js';
-import { threadToolDefinitions } from '../plugins/threads.js';
 import { delegationToolDefinitions } from '../plugins/delegation.js';
 import { storageToolDefinitions } from '../plugins/storage.js';
 import { mcpToolDefinitions } from '../plugins/mcp.js';
@@ -39,7 +38,6 @@ export const getSystemAgentDetails = (): AgentDetails => ({
     config: {
       model: 'openai/gpt-4o-mini',
       toolDefinitions: {
-        ...threadToolDefinitions,
         ...delegationToolDefinitions,
         ...storageToolDefinitions,
         ...mcpToolDefinitions,
@@ -49,7 +47,6 @@ export const getSystemAgentDetails = (): AgentDetails => ({
   },
   plugins: [
     { name: 'storage', config: { storage: storageService } },
-    { name: 'threads', config: {} },
     { name: 'delegation', config: {} },
     { name: 'mcp', config: {} },
     { name: 'ui', config: {} },

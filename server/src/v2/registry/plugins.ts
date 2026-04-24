@@ -7,7 +7,6 @@ import { aiSdkPlugin } from '../plugins/ai-sdk.js';
 import { storagePlugin } from '../plugins/storage.js';
 import { storageService } from '../services/storage.js';
 import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
-import { threadsPlugin } from '../plugins/threads.js';
 import { delegationPlugin } from '../plugins/delegation.js';
 import { mcpPlugin } from '../plugins/mcp.js';
 import { uiPlugin } from '../plugins/ui.js';
@@ -44,8 +43,6 @@ export async function resolvePlugin(
         storage: storageService,
         ...config,
       });
-    case 'threads':
-      return threadsPlugin();
     case 'delegation':
       return delegationPlugin();
     case 'mcp':

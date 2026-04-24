@@ -139,7 +139,6 @@ const listBuiltInPlugins = async (): Promise<Plugin[]> => {
   return [
     mapNameToPlugin('storage', 'Built-in storage plugin'),
     mapNameToPlugin('ai-sdk', 'Built-in AI SDK plugin', 'runtime'),
-    mapNameToPlugin('threads', 'Built-in threads plugin'),
     mapNameToPlugin('delegation', 'Built-in delegation plugin'),
   ];
 };
@@ -271,6 +270,56 @@ export const storageService = {
       spec?.trim() || `# ${normalizedChannelId}\n\nDefine the goals and rules for this channel here.\n`,
     );
     await fs.writeFile(statePath, JSON.stringify(initialState || {}, null, 2));
+  },
+  createThread: async ({
+    channelId,
+    threadId,
+    threadTitle,
+    spec,
+    initialState,
+  }: {
+    channelId: string;
+    threadId: string;
+    threadTitle?: string;
+    spec?: string;
+    initialState?: Record<string, unknown>;
+  }): Promise<void> => {
+    const normalizedChannelId = channelId.trim();
+    const normalizedThreadId = threadId.trim();
+
+    if (!normalizedChannelId) {
+      throw new Error('channelId is required');
+    }
+    if (!normalizedThreadId) {
+      throw new Error('threadId is required');
+    }
+
+    const threadDir = getConversationDir(normalizedChannelId, normalizedThreadId);
+    const specPath = `${threadDir}/SPEC.md`;
+    const statePath = `${threadDir}/state.json`;
+
+    try {
+      await fs.access(threadDir);
+      throw new Error(
+        `Thread "${normalizedThreadId}" already exists in channel "${normalizedChannelId}"`,
+      );
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+
+    const baseState = { ...(initialState || {}) };
+    if (threadTitle?.trim()) {
+      baseState.generatedName = threadTitle.trim();
+    }
+
+    await fs.mkdir(threadDir, { recursive: true });
+    await fs.writeFile(
+      specPath,
+      spec?.trim() || `# ${normalizedThreadId}\n\nDefine the goals and plan for this thread here.\n`,
+    );
+    await fs.writeFile(statePath, JSON.stringify(baseState, null, 2));
   },
   getThreads: async ({ channelId }: { channelId: string }): Promise<Thread[]> => {
     const threadsDir = resolvePath(
