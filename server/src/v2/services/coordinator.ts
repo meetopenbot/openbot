@@ -95,6 +95,9 @@ export const coordinatorService = {
   dispatch: async (options: DispatchOptions): Promise<void> => {
     const { runId, event, channelId, threadId, onEvent } = options;
 
+    // 0. Ensure the incoming event has a unique ID immediately
+    ensureEventId(event);
+
     let finalAgentId = 'system';
     let finalEvent = event;
     let currentThreadId = threadId;
@@ -117,8 +120,6 @@ export const coordinatorService = {
         },
       };
       finalEvent = normalizedInvokeEvent;
-
-      ensureEventId(finalEvent);
 
       // 1. Store the user's input in the current context (main channel or existing thread)
       const initialState = await storageService.getOpenBotState({
@@ -191,6 +192,11 @@ export const coordinatorService = {
         channelId,
         threadId: currentThreadId,
         onEvent: async (chunk, state) => {
+          // 0. Filter out echoed input events to prevent duplication in the UI/storage
+          if (chunk.type === currentEvent.type && chunk.id === currentEvent.id) {
+            return;
+          }
+
           // 1. Detect if a new thread was created and update the context for the rest of the loop
           if (chunk.type === 'action:create_thread:result' && chunk.data.success) {
             currentThreadId = chunk.data.threadId || currentThreadId;
