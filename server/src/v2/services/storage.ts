@@ -99,6 +99,22 @@ const getConversationDir = (channelId: string, threadId?: string) => {
   return threadId ? `${base}/threads/${threadId}` : base;
 };
 
+const getLastReadFilePath = () =>
+  path.join(
+    resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR),
+    '_meta',
+    'last-read.json',
+  );
+
+const readJsonFile = async <T>(filePath: string, fallback: T): Promise<T> => {
+  try {
+    return JSON.parse(await fs.readFile(filePath, 'utf-8')) as T;
+  } catch (e: unknown) {
+    if ((e as { code?: string })?.code === 'ENOENT') return fallback;
+    throw e;
+  }
+};
+
 const listBuiltInPlugins = async (): Promise<Plugin[]> => {
   return [
     mapNameToPlugin('storage', 'Built-in storage plugin'),
@@ -137,6 +153,24 @@ const listPluginsFromDisk = async (): Promise<Plugin[]> => {
 };
 
 export const storageService = {
+  getLastReadByChannel: async (): Promise<Record<string, string>> => {
+    return readJsonFile(getLastReadFilePath(), {});
+  },
+
+  setLastReadForChannel: async ({
+    channelId,
+    lastReadEventId,
+  }: {
+    channelId: string;
+    lastReadEventId: string;
+  }): Promise<void> => {
+    const p = getLastReadFilePath();
+    await fs.mkdir(path.dirname(p), { recursive: true });
+    const map = await readJsonFile<Record<string, string>>(p, {});
+    map[channelId] = lastReadEventId;
+    await fs.writeFile(p, JSON.stringify(map, null, 2), 'utf-8');
+  },
+
   getChannels: async (): Promise<Channel[]> => {
     const channelsDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR);
     try {
@@ -145,7 +179,10 @@ export const storageService = {
       await fs.mkdir(channelsDir, { recursive: true });
     }
 
-    const channelNames = (await fs.readdir(channelsDir)).filter((name) => !name.startsWith('.'));
+    const channelNames = (await fs.readdir(channelsDir)).filter(
+      (name) => !name.startsWith('.') && name !== '_meta',
+    );
+    const lastReadByChannel = await storageService.getLastReadByChannel();
 
     const channels = await Promise.all(
       channelNames.map(async (name) => {
@@ -156,6 +193,14 @@ export const storageService = {
           createdAt: new Date(),
           updatedAt: new Date(),
         };
+        const rid = lastReadByChannel[name];
+        try {
+          const events = await storageService.getEvents({ channelId: name });
+          const latestId = events[events.length - 1]?.id;
+          channel.hasUnseenMessages = !!(latestId && latestId !== rid);
+        } catch {
+          channel.hasUnseenMessages = false;
+        }
 
         try {
           // Fetch up to 5 most recent threads for the sidebar

@@ -1,5 +1,6 @@
 import { MelonyPlugin } from 'melony';
 import { OpenBotState, OpenBotEvent } from '../app/types.js';
+import { storageService } from '../services/storage.js';
 import z from 'zod';
 
 export type PluginKind = 'runtime' | 'tool';
@@ -45,6 +46,8 @@ export type Channel = {
   description: string;
   createdAt: Date;
   updatedAt: Date;
+  /** Indicates if there are messages the user hasn't fetched via get-events yet. */
+  hasUnseenMessages?: boolean;
   recentThreads?: Thread[];
 };
 
@@ -207,6 +210,19 @@ export const storagePlugin =
 
     builder.on('action:storage:get-events', async function* (_, state) {
       const events = await storage.getEvents(state.state);
+
+      // Simple: fetching main channel events marks it as read
+      if (!state.state.threadId && events.length > 0) {
+        const lastId = events[events.length - 1]?.id;
+        if (lastId) {
+          // We call storageService directly as it's an internal helper now
+          await storageService.setLastReadForChannel({
+            channelId: state.state.channelId,
+            lastReadEventId: lastId,
+          });
+        }
+      }
+
       yield {
         type: 'action:storage:get-events-result',
         data: { events },

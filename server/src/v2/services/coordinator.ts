@@ -274,13 +274,41 @@ export const coordinatorService = {
 
     let hasProducedOutput = false;
 
-    // RUN the agent runtime
-    for await (const chunk of agentRuntime.run(event, { state: agentState, runId })) {
-      await onEvent(chunk, agentState);
+    await onEvent(
+      {
+        type: 'agent:run:start',
+        data: {
+          runId,
+          agentId,
+          channelId,
+          threadId,
+        },
+      },
+      agentState,
+    );
 
-      if (chunk.type === 'agent:output') {
-        hasProducedOutput = true;
+    try {
+      // RUN the agent runtime
+      for await (const chunk of agentRuntime.run(event, { state: agentState, runId })) {
+        await onEvent(chunk, agentState);
+
+        if (chunk.type === 'agent:output') {
+          hasProducedOutput = true;
+        }
       }
+    } finally {
+      await onEvent(
+        {
+          type: 'agent:run:end',
+          data: {
+            runId,
+            agentId,
+            channelId,
+            threadId,
+          },
+        },
+        agentState,
+      );
     }
 
     // Fallback for agents that don't produce output

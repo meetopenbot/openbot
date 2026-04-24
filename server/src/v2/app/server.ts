@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { DEFAULT_BASE_DIR, loadConfig, loadVariables, resolvePath } from '../app/config.js';
-import { OpenBotEvent, OpenBotState, UIMessageEvent } from './types.js';
+import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
 import path from 'path';
 import fs from 'fs/promises';
 import { processService } from '../services/process.js';
@@ -26,6 +26,11 @@ export async function startServer(options: ServerOptions = {}) {
   const PORT = Number(options.port ?? config.port ?? process.env.PORT ?? 4132);
   const app = express();
   const clients: Map<string, express.Response[]> = new Map();
+  const GLOBAL_CHANNEL_ID = '__global__';
+  const activeRuns = new Map<
+    string,
+    { runId: string; channelId: string; threadId?: string; agentId: string }
+  >();
 
   const agentsDir = path.join(openBotDir, 'agents');
   const pluginsDir = path.join(openBotDir, 'plugins');
@@ -50,6 +55,39 @@ export async function startServer(options: ServerOptions = {}) {
 
   const getClientKey = (channelId: string, threadId?: string) =>
     threadId ? `${channelId}:${threadId}` : channelId;
+
+  const sendToClientKey = (clientKey: string, chunk: OpenBotEvent) => {
+    const threadClients = clients.get(clientKey);
+    if (!threadClients) return;
+    threadClients.forEach((client) => {
+      if (!client.writableEnded) {
+        client.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      }
+    });
+  };
+
+  const buildActiveRunsSnapshot = (): ActiveRunsSnapshotEvent => {
+    const byChannel = new Map<string, { activeCount: number; agentIds: Set<string> }>();
+    for (const run of activeRuns.values()) {
+      const existing = byChannel.get(run.channelId) ?? {
+        activeCount: 0,
+        agentIds: new Set<string>(),
+      };
+      existing.activeCount += 1;
+      existing.agentIds.add(run.agentId);
+      byChannel.set(run.channelId, existing);
+    }
+    return {
+      type: 'agent:active-runs:snapshot',
+      data: {
+        channels: Array.from(byChannel.entries()).map(([channelId, value]) => ({
+          channelId,
+          activeCount: value.activeCount,
+          agentIds: Array.from(value.agentIds),
+        })),
+      },
+    };
+  };
 
   app.use(cors());
   app.use(express.json({ limit: '20mb' }));
@@ -77,6 +115,12 @@ export async function startServer(options: ServerOptions = {}) {
       clients.set(clientKey, []);
     }
     clients.get(clientKey)!.push(res);
+
+    if (channelId === GLOBAL_CHANNEL_ID) {
+      const snapshot = buildActiveRunsSnapshot();
+      ensureEventId(snapshot);
+      res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
+    }
 
     // Keep connection alive through intermediaries that close idle streams.
     const heartbeat = setInterval(() => {
@@ -115,19 +159,27 @@ export async function startServer(options: ServerOptions = {}) {
       const targetThreadId = state?.threadId || threadId;
       const targetClientKey = getClientKey(targetChannelId, targetThreadId);
 
+      if (chunk.type === 'agent:run:start') {
+        activeRuns.set(chunk.data.runId, {
+          runId: chunk.data.runId,
+          channelId: chunk.data.channelId,
+          threadId: chunk.data.threadId,
+          agentId: chunk.data.agentId,
+        });
+      } else if (chunk.type === 'agent:run:end') {
+        activeRuns.delete(chunk.data.runId);
+      }
+
       await storageService.storeEvent({
         channelId: targetChannelId,
         threadId: targetThreadId,
         event: chunk,
       });
 
-      const threadClients = clients.get(targetClientKey);
-      if (threadClients) {
-        threadClients.forEach((client) => {
-          if (!client.writableEnded) {
-            client.write(`data: ${JSON.stringify(chunk)}\n\n`);
-          }
-        });
+      sendToClientKey(targetClientKey, chunk);
+
+      if (chunk.type === 'agent:run:start' || chunk.type === 'agent:run:end') {
+        sendToClientKey(GLOBAL_CHANNEL_ID, chunk);
       }
     };
 

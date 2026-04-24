@@ -223,6 +223,37 @@ export type AgentOutputEvent = BaseEvent & {
   };
 };
 
+export type AgentRunStartEvent = BaseEvent & {
+  type: 'agent:run:start';
+  data: {
+    runId: string;
+    agentId: string;
+    channelId: string;
+    threadId?: string;
+  };
+};
+
+export type AgentRunEndEvent = BaseEvent & {
+  type: 'agent:run:end';
+  data: {
+    runId: string;
+    agentId: string;
+    channelId: string;
+    threadId?: string;
+  };
+};
+
+export type ActiveRunsSnapshotEvent = BaseEvent & {
+  type: 'agent:active-runs:snapshot';
+  data: {
+    channels: Array<{
+      channelId: string;
+      activeCount: number;
+      agentIds: string[];
+    }>;
+  };
+};
+
 export type CreateThreadEvent = BaseEvent & {
   type: 'action:create_thread';
   data: {
@@ -334,6 +365,9 @@ export type OpenBotEvent =
   | AgentInvokeEvent
   | UIMessageEvent
   | AgentOutputEvent
+  | AgentRunStartEvent
+  | AgentRunEndEvent
+  | ActiveRunsSnapshotEvent
   | GetChannelsEvent
   | GetChannelsResultEvent
   | GetThreadsEvent
