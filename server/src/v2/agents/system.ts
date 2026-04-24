@@ -27,6 +27,10 @@ export const getSystemAgentDetails = (): AgentDetails => ({
     '2. **Specialized Agents**: You can @mention specialized agents for specific tasks. For example, use `@os` for terminal commands and file operations.\n' +
     '3. **Channels**: Channels are shared spaces where multiple agents can participate. You can create new channels for different topics.\n' +
     '4. **Local-First**: OpenBot runs entirely on your machine. Your data stays private and local.\n\n' +
+    '### Workflow Guidelines:\n' +
+    '- **Complex Tasks**: When a task is complex, create a new thread using `create_thread`. Provide an `initialState` with a `todos` list to track progress and a `spec` to define the goal.\n' +
+    '- **Todo Schema**: Keep todo items simple. Each item should have a short `id`, a clear `task` description, and a `status` (e.g., "pending", "in_progress", "done").\n' +
+    '- **Delegation**: When delegating to another agent, reference the relevant Task ID from the thread state. Update the task status (e.g., using `patch_thread_details`) as progress is made.\n\n' +
     'If you need to know what agents or plugins are installed, I can help you find that information.',
   runtime: {
     name: 'ai-sdk',

@@ -12,6 +12,7 @@ export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (bu
     // we take the threadId from the meta so the next agent:invoke event will reply in the same thread
     const threadId = event.meta?.threadId;
     const channelId = context.state.channelId;
+    const { threadTitle, spec, initialState } = (event as any).data;
 
     if (!threadId) {
       console.warn('[threads] Cannot create thread: meta.threadId is missing');
@@ -21,16 +22,30 @@ export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (bu
     // override the threadId in the state so the next agent:invoke event will reply in the same thread
     context.state.threadId = threadId;
 
-    // persist the thread title so we can use it later
-    if (channelId && threadId && (event as any).data.threadTitle?.trim()) {
+    // persist the thread title, spec and initial state
+    if (channelId && threadId) {
       try {
+        const patch: Record<string, unknown> = {
+          ...((initialState as Record<string, unknown>) || {}),
+        };
+
+        if (threadTitle?.trim()) {
+          patch.generatedName = threadTitle.trim();
+        }
+
         await storageService.patchThreadState({
           channelId,
           threadId,
-          state: {
-            generatedName: (event as any).data.threadTitle.trim(),
-          },
+          state: patch,
         });
+
+        if (typeof spec === 'string' && spec.trim()) {
+          await storageService.patchThreadSpec({
+            channelId,
+            threadId,
+            spec,
+          });
+        }
 
         context.state.threadDetails = await storageService.getThreadDetails({
           channelId,
@@ -38,7 +53,7 @@ export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (bu
         });
       } catch (error) {
         console.warn(
-          `[threads] Failed to persist generated thread title for channel ${channelId} thread ${threadId}`,
+          `[threads] Failed to initialize thread for channel ${channelId} thread ${threadId}`,
           error,
         );
       }
@@ -50,7 +65,7 @@ export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (bu
       data: {
         success: true,
         threadId,
-        threadTitle: (event as any).data.threadTitle,
+        threadTitle,
       },
       meta: {
         threadId,
@@ -59,8 +74,9 @@ export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (bu
   });
 
   builder.on('action:create_channel', async function* (event) {
-    const rawChannelId = ((event as any).data.channelId || '').trim();
-    const channelSpec = typeof (event as any).data.spec === 'string' ? (event as any).data.spec : '';
+    const { channelId, spec, initialState } = (event as any).data;
+    const rawChannelId = (channelId || '').trim();
+    const channelSpec = typeof spec === 'string' ? spec : '';
 
     if (!rawChannelId) {
       yield {
@@ -80,6 +96,7 @@ export const threadsPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (bu
       await storageService.createChannel({
         channelId: rawChannelId,
         spec: channelSpec,
+        initialState: initialState as Record<string, unknown>,
       });
 
       yield {
@@ -116,16 +133,32 @@ export const threadToolDefinitions = {
     description:
       'Create a new thread. Use this when you think the user intent is complex and should be split into multiple steps. If user asks basic questions, no need to create a thread.',
     inputSchema: z.object({
-      threadTitle: z.string(),
+      threadTitle: z.string().describe('Short descriptive title for the thread.'),
+      spec: z
+        .string()
+        .optional()
+        .describe('Initial markdown content for the thread spec (SPEC.md).'),
+      initialState: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe(
+          'Initial state object for the thread. Use this to seed the thread with context or a `todos` list. ' +
+            'Keep todos simple: { id: string, task: string, status: "pending" | "in_progress" | "done" }.',
+        ),
     }),
   },
   create_channel: {
-    description: 'Create a new channel. Use this when you think the user intent is completelly different from the current channel and should be split into multiple channels. Before creating, always notify with details and ask for confirmation. If user asks basic questions, no need to create a channel.',
+    description:
+      'Create a new channel. Use this when you think the user intent is completelly different from the current channel and should be split into multiple channels. Before creating, always notify with details and ask for confirmation. If user asks basic questions, no need to create a channel.',
     inputSchema: z.object({
       channelId: z
         .string()
         .describe('Unique channel ID. Example: product-launch, backend-platform, or channel_roadmap.'),
       spec: z.string().optional().describe('Optional initial markdown content for the channel spec.'),
+      initialState: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe('Optional initial state object for the channel.'),
     }),
   },
 };

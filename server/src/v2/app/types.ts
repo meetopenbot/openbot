@@ -258,6 +258,8 @@ export type CreateThreadEvent = BaseEvent & {
   type: 'action:create_thread';
   data: {
     threadTitle: string;
+    spec?: string;
+    initialState?: Record<string, unknown>;
   };
   meta: {
     toolCallId: string;
@@ -283,6 +285,7 @@ export type CreateChannelEvent = BaseEvent & {
   data: {
     channelId: string;
     spec?: string;
+    initialState?: Record<string, unknown>;
   };
   meta?: {
     toolCallId?: string;

@@ -241,9 +241,11 @@ export const storageService = {
   createChannel: async ({
     channelId,
     spec,
+    initialState,
   }: {
     channelId: string;
     spec?: string;
+    initialState?: Record<string, unknown>;
   }): Promise<void> => {
     const normalizedChannelId = channelId.trim();
     if (!normalizedChannelId) {
@@ -268,7 +270,7 @@ export const storageService = {
       specPath,
       spec?.trim() || `# ${normalizedChannelId}\n\nDefine the goals and rules for this channel here.\n`,
     );
-    await fs.writeFile(statePath, JSON.stringify({}, null, 2));
+    await fs.writeFile(statePath, JSON.stringify(initialState || {}, null, 2));
   },
   getThreads: async ({ channelId }: { channelId: string }): Promise<Thread[]> => {
     const threadsDir = resolvePath(
