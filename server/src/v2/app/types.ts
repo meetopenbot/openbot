@@ -175,6 +175,7 @@ export type PatchChannelDetailsEvent = BaseEvent & {
   data: {
     state?: Record<string, unknown>;
     spec?: string;
+    cwd?: string;
   };
 };
 
@@ -182,7 +183,7 @@ export type PatchChannelDetailsResultEvent = BaseEvent & {
   type: 'action:patch_channel_details:result';
   data: {
     success: boolean;
-    updatedFields: ('state' | 'spec')[];
+    updatedFields: ('state' | 'spec' | 'cwd')[];
   };
 };
 
@@ -276,6 +277,7 @@ export type CreateChannelEvent = BaseEvent & {
     channelId: string;
     spec?: string;
     initialState?: Record<string, unknown>;
+    cwd?: string;
   };
   meta?: {
     toolCallId?: string;
@@ -290,6 +292,24 @@ export type CreateChannelResultEvent = BaseEvent & {
     success: boolean;
     channelId: string;
     channelUrl: string;
+  };
+};
+
+export type UpdateChannelEvent = BaseEvent & {
+  type: 'action:update_channel';
+  data: {
+    channelId?: string;
+    name?: string;
+    cwd?: string;
+  };
+};
+
+export type UpdateChannelResultEvent = BaseEvent & {
+  type: 'action:update_channel:result';
+  data: {
+    success: boolean;
+    channelId: string;
+    updatedFields: string[];
   };
 };
 
@@ -408,6 +428,8 @@ export type OpenBotEvent =
   | CreateThreadResultEvent
   | CreateChannelEvent
   | CreateChannelResultEvent
+  | UpdateChannelEvent
+  | UpdateChannelResultEvent
   | UIWidgetEvent
   | RenderUIWidgetEvent
   | DelegateEvent

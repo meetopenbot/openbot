@@ -48,7 +48,8 @@ const resolveBaseDir = () => {
 
 const ENTITY_SVG_CANDIDATE_NAMES = ['avatar.svg', 'icon.svg', 'image.svg', 'logo.svg'] as const;
 
-const toSvgDataUrl = (svg: string) => `data:image/svg+xml;base64,${Buffer.from(svg, 'utf-8').toString('base64')}`;
+const toSvgDataUrl = (svg: string) =>
+  `data:image/svg+xml;base64,${Buffer.from(svg, 'utf-8').toString('base64')}`;
 
 const tryReadSvgDataUrl = async (filePath: string): Promise<string | null> => {
   try {
@@ -83,7 +84,9 @@ const resolveEntityImageDataUrl = async (entityDir: string): Promise<string | un
   for (const dir of preferredDirs) {
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });
-      const firstSvg = entries.find((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.svg'));
+      const firstSvg = entries.find(
+        (entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.svg'),
+      );
       if (!firstSvg) continue;
       const dataUrl = await tryReadSvgDataUrl(path.join(dir, firstSvg.name));
       if (dataUrl) return dataUrl;
@@ -101,11 +104,7 @@ const getConversationDir = (channelId: string, threadId?: string) => {
 };
 
 const getLastReadFilePath = () =>
-  path.join(
-    resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR),
-    '_meta',
-    'last-read.json',
-  );
+  path.join(resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR), '_meta', 'last-read.json');
 
 const readJsonFile = async <T>(filePath: string, fallback: T): Promise<T> => {
   try {
@@ -131,7 +130,10 @@ const toVariablesRecord = (raw: unknown): Record<string, string> => {
 
   // Legacy format: { [key: string]: string }
   return Object.fromEntries(
-    Object.entries(raw as Record<string, unknown>).map(([key, value]) => [key, String(value ?? '')]),
+    Object.entries(raw as Record<string, unknown>).map(([key, value]) => [
+      key,
+      String(value ?? ''),
+    ]),
   );
 };
 
@@ -205,10 +207,23 @@ export const storageService = {
 
     const channels = await Promise.all(
       channelNames.map(async (name) => {
+        const channelDir = getConversationDir(name);
+        const statePath = path.join(channelDir, 'state.json');
+        let cwd: string | undefined;
+
+        try {
+          const stateContent = await fs.readFile(statePath, 'utf-8');
+          const state = JSON.parse(stateContent);
+          cwd = typeof state.cwd === 'string' ? state.cwd : undefined;
+        } catch {
+          // Ignore if state.json is missing or invalid
+        }
+
         const channel: Channel = {
           id: name,
           name: name,
           description: '',
+          cwd,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -241,10 +256,12 @@ export const storageService = {
     channelId,
     spec,
     initialState,
+    cwd,
   }: {
     channelId: string;
     spec?: string;
     initialState?: Record<string, unknown>;
+    cwd?: string;
   }): Promise<void> => {
     const normalizedChannelId = channelId.trim();
     if (!normalizedChannelId) {
@@ -264,12 +281,21 @@ export const storageService = {
       }
     }
 
+    const finalState = {
+      ...(initialState || {}),
+    };
+
+    if (cwd) {
+      finalState.cwd = cwd;
+    }
+
     await fs.mkdir(channelDir, { recursive: true });
     await fs.writeFile(
       specPath,
-      spec?.trim() || `# ${normalizedChannelId}\n\nDefine the goals and rules for this channel here.\n`,
+      spec?.trim() ||
+        `# ${normalizedChannelId}\n\nDefine the goals and rules for this channel here.\n`,
     );
-    await fs.writeFile(statePath, JSON.stringify(initialState || {}, null, 2));
+    await fs.writeFile(statePath, JSON.stringify(finalState, null, 2));
   },
   createThread: async ({
     channelId,
@@ -317,7 +343,8 @@ export const storageService = {
     await fs.mkdir(threadDir, { recursive: true });
     await fs.writeFile(
       specPath,
-      spec?.trim() || `# ${normalizedThreadId}\n\nDefine the goals and plan for this thread here.\n`,
+      spec?.trim() ||
+        `# ${normalizedThreadId}\n\nDefine the goals and plan for this thread here.\n`,
     );
     await fs.writeFile(statePath, JSON.stringify(baseState, null, 2));
   },
@@ -350,7 +377,10 @@ export const storageService = {
           }
         } catch (error: any) {
           if (error.code !== 'ENOENT') {
-            console.error(`Failed to read thread state for channel ${channelId} thread ${name}`, error);
+            console.error(
+              `Failed to read thread state for channel ${channelId} thread ${name}`,
+              error,
+            );
           }
         }
 
@@ -382,7 +412,10 @@ export const storageService = {
       spec = await fs.readFile(specPath, 'utf-8');
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
-        console.error(`Failed to read thread spec for channel ${channelId} thread ${threadId}`, error);
+        console.error(
+          `Failed to read thread spec for channel ${channelId} thread ${threadId}`,
+          error,
+        );
       }
     }
 
@@ -392,7 +425,10 @@ export const storageService = {
       state = JSON.parse(stateContent);
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
-        console.error(`Failed to read thread state for channel ${channelId} thread ${threadId}`, error);
+        console.error(
+          `Failed to read thread state for channel ${channelId} thread ${threadId}`,
+          error,
+        );
       }
     }
 
@@ -438,6 +474,7 @@ export const storageService = {
       name: channelId,
       spec,
       state,
+      cwd: typeof (state as any).cwd === 'string' ? (state as any).cwd : undefined,
     };
 
     details.threads = await storageService.getThreads({ channelId });
@@ -541,7 +578,10 @@ export const storageService = {
       await fs.mkdir(threadDir, { recursive: true });
       await fs.writeFile(specPath, spec);
     } catch (error) {
-      console.error(`Failed to patch thread spec for channel ${channelId} thread ${threadId}`, error);
+      console.error(
+        `Failed to patch thread spec for channel ${channelId} thread ${threadId}`,
+        error,
+      );
       throw error;
     }
   },
@@ -769,7 +809,7 @@ export const storageService = {
     }
 
     let channelDetails;
-    if (channelId && channelId !== 'default') {
+    if (channelId && channelId !== 'general') {
       try {
         channelDetails = await storageService.getChannelDetails({ channelId });
       } catch (error) {
@@ -795,7 +835,14 @@ export const storageService = {
       channelId,
       threadId,
       triggerEvent: event,
-      agentDetails: agentDetails as AgentDetails,
+      agentDetails: {
+        id: agentDetails.id,
+        name: agentDetails.name,
+        description: agentDetails.description || '',
+        instructions: agentDetails.instructions || '',
+        runtime: agentDetails.runtime,
+        plugins: agentDetails.plugins,
+      } as AgentDetails,
       channelDetails: channelDetails as ChannelDetails,
       threadDetails: threadDetails as ThreadDetails,
     };

@@ -44,6 +44,7 @@ export type Channel = {
   id: string;
   name: string;
   description: string;
+  cwd?: string;
   createdAt: Date;
   updatedAt: Date;
   /** Indicates if there are messages the user hasn't fetched via get-events yet. */
@@ -72,6 +73,7 @@ export type ChannelDetails = {
   name: string;
   spec: string;
   state: unknown;
+  cwd?: string;
   threads?: Thread[];
 };
 
@@ -81,10 +83,12 @@ export interface Storage {
     channelId,
     spec,
     initialState,
+    cwd,
   }: {
     channelId: string;
     spec?: string;
     initialState?: Record<string, unknown>;
+    cwd?: string;
   }) => Promise<void>;
   createThread: ({
     channelId,
@@ -181,6 +185,7 @@ export const storageToolDefinitions = {
         .record(z.string(), z.unknown())
         .optional()
         .describe('Optional initial state object for the channel.'),
+      cwd: z.string().optional().describe('Optional initial current working directory for the channel.'),
     }),
   },
   patch_channel_details: {
@@ -199,9 +204,13 @@ export const storageToolDefinitions = {
           .describe(
             'Markdown content for the channel specification (SPEC.md). Use this for goals and rules.',
           ),
+        cwd: z
+          .string()
+          .optional()
+          .describe('Current working directory for the channel.'),
       })
-      .refine((value) => value.state !== undefined || value.spec !== undefined, {
-        message: 'Provide at least one of state or spec.',
+      .refine((value) => value.state !== undefined || value.spec !== undefined || value.cwd !== undefined, {
+        message: 'Provide at least one of state, spec, or cwd.',
       }),
   },
   patch_thread_details: {
@@ -282,7 +291,7 @@ export const storagePlugin =
     });
 
     builder.on('action:create_channel', async function* (event, context) {
-      const { channelId, spec, initialState } = (event as any).data;
+      const { channelId, spec, initialState, cwd } = (event as any).data;
       const rawChannelId = (channelId || '').trim();
       const channelSpec = typeof spec === 'string' ? spec : '';
 
@@ -305,6 +314,7 @@ export const storagePlugin =
           channelId: rawChannelId,
           spec: channelSpec,
           initialState: initialState as Record<string, unknown>,
+          cwd,
         });
 
         yield {
@@ -457,7 +467,7 @@ export const storagePlugin =
     });
 
     builder.on('action:patch_channel_details', async function* (event, context) {
-      const updatedFields: ('state' | 'spec')[] = [];
+      const updatedFields: ('state' | 'spec' | 'cwd')[] = [];
 
       try {
         if ((event.data as any).state !== undefined) {
@@ -474,6 +484,14 @@ export const storagePlugin =
             spec: (event.data as any).spec,
           });
           updatedFields.push('spec');
+        }
+
+        if (typeof (event.data as any).cwd === 'string') {
+          await storage.patchChannelState({
+            channelId: context.state.channelId,
+            state: { cwd: (event.data as any).cwd },
+          });
+          updatedFields.push('cwd');
         }
 
         context.state.channelDetails = await storage.getChannelDetails({
@@ -495,6 +513,74 @@ export const storagePlugin =
             updatedFields,
           },
         };
+      }
+    });
+
+    // Backward-compatible event used by external frontends.
+    builder.on('action:update_channel', async function* (event, context) {
+      const data = (event.data || {}) as {
+        channelId?: string;
+        name?: string;
+        cwd?: string;
+      };
+      const targetChannelId = (data.channelId || context.state.channelId || '').trim();
+
+      if (!targetChannelId) {
+        yield {
+          type: 'action:update_channel:result',
+          data: {
+            success: false,
+            channelId: '',
+            updatedFields: [] as string[],
+          },
+        } as any;
+        return;
+      }
+
+      const patch: Record<string, unknown> = {};
+      const updatedFields: string[] = [];
+
+      if (typeof data.name === 'string' && data.name.trim()) {
+        patch.name = data.name.trim();
+        updatedFields.push('name');
+      }
+
+      if (typeof data.cwd === 'string' && data.cwd.trim()) {
+        patch.cwd = data.cwd.trim();
+        updatedFields.push('cwd');
+      }
+
+      try {
+        if (updatedFields.length > 0) {
+          await storage.patchChannelState({
+            channelId: targetChannelId,
+            state: patch,
+          });
+        }
+
+        if (targetChannelId === context.state.channelId) {
+          context.state.channelDetails = await storage.getChannelDetails({
+            channelId: context.state.channelId,
+          });
+        }
+
+        yield {
+          type: 'action:update_channel:result',
+          data: {
+            success: true,
+            channelId: targetChannelId,
+            updatedFields,
+          },
+        } as any;
+      } catch {
+        yield {
+          type: 'action:update_channel:result',
+          data: {
+            success: false,
+            channelId: targetChannelId,
+            updatedFields,
+          },
+        } as any;
       }
     });
 

@@ -60,7 +60,7 @@ export async function startServer(options: ServerOptions = {}) {
       return { channelId: xChannelId as string, threadId: xThreadId as string | undefined };
     }
     // Fallback: if only threadId is provided, it's actually the channelId in the new model
-    return { channelId: (xThreadId || 'default') as string, threadId: undefined };
+    return { channelId: (xThreadId || 'general') as string, threadId: undefined };
   };
 
   const getClientKey = (channelId: string, threadId?: string) =>
