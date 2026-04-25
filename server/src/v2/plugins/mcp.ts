@@ -35,7 +35,7 @@ export const mcpToolDefinitions = {
 };
 
 export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
-  builder.on('action:mcp_list_tools', async function* (event) {
+  builder.on('action:mcp_list_tools', async function* (event, context) {
     const serverId = (event.data as any)?.serverId as string;
 
     try {
@@ -60,7 +60,10 @@ export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builde
               ? `MCP tools available on \`${serverId}\`:\n${toolNames.join('\n')}`
               : `MCP server \`${serverId}\` has no tools.`,
         },
-        meta: event.meta,
+        meta: {
+          ...(event.meta || {}),
+          agentId: context.state.agentId,
+        },
       } as any;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown MCP error';
@@ -79,12 +82,15 @@ export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builde
         data: {
           content: `Failed to list MCP tools for \`${serverId}\`: ${message}`,
         },
-        meta: event.meta,
+        meta: {
+          ...(event.meta || {}),
+          agentId: context.state.agentId,
+        },
       } as any;
     }
   });
 
-  builder.on('action:mcp_call', async function* (event) {
+  builder.on('action:mcp_call', async function* (event, context) {
     const serverId = (event.data as any)?.serverId as string;
     const toolName = (event.data as any)?.toolName as string;
     const args = ((event.data as any)?.args || {}) as Record<string, unknown>;
@@ -109,7 +115,10 @@ export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builde
         data: {
           content: `MCP \`${serverId}.${toolName}\` result:\n\n${rendered}`,
         },
-        meta: event.meta,
+        meta: {
+          ...(event.meta || {}),
+          agentId: context.state.agentId,
+        },
       } as any;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown MCP error';
@@ -128,7 +137,10 @@ export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builde
         data: {
           content: `MCP call failed for \`${serverId}.${toolName}\`: ${message}`,
         },
-        meta: event.meta,
+        meta: {
+          ...(event.meta || {}),
+          agentId: context.state.agentId,
+        },
       } as any;
     }
   });

@@ -312,11 +312,13 @@ export const coordinatorService = {
     try {
       // RUN the agent runtime
       for await (const chunk of agentRuntime.run(event, { state: agentState, runId })) {
-        await onEvent(chunk, agentState);
-
-        if (chunk.type === 'agent:output' || chunk.type.startsWith('action:')) {
+        if (chunk.type === 'agent:output') {
+          hasProducedOutput = true;
+          chunk.meta = { ...chunk.meta, agentId };
+        } else if (chunk.type.startsWith('action:')) {
           hasProducedOutput = true;
         }
+        await onEvent(chunk, agentState);
       }
     } finally {
       await onEvent(
@@ -337,7 +339,14 @@ export const coordinatorService = {
     if (event.type === 'agent:invoke' && !hasProducedOutput) {
       const warning = `⚠️ **${agentId}** is not configured to handle inputs. Please check its plugin configuration.`;
 
-      await onEvent({ type: 'agent:output', data: { content: warning } }, agentState);
+      await onEvent(
+        {
+          type: 'agent:output',
+          data: { content: warning },
+          meta: { agentId },
+        },
+        agentState,
+      );
     }
   },
 };

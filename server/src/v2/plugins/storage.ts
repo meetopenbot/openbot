@@ -170,8 +170,13 @@ export const storageToolDefinitions = {
     inputSchema: z.object({
       channelId: z
         .string()
-        .describe('Unique channel ID. Example: product-launch, backend-platform, or channel_roadmap.'),
-      spec: z.string().optional().describe('Optional initial markdown content for the channel spec.'),
+        .describe(
+          'Unique channel ID. Example: product-launch, backend-platform, or channel_roadmap.',
+        ),
+      spec: z
+        .string()
+        .optional()
+        .describe('Optional initial markdown content for the channel spec.'),
       initialState: z
         .record(z.string(), z.unknown())
         .optional()
@@ -276,7 +281,7 @@ export const storagePlugin =
       } as any;
     });
 
-    builder.on('action:create_channel', async function* (event) {
+    builder.on('action:create_channel', async function* (event, context) {
       const { channelId, spec, initialState } = (event as any).data;
       const rawChannelId = (channelId || '').trim();
       const channelSpec = typeof spec === 'string' ? spec : '';
@@ -314,9 +319,12 @@ export const storagePlugin =
         yield {
           type: 'agent:output',
           data: {
-            content: `Created channel \`${rawChannelId}\`.\n\n[Open channel](${channelUrl})`,
+            content: `Created channel \`${rawChannelId}\`.`,
           },
-          meta: event.meta,
+          meta: {
+            ...(event.meta || {}),
+            agentId: context.state.agentId,
+          },
         } as any;
       } catch {
         yield {
@@ -534,6 +542,9 @@ export const storagePlugin =
           data: {
             content: `Thread details updated: ${updatedFields.join(', ')}`,
           },
+          meta: {
+            agentId: context.state.agentId,
+          },
         };
       } catch (error) {
         yield {
@@ -548,6 +559,9 @@ export const storagePlugin =
           type: 'agent:output',
           data: {
             content: `Failed to update thread details: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          },
+          meta: {
+            agentId: context.state.agentId,
           },
         };
       }

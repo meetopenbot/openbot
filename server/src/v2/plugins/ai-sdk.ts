@@ -138,8 +138,6 @@ export const aiSdkPlugin =
       const threadId = event.meta?.threadId || context.state.threadId;
       const systemPrompt = await buildSystemPrompt(context.state, system, context, storage);
 
-      console.log('systemPrompt::::::::::::', systemPrompt);
-
       context.state.shortTermMessages = [
         ...(context.state.shortTermMessages ?? []),
         {
@@ -182,6 +180,9 @@ export const aiSdkPlugin =
           type: 'agent:output',
           data: {
             content: result.text,
+          },
+          meta: {
+            agentId: context.state.agentId,
           },
         };
       }

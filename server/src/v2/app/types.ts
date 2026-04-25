@@ -207,6 +207,10 @@ export type AgentOutputEvent = BaseEvent & {
   data: {
     content: string;
   };
+  meta: {
+    agentId: string;
+    [key: string]: any;
+  };
 };
 
 export type AgentRunStartEvent = BaseEvent & {

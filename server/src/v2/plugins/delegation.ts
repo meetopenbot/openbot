@@ -7,7 +7,7 @@ import z from 'zod';
  * Automatically handles delegation events and routes them through the storage service.
  */
 export const delegationPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
-  builder.on('action:delegate', async function* (event) {
+  builder.on('action:delegate', async function* (event, context) {
     const { agentId, content } = event.data;
 
     // By yielding an agent:output with a mention, we:
@@ -18,7 +18,10 @@ export const delegationPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => 
       data: {
         content: `@${agentId}, ${content}`,
       },
-      meta: event.meta,
+      meta: {
+        ...(event.meta || {}),
+        agentId: context.state.agentId,
+      },
     };
   });
 };
