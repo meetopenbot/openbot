@@ -143,6 +143,11 @@ export interface Storage {
     spec: string;
   }) => Promise<void>;
   getVariables: () => Promise<Record<string, string>>;
+  listFiles: (options: {
+    channelId: string;
+    path?: string;
+  }) => Promise<Array<{ name: string; isDirectory: boolean }>>;
+  readFile: (options: { channelId: string; path: string }) => Promise<string>;
 }
 
 export interface StoragePluginOptions {
@@ -648,6 +653,69 @@ export const storagePlugin =
           },
           meta: {
             agentId: context.state.agentId,
+          },
+        };
+      }
+    });
+
+    builder.on('action:storage:list-files', async function* (event, context) {
+      const channelId = context.state.channelId;
+      const subPath = (event.data as any)?.path || '';
+
+      try {
+        const files = await storage.listFiles({ channelId, path: subPath });
+        yield {
+          type: 'action:storage:list-files:result',
+          data: {
+            success: true,
+            files,
+          },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:storage:list-files:result',
+          data: {
+            success: false,
+            files: [],
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    });
+
+    builder.on('action:storage:read-file', async function* (event, context) {
+      const channelId = context.state.channelId;
+      const filePath = (event.data as any)?.path;
+
+      if (!filePath) {
+        yield {
+          type: 'action:storage:read-file:result',
+          data: {
+            success: false,
+            path: '',
+            error: 'Path is required',
+          },
+        };
+        return;
+      }
+
+      try {
+        const content = await storage.readFile({ channelId, path: filePath });
+        yield {
+          type: 'action:storage:read-file:result',
+          data: {
+            success: true,
+            content,
+            path: filePath,
+          },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:storage:read-file:result',
+          data: {
+            success: false,
+            path: filePath,
+            error: error instanceof Error ? error.message : 'Unknown error',
           },
         };
       }

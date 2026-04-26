@@ -784,6 +784,56 @@ export const storageService = {
     return toVariablesRecord(raw);
   },
 
+  listFiles: async ({
+    channelId,
+    path: subPath = '',
+  }: {
+    channelId: string;
+    path?: string;
+  }): Promise<Array<{ name: string; isDirectory: boolean }>> => {
+    const details = await storageService.getChannelDetails({ channelId });
+    const baseCwd = details.cwd;
+
+    if (!baseCwd) {
+      throw new Error('Channel has no CWD configured');
+    }
+
+    const resolvedBase = path.resolve(baseCwd);
+    const targetDir = path.resolve(resolvedBase, subPath);
+
+    // Security check: ensure target is within baseCwd
+    if (!targetDir.startsWith(resolvedBase)) {
+      throw new Error('Access denied: directory escape');
+    }
+
+    const entries = await fs.readdir(targetDir, { withFileTypes: true });
+    return entries
+      .filter((e) => !e.name.startsWith('.')) // Hide hidden files by default for MVP
+      .map((e) => ({
+        name: e.name,
+        isDirectory: e.isDirectory(),
+      }));
+  },
+
+  readFile: async ({ channelId, path: filePath }: { channelId: string; path: string }): Promise<string> => {
+    const details = await storageService.getChannelDetails({ channelId });
+    const baseCwd = details.cwd;
+
+    if (!baseCwd) {
+      throw new Error('Channel has no CWD configured');
+    }
+
+    const resolvedBase = path.resolve(baseCwd);
+    const targetFile = path.resolve(resolvedBase, filePath);
+
+    // Security check: ensure target is within baseCwd
+    if (!targetFile.startsWith(resolvedBase)) {
+      throw new Error('Access denied: directory escape');
+    }
+
+    return fs.readFile(targetFile, 'utf-8');
+  },
+
   /**
    * Hydrates the full OpenBot state from disk/storage before a run.
    */

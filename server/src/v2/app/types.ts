@@ -203,6 +203,39 @@ export type PatchThreadDetailsResultEvent = BaseEvent & {
   };
 };
 
+export type ListFilesEvent = BaseEvent & {
+  type: 'action:storage:list-files';
+  data: {
+    path?: string;
+  };
+};
+
+export type ListFilesResultEvent = BaseEvent & {
+  type: 'action:storage:list-files:result';
+  data: {
+    success: boolean;
+    files: Array<{ name: string; isDirectory: boolean }>;
+    error?: string;
+  };
+};
+
+export type ReadFileEvent = BaseEvent & {
+  type: 'action:storage:read-file';
+  data: {
+    path: string;
+  };
+};
+
+export type ReadFileResultEvent = BaseEvent & {
+  type: 'action:storage:read-file:result';
+  data: {
+    success: boolean;
+    content?: string;
+    path: string;
+    error?: string;
+  };
+};
+
 export type AgentOutputEvent = BaseEvent & {
   type: 'agent:output';
   data: {
@@ -424,6 +457,10 @@ export type OpenBotEvent =
   | PatchChannelDetailsResultEvent
   | PatchThreadDetailsEvent
   | PatchThreadDetailsResultEvent
+  | ListFilesEvent
+  | ListFilesResultEvent
+  | ReadFileEvent
+  | ReadFileResultEvent
   | CreateThreadEvent
   | CreateThreadResultEvent
   | CreateChannelEvent
