@@ -10,7 +10,7 @@ import { processService } from '../services/process.js';
 import { storageService } from '../services/storage.js';
 import { coordinatorService } from '../services/coordinator.js';
 import { initPlugins } from '../registry/plugins.js';
-import { ensureEventId, openBotEventFromQuery, parseMention } from './utils.js';
+import { ensureEventId, openBotEventFromQuery } from './utils.js';
 
 export interface ServerOptions {
   port?: number;
@@ -51,16 +51,23 @@ export async function startServer(options: ServerOptions = {}) {
   initPlugins(pluginsDir);
 
   const getContext = (req: express.Request) => {
-    const xChannelId =
+    const channelId =
       req.get('x-openbot-channel-id') || req.query.channelId || (req.body && req.body.channelId);
-    const xThreadId =
+    const threadId =
       req.get('x-openbot-thread-id') || req.query.threadId || (req.body && req.body.threadId);
+    const agentId =
+      req.get('x-openbot-agent-id') || req.query.agentId || (req.body && req.body.agentId);
+    const responseType =
+      req.get('x-openbot-response-type') ||
+      req.query.responseType ||
+      (req.body && req.body.responseType);
 
-    if (xChannelId) {
-      return { channelId: xChannelId as string, threadId: xThreadId as string | undefined };
-    }
-    // Fallback: if only threadId is provided, it's actually the channelId in the new model
-    return { channelId: (xThreadId || 'general') as string, threadId: undefined };
+    return {
+      channelId: (channelId || (threadId ? 'general' : 'general')) as string, // Default to general if none
+      threadId: threadId as string | undefined,
+      agentId: agentId as string | undefined,
+      responseType: responseType as string | undefined,
+    };
   };
 
   const getClientKey = (channelId: string, threadId?: string) =>
@@ -166,7 +173,7 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     const event = parseResult.data as OpenBotEvent;
-    const { channelId, threadId } = getContext(req);
+    const { channelId, threadId, agentId } = getContext(req);
     if (!channelId || !channelId.trim()) {
       res.status(400).json({ error: 'channelId is required' });
       return;
@@ -207,6 +214,7 @@ export async function startServer(options: ServerOptions = {}) {
     try {
       await coordinatorService.dispatch({
         runId,
+        agentId,
         event,
         channelId,
         threadId,
@@ -235,7 +243,7 @@ export async function startServer(options: ServerOptions = {}) {
       return;
     }
 
-    const { channelId, threadId } = getContext(req);
+    const { channelId, threadId, agentId } = getContext(req);
     const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
     const events: OpenBotEvent[] = [];
 
@@ -245,6 +253,7 @@ export async function startServer(options: ServerOptions = {}) {
 
     await coordinatorService.dispatch({
       runId,
+      agentId,
       event,
       channelId,
       threadId,

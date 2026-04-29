@@ -2,7 +2,7 @@ import { melony, Runtime } from 'melony';
 import { AgentInvokeEvent, OpenBotEvent, OpenBotState } from '../app/types.js';
 import { resolvePlugin } from '../registry/plugins.js';
 import { storageService } from './storage.js';
-import { ensureEventId, parseMention } from '../app/utils.js';
+import { ensureEventId } from '../app/utils.js';
 
 export interface ExecuteAgentOptions {
   runId: string;
@@ -15,6 +15,7 @@ export interface ExecuteAgentOptions {
 
 export interface DispatchOptions {
   runId: string;
+  agentId?: string;
   event: OpenBotEvent;
   channelId: string;
   threadId?: string;
@@ -90,19 +91,19 @@ async function createAgentRuntime(
 export const coordinatorService = {
   /**
    * The primary entry point for all events coming into the system (e.g. from the API).
-   * Handles routing, @mentions, and initial UI message creation.
+   * Handles routing and initial UI message creation.
    */
   dispatch: async (options: DispatchOptions): Promise<void> => {
-    const { runId, event, channelId, threadId, onEvent } = options;
+    const { runId, agentId, event, channelId, threadId, onEvent } = options;
 
     // 0. Ensure the incoming event has a unique ID immediately
     ensureEventId(event);
 
-    let finalAgentId = 'system';
+    let finalAgentId = agentId || 'system';
     let finalEvent = event;
     let currentThreadId = threadId;
 
-    // 1. Convert user:input (or other raw inputs) to agent:invoke and handle @mentions
+    // 1. Convert user:input (or other raw inputs) to agent:invoke
     const rawContent = (event as any).data?.content || '';
     if (event.type === 'user:input' || event.type === 'agent:invoke') {
       const normalizedInvokeEvent: AgentInvokeEvent = {
@@ -133,38 +134,20 @@ export const coordinatorService = {
       // 2. Propagate the user's input to the event bus
       await onEvent(finalEvent, initialState);
 
-      // 3. Detect mentions and trigger delegation/routing
-      const mention = parseMention(rawContent);
-      if (mention) {
-        finalAgentId = mention.agentId;
-        finalEvent = {
-          ...event,
-          type: 'agent:invoke',
-          data: {
-            ...((event as any).data || {}),
-            content: mention.stripped,
-          },
-          meta: {
-            ...(event.meta || {}),
-            // The threadId in meta is the anchor for new threads (Slack-style)
-            threadId: currentThreadId || finalEvent.id,
-          },
-        };
-      } else {
-        finalEvent = {
-          ...event,
-          type: 'agent:invoke',
-          data: {
-            ...((event as any).data || {}),
-            content: rawContent,
-          },
-          meta: {
-            ...(event.meta || {}),
-            // The threadId in meta is the anchor for new threads (Slack-style)
-            threadId: currentThreadId || finalEvent.id,
-          },
-        };
-      }
+      // 3. Prepare the event for the target agent
+      finalEvent = {
+        ...event,
+        type: 'agent:invoke',
+        data: {
+          ...((event as any).data || {}),
+          content: rawContent,
+        },
+        meta: {
+          ...(event.meta || {}),
+          // The threadId in meta is the anchor for new threads (Slack-style)
+          threadId: currentThreadId || finalEvent.id,
+        },
+      };
     }
 
     // 4. Linear Execution Loop
@@ -181,7 +164,7 @@ export const coordinatorService = {
       iterations++;
       const { agentId, event: currentEvent } = queue.shift()!;
 
-      // Track agents queued in this step to avoid double-runs (e.g. from tool + text mention)
+      // Track agents queued in this step to avoid double-runs (e.g. from tool delegation)
       const queuedAgents = new Set<string>();
       const delegations: { agentId: string; event: OpenBotEvent }[] = [];
 
@@ -202,7 +185,7 @@ export const coordinatorService = {
             currentThreadId = chunk.data.threadId || currentThreadId;
           }
 
-          // 2. Detect delegations and mentions to queue them for the next iteration
+          // 2. Detect delegations to queue them for the next iteration
           let targetAgentId: string | null = null;
           let targetEvent: OpenBotEvent | null = null;
 
@@ -219,21 +202,6 @@ export const coordinatorService = {
                 threadId: currentThreadId,
               },
             };
-          } else if (chunk.type === 'agent:output') {
-            const mention = parseMention(chunk.data.content);
-            if (mention && mention.agentId !== agentId) {
-              targetAgentId = mention.agentId;
-              targetEvent = {
-                type: 'agent:invoke',
-                data: {
-                  agentId: mention.agentId,
-                  content: mention.stripped,
-                },
-                meta: {
-                  threadId: currentThreadId,
-                },
-              };
-            }
           }
 
           // 3. Queue only if not already queued in this step

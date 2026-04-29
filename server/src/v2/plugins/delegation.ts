@@ -10,13 +10,24 @@ export const delegationPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => 
   builder.on('action:delegate', async function* (event, context) {
     const { agentId, content } = event.data;
 
-    // By yielding an agent:output with a mention, we:
-    // 1. Show the delegation in the UI (via agentPlugin)
-    // 2. Trigger the linear execution loop in coordinatorService (via its parsing of agent:output mentions)
+    // 1. Show the delegation in the UI
     yield {
       type: 'agent:output',
       data: {
-        content: `@${agentId}, ${content}`,
+        content: `Delegating to **${agentId}**: ${content}`,
+      },
+      meta: {
+        ...(event.meta || {}),
+        agentId: context.state.agentId,
+      },
+    };
+
+    // 2. Trigger the linear execution loop in coordinatorService
+    yield {
+      type: 'agent:invoke',
+      data: {
+        agentId,
+        content,
       },
       meta: {
         ...(event.meta || {}),
