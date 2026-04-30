@@ -645,7 +645,7 @@ export const storageService = {
       }),
     );
 
-    const system = getSystemAgentDetails();
+    const system = await storageService.getAgentDetails({ agentId: 'system' });
     const builtInSystemAgent: Agent = {
       id: system.id,
       name: system.name,
@@ -684,34 +684,44 @@ export const storageService = {
     const agentDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_AGENTS_DIR + '/' + agentId);
     const agentMdPath = `${agentDir}/AGENT.md`;
 
-    try {
-      await fs.access(agentMdPath);
-    } catch {
-      const error = new Error(`Agent "${agentId}" does not exist.`);
-      (error as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
-      throw error;
-    }
+    let diskDetails: Partial<AgentDetails> | undefined;
 
     try {
+      await fs.access(agentMdPath);
       const agentMd = await fs.readFile(agentMdPath, 'utf-8');
       const { data, content: instructions } = matter(agentMd);
       const discoveredImage = await resolveEntityImageDataUrl(agentDir);
 
-      return {
+      diskDetails = {
         id: agentId,
         name: data.name || agentId,
         instructions: instructions.trim(),
         runtime: data.runtime,
         plugins: data.plugins || [],
         description: data.description || '',
-        image: discoveredImage,
+        image: discoveredImage || undefined,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
     } catch (error) {
-      console.error(`Failed to read agent MD file for agent ${agentId}`, error);
+      if (agentId !== 'system') {
+        const err = new Error(`Agent "${agentId}" does not exist.`);
+        (err as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
+        throw err;
+      }
+    }
+
+    if (agentId === 'system') {
+      return getSystemAgentDetails(diskDetails);
+    }
+
+    if (!diskDetails) {
+      const error = new Error(`Agent "${agentId}" does not exist.`);
+      (error as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
       throw error;
     }
+
+    return diskDetails as AgentDetails;
   },
   getEvents: async ({
     channelId,
@@ -889,15 +899,11 @@ export const storageService = {
     const { runId, agentId, channelId, threadId, event } = options;
 
     let agentDetails: AgentDetails;
-    if (agentId === 'system') {
-      agentDetails = getSystemAgentDetails();
-    } else {
-      try {
-        agentDetails = await storageService.getAgentDetails({ agentId });
-      } catch (error) {
-        console.warn(`[storage] Failed to load agent details for agent: ${agentId}`, error);
-        throw error;
-      }
+    try {
+      agentDetails = await storageService.getAgentDetails({ agentId });
+    } catch (error) {
+      console.warn(`[storage] Failed to load agent details for agent: ${agentId}`, error);
+      throw error;
     }
 
     let channelDetails;
