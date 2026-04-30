@@ -11,6 +11,7 @@ import { storageService } from '../services/storage.js';
 import { coordinatorService } from '../services/coordinator.js';
 import { initPlugins } from '../registry/plugins.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
+import { generateId } from 'melony';
 
 export interface ServerOptions {
   port?: number;
@@ -178,7 +179,7 @@ export async function startServer(options: ServerOptions = {}) {
       res.status(400).json({ error: 'channelId is required' });
       return;
     }
-    const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
+    const runId = req.get('x-openbot-run-id') || `run_${generateId()}`;
 
     const onEvent = async (chunk: OpenBotEvent, state?: OpenBotState) => {
       ensureEventId(chunk);
@@ -244,7 +245,7 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     const { channelId, threadId, agentId } = getContext(req);
-    const runId = req.get('x-openbot-run-id') || `run_${Date.now()}`;
+    const runId = req.get('x-openbot-run-id') || `run_${generateId()}`;
     const events: OpenBotEvent[] = [];
 
     const onEvent = async (chunk: OpenBotEvent) => {
