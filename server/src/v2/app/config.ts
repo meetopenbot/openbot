@@ -10,7 +10,10 @@ export interface MelonyConfig {
   baseDir?: string;
   port?: number;
   mcpServers?: MCPServerConfig[];
+  globalPlugins?: PluginSpec[];
 }
+
+export type PluginSpec = string | { name: string; config?: Record<string, unknown> };
 
 export interface MCPServerConfig {
   id: string;

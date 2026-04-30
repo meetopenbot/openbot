@@ -3,6 +3,7 @@ import { AgentInvokeEvent, OpenBotEvent, OpenBotState } from '../app/types.js';
 import { resolvePlugin } from '../registry/plugins.js';
 import { storageService } from './storage.js';
 import { ensureEventId } from '../app/utils.js';
+import { loadConfig, PluginSpec } from '../app/config.js';
 
 export interface ExecuteAgentOptions {
   runId: string;
@@ -69,7 +70,9 @@ async function createAgentRuntime(
     : state.agentDetails?.runtime
       ? [state.agentDetails.runtime]
       : [];
-  const pluginSpecs = [...runtimeSpecs, ...(state.agentDetails?.plugins || [])];
+  const { globalPlugins = [] } = loadConfig();
+  const agentSpecs = [...runtimeSpecs, ...(state.agentDetails?.plugins || [])];
+  const pluginSpecs = mergePluginSpecs(globalPlugins, agentSpecs);
 
   // 4. Load normalized plugins
   for (const p of pluginSpecs) {
@@ -86,6 +89,25 @@ async function createAgentRuntime(
   }
 
   return runtime.build();
+}
+
+function mergePluginSpecs(globalSpecs: PluginSpec[], agentSpecs: PluginSpec[]): PluginSpec[] {
+  const specsByName = new Map<string, PluginSpec>();
+
+  for (const spec of globalSpecs) {
+    const name = typeof spec === 'string' ? spec : spec?.name;
+    if (!name || typeof name !== 'string') continue;
+    specsByName.set(name, spec);
+  }
+
+  // Agent-defined plugins override global ones with the same name.
+  for (const spec of agentSpecs) {
+    const name = typeof spec === 'string' ? spec : spec?.name;
+    if (!name || typeof name !== 'string') continue;
+    specsByName.set(name, spec);
+  }
+
+  return [...specsByName.values()];
 }
 
 export const coordinatorService = {
