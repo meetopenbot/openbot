@@ -106,6 +106,31 @@ const getConversationDir = (channelId: string, threadId?: string) => {
 const getLastReadFilePath = () =>
   path.join(resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR), '_meta', 'last-read.json');
 
+const THREAD_TITLE_MAX_LENGTH = 80;
+
+const buildThreadTitleFromEvent = (event: OpenBotEvent): string | undefined => {
+  let rawContent = '';
+
+  if (event.type === 'user:input' && typeof event.data?.content === 'string') {
+    rawContent = event.data.content;
+  } else if (
+    event.type === 'agent:invoke' &&
+    event.data?.role === 'user' &&
+    typeof event.data.content === 'string'
+  ) {
+    rawContent = event.data.content;
+  }
+
+  const normalized = rawContent.replace(/\s+/g, ' ').trim();
+  if (!normalized) return undefined;
+
+  if (normalized.length <= THREAD_TITLE_MAX_LENGTH) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, THREAD_TITLE_MAX_LENGTH).trimEnd()}...`;
+};
+
 const readJsonFile = async <T>(filePath: string, fallback: T): Promise<T> => {
   try {
     return JSON.parse(await fs.readFile(filePath, 'utf-8')) as T;
@@ -765,7 +790,24 @@ export const storageService = {
   }): Promise<void> => {
     try {
       const threadDir = getConversationDir(channelId, threadId);
-      await fs.mkdir(threadDir, { recursive: true });
+      if (threadId) {
+        try {
+          await fs.access(threadDir);
+        } catch (error: any) {
+          if (error.code === 'ENOENT') {
+            const threadTitle = buildThreadTitleFromEvent(event);
+            await storageService.createThread({
+              channelId,
+              threadId,
+              threadTitle,
+            });
+          } else {
+            throw error;
+          }
+        }
+      } else {
+        await fs.mkdir(threadDir, { recursive: true });
+      }
 
       // Ensure the event has a unique ID
       if (!event.id) {

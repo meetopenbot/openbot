@@ -155,24 +155,6 @@ export interface StoragePluginOptions {
 }
 
 export const storageToolDefinitions = {
-  create_thread: {
-    description:
-      'Create a new thread. Use this when you think the user intent is complex and should be split into multiple steps. If user asks basic questions, no need to create a thread.',
-    inputSchema: z.object({
-      threadTitle: z.string().describe('Short descriptive title for the thread.'),
-      spec: z
-        .string()
-        .optional()
-        .describe('Initial markdown content for the thread spec (SPEC.md).'),
-      initialState: z
-        .record(z.string(), z.unknown())
-        .optional()
-        .describe(
-          'Initial state object for the thread. Use this to seed the thread with context or a `todos` list. ' +
-            'Keep todos simple: { id: string, task: string, status: "pending" | "in_progress" | "done" }.',
-        ),
-    }),
-  },
   create_channel: {
     description:
       'Create a new channel. Use this when you think the user intent is completelly different from the current channel and should be split into multiple channels. Before creating, always notify with details and ask for confirmation. If user asks basic questions, no need to create a channel.',
@@ -190,7 +172,10 @@ export const storageToolDefinitions = {
         .record(z.string(), z.unknown())
         .optional()
         .describe('Optional initial state object for the channel.'),
-      cwd: z.string().optional().describe('Optional initial current working directory for the channel.'),
+      cwd: z
+        .string()
+        .optional()
+        .describe('Optional initial current working directory for the channel.'),
     }),
   },
   patch_channel_details: {
@@ -209,14 +194,14 @@ export const storageToolDefinitions = {
           .describe(
             'Markdown content for the channel specification (SPEC.md). Use this for goals and rules.',
           ),
-        cwd: z
-          .string()
-          .optional()
-          .describe('Current working directory for the channel.'),
+        cwd: z.string().optional().describe('Current working directory for the channel.'),
       })
-      .refine((value) => value.state !== undefined || value.spec !== undefined || value.cwd !== undefined, {
-        message: 'Provide at least one of state, spec, or cwd.',
-      }),
+      .refine(
+        (value) => value.state !== undefined || value.spec !== undefined || value.cwd !== undefined,
+        {
+          message: 'Provide at least one of state, spec, or cwd.',
+        },
+      ),
   },
   patch_thread_details: {
     description: 'Patch current thread details (state and/or spec).',
