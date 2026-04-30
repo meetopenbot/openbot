@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-export interface MelonyConfig {
+export interface OpenBotconfig {
   name?: string;
   description?: string;
   model?: string;
@@ -40,7 +40,7 @@ export function resolvePath(p: string) {
   return p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : path.resolve(p);
 }
 
-export function loadConfig(): MelonyConfig {
+export function loadConfig(): OpenBotconfig {
   const configPath = path.join(os.homedir(), '.openbot', CONFIG_FILE);
   if (fs.existsSync(configPath)) {
     try {
@@ -52,7 +52,7 @@ export function loadConfig(): MelonyConfig {
   return {};
 }
 
-export function saveConfig(config: Partial<MelonyConfig>) {
+export function saveConfig(config: Partial<OpenBotconfig>) {
   const configDir = resolvePath(DEFAULT_BASE_DIR);
   const configPath = path.join(configDir, CONFIG_FILE);
 
