@@ -7,9 +7,9 @@ import fs from 'fs/promises';
 import { generateId } from 'melony';
 import { DEFAULT_BASE_DIR, loadConfig, loadVariables, resolvePath } from '../app/config.js';
 import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
-import { processService } from '../services/process.js';
+import { processService } from '../harness/process.js';
 import { storageService } from '../services/storage.js';
-import { orchestratorService } from '../services/orchestrator.js';
+import { AgentHarness } from '../harness/agent-harness.js';
 import { initPlugins } from '../registry/plugins.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
 
@@ -220,14 +220,15 @@ export async function startServer(options: ServerOptions = {}) {
     };
 
     try {
-      await orchestratorService.dispatch({
+      const harness = new AgentHarness({
         runId,
-        agentId,
-        event,
+        agentId: agentId || 'system',
         channelId,
         threadId,
         onEvent,
       });
+
+      await harness.dispatch(event);
       res.sendStatus(200);
     } catch (error) {
       console.error('[publish] Failed to dispatch event', {
@@ -258,16 +259,20 @@ export async function startServer(options: ServerOptions = {}) {
       events.push(chunk);
     };
 
-    await orchestratorService.dispatch({
-      runId,
-      agentId,
-      event,
-      channelId,
-      threadId,
-      onEvent,
-    });
+    try {
+      const harness = new AgentHarness({
+        runId,
+        agentId: agentId || 'system',
+        channelId,
+        threadId,
+        onEvent,
+      });
 
-    res.json({ events });
+      await harness.dispatch(event);
+      res.json({ events });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to process state request' });
+    }
   });
 
   app.listen(PORT, () => {

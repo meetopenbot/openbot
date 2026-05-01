@@ -1,7 +1,7 @@
 import { melony, Runtime } from 'melony';
 import { AgentInvokeEvent, OpenBotEvent, OpenBotState } from '../app/types.js';
 import { resolvePlugin } from '../registry/plugins.js';
-import { storageService } from './storage.js';
+import { storageService } from '../services/storage.js';
 import { ensureEventId } from '../app/utils.js';
 import { loadConfig, PluginSpec } from '../app/config.js';
 

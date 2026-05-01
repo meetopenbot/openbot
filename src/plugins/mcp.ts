@@ -1,7 +1,7 @@
 import { MelonyPlugin } from 'melony';
 import z from 'zod';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
-import { mcpService } from '../services/mcp.js';
+import { mcpService } from '../harness/mcp.js';
 
 function stringifyResult(value: unknown): string {
   if (typeof value === 'string') {

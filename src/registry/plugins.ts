@@ -10,6 +10,7 @@ import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
 import { delegationPlugin } from '../plugins/delegation.js';
 import { mcpPlugin } from '../plugins/mcp.js';
 import { uiPlugin } from '../plugins/ui.js';
+import { orchestratorService } from '../harness/orchestrator.js';
 
 let pluginsDir: string | null = null;
 const loadedPlugins = new Set<string>();
