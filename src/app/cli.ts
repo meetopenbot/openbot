@@ -25,7 +25,7 @@ function checkNodeVersion() {
 
 checkNodeVersion();
 
-program.name('openbot').description('OpenBot CLI').version('0.2.12');
+program.name('openbot').description('OpenBot CLI').version('0.2.13');
 
 program
   .command('start')
