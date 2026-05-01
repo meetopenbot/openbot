@@ -1,30 +1,31 @@
 # Architecture
 
-OpenBot follows a modular architecture based on the `melony` framework.
+OpenBot is an orchestration platform built on a modular, event-driven architecture. It leverages the `melony` framework to coordinate interactions between multiple specialized agents.
 
 ## Core Components
 
-### 1. Agent Routing
-The router is the central dispatcher. It receives user input and determines which agent should handle the message using the following priority:
+### 1. Agent Orchestration & Routing
+The orchestrator is the central dispatcher. It receives user input and determines how to delegate tasks across the agent network using the following logic:
 
-1. **@mention** — the first `@agentId` in the message text
-2. **DM context** — direct messages route to the DM target agent
-3. **Channel default** — falls back to the `default` agent
+1. **Command Prefix** — Explicit delegation to a specific agent (e.g., `/os list files`).
+2. **DM context** — Direct communication with a specific agent.
+3. **Orchestrator Intelligence** — The default agent analyzes the request and suggests or invokes the most suitable specialized agent.
 
 ### 2. Agent Registry
-Holds all available agents. Agents can be:
-- **Built-in**: Compiled directly into the OpenBot core (e.g., `osAgent`).
-- **YAML-based**: Defined in `~/.openbot/agents/*/AGENT.md` files for quick customization.
+A dynamic registry that manages all available agents. Agents can be:
+- **Built-in**: Core agents compiled into the platform (e.g., `src/agents/system.ts`).
+- **YAML-based**: Rapidly defined agents in `~/.openbot/agents/*/AGENT.md`.
+- **TS Packages**: Advanced agents with custom logic in `~/.openbot/agents/*/index.ts`.
 
 ### 3. Plugin Registry
-Manages functionality that can be shared across agents. Plugins provide tool definitions and implementations (e.g., `shell`, `file-system`).
+The "capability layer" that provides tools and logic shared across the platform. Plugins (like `shell`, `file-system`, or `mcp`) define the actions agents can perform.
 
-### 4. Melony App
-The underlying event-driven orchestration layer that handles communication between agents via events like `user:input` and `agent:output`.
+### 4. Orchestration Layer (Melony)
+The underlying event bus that handles all communication. It ensures that agents can collaborate asynchronously, share context, and emit real-time updates to the UI.
 
-## Message Flow
+## Multi-Agent Workflow
 
-1. User sends a message (optionally @mentioning an agent).
-2. Router parses the @mention and resolves the target agent.
-3. The target agent's runtime processes the message.
-4. The agent streams events (`agent:output`, `ui`, etc.) back to the client.
+1. **Input**: User sends a message to the platform.
+2. **Orchestration**: The router or orchestrator agent identifies the required capabilities (via command prefix or intent analysis).
+3. **Execution**: The target agent(s) process the task, potentially collaborating with other agents via the event bus.
+4. **Output**: Agents stream events (`agent:output`, `ui`, etc.) back to the central dashboard.

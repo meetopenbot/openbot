@@ -79,6 +79,6 @@ export async function resolvePlugin(
     }
   }
 
-  console.warn(`[plugins] Plugin "${pluginName}" not found in v2 registry or external directory.`);
+  console.warn(`[plugins] Plugin "${pluginName}" not found in registry or external directory.`);
   return null;
 }

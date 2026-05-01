@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<h1 align="center">OpenBot: The Extensible, Multi-Agent AI Sidekick.</h1>
+<h1 align="center">OpenBot: The open-source platform for multi-agent orchestration.</h1>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/openbot"><img src="https://img.shields.io/npm/v/openbot" alt="npm version" /></a>
@@ -15,41 +15,48 @@
   <a href="https://www.npmjs.com/package/openbot"><img src="https://img.shields.io/npm/dt/openbot" alt="npm downloads" /></a>
 </p>
 
-OpenBot is more than just a chatbot. It's an AI workspace that lives in your terminal and browser, where specialized agents collaborate via @mentions. It's designed to be local-first, event-driven, and infinitely extensible.
+OpenBot is a local-first, event-driven platform designed to coordinate and orchestrate multiple specialized AI agents. It provides the infrastructure for agents to collaborate, share context, and execute complex workflows across your local system and the web.
 
 💬 Join the community on Discord: https://discord.gg/XYYXvN2ebB
 
 ![OpenBot Banner](./screen-slack-like.png)
 
-## 🧠 The Multi-Agent Philosophy
+## 🧠 Orchestration & Coordination
 
-OpenBot follows a **Slack-like @mention** pattern for agent collaboration.
+OpenBot provides a unified platform for multi-agent coordination.
 
-- **@mention Routing**: Tag any agent with `@agent` in a message to invoke it directly.
-- **Specialized Agents**: Dedicated to specific domains like `os` (shell & files), `browser` (web automation), or any custom agent you define.
-- **Event Bus**: All communication happens asynchronously via events, allowing for complex multi-agent choreography and real-time UI updates.
+- **Agent Orchestration**: The platform manages the lifecycle and communication between multiple specialized agents.
+- **Intelligent Delegation**: The orchestrator analyzes user intent and delegates tasks to the most suitable specialized agents.
+- **Context Sharing**: Agents share state and history, allowing for seamless handoffs and collaborative problem-solving.
+- **Event-Driven Architecture**: All communication happens asynchronously via a central event bus, enabling complex multi-agent choreography and real-time updates.
 
 ## 🤖 Meet the Agents
 
-### 🧠 Default Agent
-The primary entry point of the OpenBot ecosystem. It handles general conversations, manages long-term memory (via the `memory` plugin), and is aware of all other agents so it can suggest which ones to @mention for specialized tasks.
+### 🧠 Orchestrator Agent (Default)
+
+The central intelligence of the OpenBot platform. It analyzes user intent, manages long-term memory (via the `memory` plugin), and orchestrates specialized agents by suggesting or automatically invoking them for specific tasks.
 
 ### 🐚 OS Agent (`os`)
+
 Your specialized terminal and file system companion. It has full access to your local machine (within the boundaries you set). It can execute shell commands, create/read/edit files, manage directories, and handle system-level operations like git commands or script execution.
 
 ### 🌐 Browser Agent (`browser`) <mark>Stagehand</mark>
+
 A powerful web automation specialist based on **[Stagehand](https://github.com/browserbase/stagehand)**. It can navigate the internet exactly like a human would—browsing websites, clicking buttons, filling forms, and extracting data.
-*Note: We also plan to introduce a parallel agent based on **[browser-use](https://github.com/browser-use/browser-use)** for alternative autonomous web navigation strategies.*
+_Note: We also plan to introduce a parallel agent based on **[browser-use](https://github.com/browser-use/browser-use)** for alternative autonomous web navigation strategies._
 
 ### 🏷️ Topic Agent (`topic`)
+
 A background utility that works silently to keep your workspace organized. It automatically analyzes the first few messages of a new conversation and generates a concise (3-5 word) title.
 
 ### 💻 Codex Agent (`codex`)
+
 A world-class software engineer and coding assistant powered by OpenAI. It helps with high-level architectural decisions, code refactoring, complex logic implementation, and debugging. It has access to the shell and file system to explore and modify your codebase.
 
 ## 📱 OpenBot Mobile (Coming Soon)
 
 We're bringing the power of OpenBot to your pocket! The upcoming mobile app will feature:
+
 - **HITL (Human-In-The-Loop)**: Review and approve sensitive actions on the go.
 - **Real-time Notifications**: Get notified when long-running tasks or agent operations complete.
 - **Always-on Agents**: Your specialized coding and OS agents, always accessible from anywhere.
@@ -66,7 +73,9 @@ We are constantly expanding the OpenBot ecosystem with specialized agents:
 - **`social` Agent**: Designed to manage social media interactions, schedule posts, and monitor mentions.
 
 ### 💭 Persistent Memory
+
 Unlike most chatbots, OpenBot has a long-term memory. It can:
+
 - **`remember`**: Store facts, snippets, or preferences for later.
 - **`recall`**: Search its past experiences to provide context for new tasks.
 - **`journal`**: Keep a daily log of activities and insights.
@@ -90,6 +99,7 @@ npx openbot-web
 ```
 
 Prefer a single command? Run both server and web together:
+
 ```bash
 openbot up
 ```
@@ -97,16 +107,19 @@ openbot up
 Once the UI is open, head to the **Settings** tab to configure your AI providers (OpenAI, Anthropic, etc.). No configuration files required.
 
 ### 🌍 Want to browse the web?
+
 Add the official browser agent:
+
 ```bash
 openbot add browser
 ```
 
-## 🛠️ Built to be Extended
+## 🛠️ Built for Orchestration
 
-OpenBot is designed for power users and builders who want to create their own custom AI workflows without the complexity of building from scratch.
+OpenBot is designed for developers and power users who want to build and orchestrate custom AI workflows without the overhead of building the underlying infrastructure.
 
 ### 1. YAML Agents (No Coding Required)
+
 Create specialized agents just by writing a simple Markdown file with YAML frontmatter in `~/.openbot/agents/researcher/AGENT.md`:
 
 ```markdown
@@ -123,53 +136,61 @@ plugins:
 
 # Instructions
 
-You are an expert researcher. 
+You are an expert researcher.
 Use the browser to gather information and the file-system to save detailed reports.
 Always cite your sources and provide a high-level summary.
 ```
 
 ### 2. TS Agent Packages (Advanced)
+
 For more complex agents that require custom logic beyond a prompt, you can create a full TypeScript package in `~/.openbot/agents/my-agent/`:
 
 ```typescript
 // ~/.openbot/agents/my-agent/index.ts
 export const agent = {
-  name: "custom-agent",
-  description: "An agent with custom TS logic",
-  factory: ({ model }) => (builder) => {
-    // Compose plugins and add custom event handlers
-    builder.use(llmPlugin({
-      model,
-      system: "You are a specialized assistant...",
-      // ...
-    }));
-  }
+  name: 'custom-agent',
+  description: 'An agent with custom TS logic',
+  factory:
+    ({ model }) =>
+    (builder) => {
+      // Compose plugins and add custom event handlers
+      builder.use(
+        llmPlugin({
+          model,
+          system: 'You are a specialized assistant...',
+          // ...
+        }),
+      );
+    },
 };
 ```
 
 ### 3. Custom Plugins
+
 For those who want even more control, you can extend the AI's toolbox with custom logic. A plugin defines new tools and reacts to system events.
 
 ```typescript
 export const myPlugin = () => (builder) => {
-  builder.on("action:myTool", async function* (event, { state }) {
+  builder.on('action:myTool', async function* (event, { state }) {
     // Perform custom logic or interact with other systems
-    yield { type: "action:result", data: { result: "Done!" } };
+    yield { type: 'action:result', data: { result: 'Done!' } };
   });
 };
 ```
 
 ### Direct Command Routing
-Skip the manager's reasoning and talk directly to an agent using prefixes:
+
+Talk directly to an agent using command prefixes:
+
 - `/os list files in current directory`
 - `/browser search for local weather`
 
 ## 🏗️ Core Architecture
 
-- **`Manager`**: Central orchestrator, handles `/remember` and `/recall`.
-- **`Plugin Registry`**: Centralized tool discovery.
-- **`Agent Registry`**: Dynamic loading of built-in and user-defined agents.
-- **`SDUI (Server-Driven UI)`**: Plugins can emit UI components (cards, logs, status updates) that render directly in the web dashboard.
+- **`Orchestrator`**: Central engine that coordinates agent interactions and manages system state.
+- **`Plugin Registry`**: Unified interface for tool discovery and capability management.
+- **`Agent Registry`**: Dynamic registry for managing built-in and user-defined agents.
+- **`SDUI (Server-Driven UI)`**: A framework for agents and plugins to emit rich UI components (cards, logs, status updates) that render directly in the web dashboard.
 
 ## 📂 Project Structure
 

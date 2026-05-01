@@ -1,13 +1,14 @@
 # Plugins
 
-Plugins are the building blocks of OpenBot's capabilities. They provide tools and logic that agents can use.
+Plugins are the building blocks of the OpenBot platform's capabilities. They provide the tools and logic that the orchestrator and specialized agents use to interact with the world.
 
 ## Built-in Plugins
 
-- **shell**: Allows agents to execute shell commands.
-- **file-system**: Provides file CRUD operations (read, write, list, delete).
-- **approval**: Intercepts actions and requires user confirmation before proceeding.
-- **memory**: Manages the "long-term memory" and context for the manager agent.
+- **ai-sdk**: Integration with AI providers (OpenAI, Anthropic, etc.).
+- **storage**: Local file-based persistence for events and state.
+- **mcp**: Model Context Protocol integration.
+- **delegation**: Allows agents to delegate tasks to other agents.
+- **ui**: Server-driven UI components.
 
 ## In-depth: Approval Plugin
 
