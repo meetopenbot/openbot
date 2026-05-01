@@ -110,7 +110,7 @@ function mergePluginSpecs(globalSpecs: PluginSpec[], agentSpecs: PluginSpec[]): 
   return [...specsByName.values()];
 }
 
-export const coordinatorService = {
+export const orchestratorService = {
   /**
    * The primary entry point for all events coming into the system (e.g. from the API).
    * Handles routing and initial UI message creation.
@@ -190,7 +190,7 @@ export const coordinatorService = {
       const queuedAgents = new Set<string>();
       const delegations: { agentId: string; event: OpenBotEvent }[] = [];
 
-      await coordinatorService.executeAgent({
+      await orchestratorService.executeAgent({
         runId,
         agentId,
         event: currentEvent,
@@ -245,7 +245,7 @@ export const coordinatorService = {
     }
 
     if (iterations >= MAX_ITERATIONS) {
-      console.warn(`[coordinator] Reached MAX_ITERATIONS (${MAX_ITERATIONS}). Stopping execution.`);
+      console.warn(`[orchestrator] Reached MAX_ITERATIONS (${MAX_ITERATIONS}). Stopping execution.`);
     }
   },
 

@@ -22,7 +22,7 @@ export const delegationPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => 
       },
     };
 
-    // 2. Trigger the linear execution loop in coordinatorService
+    // 2. Trigger the linear execution loop in orchestratorService
     yield {
       type: 'agent:invoke',
       data: {

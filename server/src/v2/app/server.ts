@@ -2,16 +2,16 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import z from 'zod';
-import { DEFAULT_BASE_DIR, loadConfig, loadVariables, resolvePath } from '../app/config.js';
-import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
 import path from 'path';
 import fs from 'fs/promises';
+import { generateId } from 'melony';
+import { DEFAULT_BASE_DIR, loadConfig, loadVariables, resolvePath } from '../app/config.js';
+import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
 import { processService } from '../services/process.js';
 import { storageService } from '../services/storage.js';
-import { coordinatorService } from '../services/coordinator.js';
+import { orchestratorService } from '../services/orchestrator.js';
 import { initPlugins } from '../registry/plugins.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
-import { generateId } from 'melony';
 
 export interface ServerOptions {
   port?: number;
@@ -58,6 +58,11 @@ export async function startServer(options: ServerOptions = {}) {
       req.get('x-openbot-thread-id') || req.query.threadId || (req.body && req.body.threadId);
     const agentId =
       req.get('x-openbot-agent-id') || req.query.agentId || (req.body && req.body.agentId);
+    const runId =
+      req.get('x-openbot-run-id') ||
+      req.query.runId ||
+      (req.body && req.body.runId) ||
+      `run_${generateId()}`;
     const responseType =
       req.get('x-openbot-response-type') ||
       req.query.responseType ||
@@ -67,6 +72,7 @@ export async function startServer(options: ServerOptions = {}) {
       channelId: (channelId || (threadId ? 'general' : 'general')) as string, // Default to general if none
       threadId: threadId as string | undefined,
       agentId: agentId as string | undefined,
+      runId: runId as string,
       responseType: responseType as string | undefined,
     };
   };
@@ -174,12 +180,13 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     const event = parseResult.data as OpenBotEvent;
-    const { channelId, threadId, agentId } = getContext(req);
+
+    const { channelId, threadId, agentId, runId } = getContext(req);
+
     if (!channelId || !channelId.trim()) {
       res.status(400).json({ error: 'channelId is required' });
       return;
     }
-    const runId = req.get('x-openbot-run-id') || `run_${generateId()}`;
 
     const onEvent = async (chunk: OpenBotEvent, state?: OpenBotState) => {
       ensureEventId(chunk);
@@ -213,7 +220,7 @@ export async function startServer(options: ServerOptions = {}) {
     };
 
     try {
-      await coordinatorService.dispatch({
+      await orchestratorService.dispatch({
         runId,
         agentId,
         event,
@@ -244,15 +251,14 @@ export async function startServer(options: ServerOptions = {}) {
       return;
     }
 
-    const { channelId, threadId, agentId } = getContext(req);
-    const runId = req.get('x-openbot-run-id') || `run_${generateId()}`;
+    const { channelId, threadId, agentId, runId } = getContext(req);
     const events: OpenBotEvent[] = [];
 
     const onEvent = async (chunk: OpenBotEvent) => {
       events.push(chunk);
     };
 
-    await coordinatorService.dispatch({
+    await orchestratorService.dispatch({
       runId,
       agentId,
       event,
