@@ -1,27 +1,34 @@
 # Architecture
 
-OpenBot follows a modular architecture based on the `melony` framework.
+OpenBot is an orchestration platform built on a modular, event-driven architecture. It leverages the `melony` framework to coordinate interactions between multiple specialized agents via a standardized **Agent Harness**.
 
 ## Core Components
 
-### 1. The Manager Agent
-The central orchestrator of OpenBot. It receives user input and uses a `delegateTask` tool to route tasks to the most appropriate specialized agent.
+### 1. Agent Harness
+The Harness is the execution environment for agents. It provides the necessary "plumbing" (storage, communication, tools) so the agent can focus on reasoning. It handles event routing and state management.
+
+### 2. Agent Orchestration & Routing
+The orchestrator is the central dispatcher within the harness. It receives user input and determines how to delegate tasks across the agent network using the following logic:
+
+1. **Command Prefix** — Explicit delegation to a specific agent (e.g., `/os list files`).
+2. **DM context** — Direct communication with a specific agent.
+3. **Orchestrator Intelligence** — The default agent analyzes the request and suggests or invokes the most suitable specialized agent.
 
 ### 2. Agent Registry
-Holds all available agents. Agents can be:
-- **Built-in**: Compiled directly into the OpenBot core (e.g., `osAgent`).
-- **YAML-based**: Defined in `.openbot/agents/*.yaml` files for quick customization.
+A dynamic registry that manages all available agents. Agents can be:
+- **Built-in**: Core agents compiled into the platform (e.g., `src/agents/system.ts`).
+- **YAML-based**: Rapidly defined agents in `~/.openbot/agents/*/AGENT.md`.
+- **TS Packages**: Advanced agents with custom logic in `~/.openbot/agents/*/index.ts`.
 
 ### 3. Plugin Registry
-Manages functionality that can be shared across agents. Plugins provide tool definitions and implementations (e.g., `shell`, `file-system`).
+The "capability layer" that provides tools and logic shared across the platform. Plugins (like `shell`, `file-system`, or `mcp`) define the actions agents can perform.
 
-### 4. Melony App
-The underlying event-driven orchestration layer that handles communication between agents via events like `agent:NAME:input` and `agent:NAME:output`.
+### 4. Orchestration Layer (Melony)
+The underlying event bus that handles all communication. It ensures that agents can collaborate asynchronously, share context, and emit real-time updates to the UI.
 
-## Task Delegation Flow
+## Multi-Agent Workflow
 
-1. User sends a message to the Manager.
-2. Manager analyzes the task and calls `delegateTask(agent="os", task="...")`.
-3. The Manager emits an `agent:os:input` event.
-4. The OS Agent receives the event, performs the task (e.g., running a shell command), and emits `agent:os:output`.
-5. The Manager receives the output and provides the final result to the user.
+1. **Input**: User sends a message to the platform.
+2. **Orchestration**: The router or orchestrator agent identifies the required capabilities (via command prefix or intent analysis).
+3. **Execution**: The target agent(s) process the task, potentially collaborating with other agents via the event bus.
+4. **Output**: Agents stream events (`agent:output`, `ui`, etc.) back to the central dashboard.

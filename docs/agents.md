@@ -1,17 +1,20 @@
 # Agents
 
-Agents are specialized entities within OpenBot that handle specific types of tasks.
+Agents are specialized entities within the OpenBot platform, each designed to handle specific domains or tasks. The platform orchestrates these agents to solve complex problems through collaboration.
 
 ## Built-in Agents
 
+### Orchestrator Agent (Default)
+The central intelligence of the platform. It manages the conversation flow, handles long-term memory, and coordinates other agents.
+
 ### OS Agent (`os`)
-The OS agent is responsible for low-level system interactions. It uses the `shell` and `file-system` plugins to execute commands and manage files.
+Specialized in low-level system interactions. It uses the `shell` and `file-system` plugins to execute commands and manage files. (Implementation: `src/agents/system.ts`)
 
 ### Topic Agent (`topic`)
-A background agent that observes completions from the Manager and automatically generates concise titles for chat threads.
+A utility agent that observes completions and automatically generates concise titles for conversations to keep the workspace organized.
 
 ### Codex Agent (`codex`)
-A world-class software engineer and coding assistant powered by OpenAI. It helps with high-level architectural decisions, code refactoring, complex logic implementation, and debugging. It has access to the shell and file system to explore and modify your codebase.
+A world-class software engineer agent. It assists with architectural decisions, refactoring, and debugging, with full access to the development environment.
 
 ## YAML Agents
 
@@ -25,7 +28,7 @@ You can easily install official agents using the CLI:
 openbot add codex
 ```
 
-This will automatically download the agent from the official `meetopenbot` GitHub organization and install it into your local agents directory.
+This will automatically download the agent and install it into your local agents directory.
 
 Example `codex.yaml`:
 ```yaml
@@ -68,7 +71,7 @@ export const agent: TSAgentDefinition = {
       model,
       system: "You are a specialized TS Agent...",
       toolDefinitions: { /* custom tools */ },
-      // I/O defaults to standardized: agent:input / agent:output
+      // I/O defaults to standardized: user:input / agent:output
     }));
   },
   capabilities: {
