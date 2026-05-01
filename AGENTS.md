@@ -34,7 +34,7 @@ OpenBot is a local-first platform for multi-agent orchestration and coordination
 
 - The server is event-first: treat HTTP routes as entry points into the event pipeline.
 - Follow Melony's event flow: `Event -> Handler -> Events`.
-- Keep the public API constrained to the three endpoints: `GET /api/events`, `POST /api/publish`, `GET /api/state`.
+- Keep the public API constrained to the three existing endpoints: `GET /api/events`, `POST /api/publish`, `GET /api/state`. Never introduce new endpoints; all functionality must be modeled through the event system.
 - Plugin changes belong in `src/plugins/*`.
 - Agent behavior and orchestration belong in agent/runtime layers, not UI code.
 - For tool-calling flows, ensure completion/result events are emitted consistently.
