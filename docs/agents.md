@@ -28,7 +28,7 @@ You can easily install official agents using the CLI:
 openbot add codex
 ```
 
-This will automatically download the agent from the official `meetopenbot` GitHub organization and install it into your local agents directory.
+This will automatically download the agent and install it into your local agents directory.
 
 Example `codex.yaml`:
 ```yaml

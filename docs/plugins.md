@@ -68,12 +68,6 @@ For official plugins, you can use the `add` command:
 openbot add search
 ```
 
-For community or custom plugins, you can use the `plugin install` command with a full GitHub repository path or local path:
-
-```bash
-openbot plugin install openbot-ai/plugin-web-search
-```
-
 ## Creating a Plugin
 
 A plugin is typically a Node.js package that exports:

@@ -7,12 +7,12 @@
     "node": ">=20.12.0"
   },
   "scripts": {
-    "dev": "tsx watch src/app/cli.ts server",
+    "dev": "tsx watch src/app/cli.ts start",
     "build": "tsc",
-    "start": "node dist/app/cli.js server"
+    "start": "node dist/app/cli.js start"
   },
   "bin": {
-    "openbot": "./dist/app/cli.js"
+    "openbot": "./dist/app/cli.js start"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.33",

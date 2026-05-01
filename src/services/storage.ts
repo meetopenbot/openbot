@@ -830,9 +830,18 @@ export const storageService = {
       throw error;
     }
   },
-  getVariables: async (): Promise<Record<string, string>> => {
+  getVariables: async (): Promise<Record<string, string | { value: string; secret: boolean }>> => {
     const variablesFilePath = resolvePath(resolveBaseDir() + '/' + VARIABLES_FILE);
-    const raw = await readJsonFile<unknown>(variablesFilePath, {});
+    const raw = await readJsonFile<any>(variablesFilePath, {});
+
+    if (raw && typeof raw === 'object' && 'variables' in raw && Array.isArray(raw.variables)) {
+      const entries = (raw.variables as StoredVariable[])
+        .filter((v) => typeof v?.key === 'string')
+        .map((v) => [v.key, { value: String(v.value ?? ''), secret: !!v.secret }] as const);
+      return Object.fromEntries(entries);
+    }
+
+    // Legacy or simple format
     return toVariablesRecord(raw);
   },
 

@@ -142,7 +142,7 @@ export interface Storage {
     threadId: string;
     spec: string;
   }) => Promise<void>;
-  getVariables: () => Promise<Record<string, string>>;
+  getVariables: () => Promise<Record<string, string | { value: string; secret: boolean }>>;
   listFiles: (options: {
     channelId: string;
     path?: string;
@@ -409,10 +409,20 @@ export const storagePlugin =
 
     builder.on('action:storage:get-variables', async function* () {
       const variables = await storage.getVariables();
+      const maskedVariables: Record<string, string> = {};
+
+      for (const [key, val] of Object.entries(variables)) {
+        if (typeof val === 'object' && val !== null && val.secret) {
+          maskedVariables[key] = '********';
+        } else {
+          maskedVariables[key] = typeof val === 'string' ? val : val.value;
+        }
+      }
+
       yield {
         type: 'action:storage:get-variables-result',
-        data: { variables },
-      };
+        data: { variables: maskedVariables },
+      } as any;
     });
 
     builder.on('action:storage:patch-channel-state', async function* (event, state) {

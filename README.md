@@ -85,26 +85,14 @@ Unlike most chatbots, OpenBot has a long-term memory. It can:
 Get up and running in seconds:
 
 ```bash
-# 1. One-line installer
-curl -fsSL https://raw.githubusercontent.com/meetopenbot/openbot/main/install.sh | bash
-
-# 2. Install OpenBot globally (manual)
+# 1. Install OpenBot globally
 npm i -g openbot
 
-# 3. Start the server
-openbot server
-
-# 4. Launch the web UI (in a new terminal)
-npx openbot-web
+# 2. Start the harness
+openbot start
 ```
 
-Prefer a single command? Run both server and web together:
-
-```bash
-openbot up
-```
-
-Once the UI is open, head to the **Settings** tab to configure your AI providers (OpenAI, Anthropic, etc.). No configuration files required.
+Once the harness is running, you can interact with it via the API or your preferred client. Head to the **Settings** to configure your AI providers (OpenAI, Anthropic, etc.).
 
 ### 🌍 Want to browse the web?
 

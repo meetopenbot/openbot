@@ -28,8 +28,8 @@ checkNodeVersion();
 program.name('openbot').description('OpenBot CLI').version('0.2.12');
 
 program
-  .command('server')
-  .description('Start the OpenBot server')
+  .command('start')
+  .description('Start the OpenBot harness')
   .option('-p, --port <number>', 'Port to listen on')
   .action(async (options) => {
     await startServer(options);

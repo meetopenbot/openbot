@@ -1,11 +1,14 @@
 # Architecture
 
-OpenBot is an orchestration platform built on a modular, event-driven architecture. It leverages the `melony` framework to coordinate interactions between multiple specialized agents.
+OpenBot is an orchestration platform built on a modular, event-driven architecture. It leverages the `melony` framework to coordinate interactions between multiple specialized agents via a standardized **Agent Harness**.
 
 ## Core Components
 
-### 1. Agent Orchestration & Routing
-The orchestrator is the central dispatcher. It receives user input and determines how to delegate tasks across the agent network using the following logic:
+### 1. Agent Harness
+The Harness is the execution environment for agents. It provides the necessary "plumbing" (storage, communication, tools) so the agent can focus on reasoning. It handles event routing and state management.
+
+### 2. Agent Orchestration & Routing
+The orchestrator is the central dispatcher within the harness. It receives user input and determines how to delegate tasks across the agent network using the following logic:
 
 1. **Command Prefix** — Explicit delegation to a specific agent (e.g., `/os list files`).
 2. **DM context** — Direct communication with a specific agent.

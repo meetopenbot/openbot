@@ -138,7 +138,7 @@ export type GetVariablesEvent = BaseEvent & {
 export type GetVariablesResultEvent = BaseEvent & {
   type: 'action:storage:get-variables-result';
   data: {
-    variables: Record<string, string>;
+    variables: Record<string, string | { value: string; secret: boolean }>;
   };
 };
 
