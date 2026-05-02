@@ -1,6 +1,6 @@
 {
   "name": "openbot",
-  "version": "0.2.12",
+  "version": "0.2.14",
   "private": false,
   "type": "module",
   "engines": {
@@ -12,7 +12,7 @@
     "start": "node dist/app/cli.js start"
   },
   "bin": {
-    "openbot": "./dist/app/cli.js start"
+    "openbot": "./dist/app/cli.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.33",
