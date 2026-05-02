@@ -245,7 +245,9 @@ export const orchestratorService = {
     }
 
     if (iterations >= MAX_ITERATIONS) {
-      console.warn(`[orchestrator] Reached MAX_ITERATIONS (${MAX_ITERATIONS}). Stopping execution.`);
+      console.warn(
+        `[orchestrator] Reached MAX_ITERATIONS (${MAX_ITERATIONS}). Stopping execution.`,
+      );
     }
   },
 
@@ -284,8 +286,6 @@ export const orchestratorService = {
     }
     const agentRuntime = await createAgentRuntime(agentState);
 
-    let hasProducedOutput = false;
-
     await onEvent(
       {
         type: 'agent:run:start',
@@ -302,12 +302,8 @@ export const orchestratorService = {
     try {
       // RUN the agent runtime
       for await (const chunk of agentRuntime.run(event, { state: agentState, runId })) {
-        if (chunk.type === 'agent:output') {
-          hasProducedOutput = true;
-          chunk.meta = { ...chunk.meta, agentId };
-        } else if (chunk.type.startsWith('action:')) {
-          hasProducedOutput = true;
-        }
+        chunk.meta = { ...chunk.meta, agentId };
+
         await onEvent(chunk, agentState);
       }
     } finally {
@@ -320,20 +316,6 @@ export const orchestratorService = {
             channelId,
             threadId,
           },
-        },
-        agentState,
-      );
-    }
-
-    // Fallback for agents that don't produce output (e.g. misconfigured or silent)
-    if (event.type === 'agent:invoke' && !hasProducedOutput) {
-      const warning = `⚠️ **${agentId}** is not configured to handle inputs. Please check its plugin configuration.`;
-
-      await onEvent(
-        {
-          type: 'agent:output',
-          data: { content: warning },
-          meta: { agentId },
         },
         agentState,
       );

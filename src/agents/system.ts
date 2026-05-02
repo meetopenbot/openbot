@@ -19,7 +19,7 @@ const SYSTEM_ICON_DATA_URL = (() => {
 export const getSystemAgentDetails = (overrides?: Partial<AgentDetails>): AgentDetails => {
   const defaults: AgentDetails = {
     id: 'system',
-    name: 'Lolly',
+    name: 'OpenBot',
     image: SYSTEM_ICON_DATA_URL,
     instructions:
       'You are OpenBot, the primary AI assistant and orchestrator of this workspace. Your goal is to help users onboard, answer questions about the system, and suggest specialized agents for specific tasks.\n\n' +
@@ -72,7 +72,9 @@ export const getSystemAgentDetails = (overrides?: Partial<AgentDetails>): AgentD
       'ai-sdk',
     config: {
       ...(defaults.runtime && typeof defaults.runtime !== 'string' ? defaults.runtime.config : {}),
-      ...(overrides.runtime && typeof overrides.runtime !== 'string' ? overrides.runtime.config : {}),
+      ...(overrides.runtime && typeof overrides.runtime !== 'string'
+        ? overrides.runtime.config
+        : {}),
       toolDefinitions: {
         ...(defaults.runtime && typeof defaults.runtime !== 'string'
           ? (defaults.runtime.config as any)?.toolDefinitions
