@@ -4,6 +4,9 @@ import cors from 'cors';
 import z from 'zod';
 import path from 'path';
 import fs from 'fs/promises';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pkg = require('../../package.json');
 import { generateId } from 'melony';
 import { DEFAULT_BASE_DIR, loadConfig, loadVariables, resolvePath } from '../app/config.js';
 import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
@@ -115,6 +118,10 @@ export async function startServer(options: ServerOptions = {}) {
 
   app.use(cors());
   app.use(express.json({ limit: '20mb' }));
+
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', version: pkg.version });
+  });
 
   app.get('/api/events', (req, res) => {
     const { channelId, threadId } = getContext(req);
@@ -277,8 +284,9 @@ export async function startServer(options: ServerOptions = {}) {
 
   app.listen(PORT, () => {
     console.log(`\x1b[32mOpenBot server listening at http://localhost:${PORT}\x1b[0m`);
-    console.log(`  - Events endpoint: GET /events (SSE)`);
-    console.log(`  - Publish endpoint: POST /publish`);
-    console.log(`  - State endpoint: GET /state`);
+    console.log(`  - Health endpoint: GET /health`);
+    console.log(`  - Events endpoint: GET /api/events (SSE)`);
+    console.log(`  - Publish endpoint: POST /api/publish`);
+    console.log(`  - State endpoint: GET /api/state`);
   });
 }
