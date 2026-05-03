@@ -123,6 +123,61 @@ export type GetAgentDetailsResultEvent = BaseEvent & {
   };
 };
 
+export type CreateAgentEvent = BaseEvent & {
+  type: 'action:storage:create-agent';
+  data: {
+    agentId: string;
+    name: string;
+    description?: string;
+    instructions: string;
+    plugins?: AgentDetails['plugins'];
+    runtime?: AgentDetails['runtime'];
+  };
+};
+
+export type CreateAgentResultEvent = BaseEvent & {
+  type: 'action:storage:create-agent-result';
+  data: {
+    success: boolean;
+    error?: string;
+  };
+};
+
+export type UpdateAgentEvent = BaseEvent & {
+  type: 'action:storage:update-agent';
+  data: {
+    agentId: string;
+    name?: string;
+    description?: string;
+    instructions?: string;
+    plugins?: AgentDetails['plugins'];
+    runtime?: AgentDetails['runtime'];
+  };
+};
+
+export type UpdateAgentResultEvent = BaseEvent & {
+  type: 'action:storage:update-agent-result';
+  data: {
+    success: boolean;
+    error?: string;
+  };
+};
+
+export type DeleteAgentEvent = BaseEvent & {
+  type: 'action:storage:delete-agent';
+  data: {
+    agentId: string;
+  };
+};
+
+export type DeleteAgentResultEvent = BaseEvent & {
+  type: 'action:storage:delete-agent-result';
+  data: {
+    success: boolean;
+    error?: string;
+  };
+};
+
 export type StreamThreadEvent = BaseEvent & {
   type: 'stream:thread';
   data: {
@@ -597,6 +652,12 @@ export type OpenBotEvent =
   | GetPluginsResultEvent
   | GetAgentDetailsEvent
   | GetAgentDetailsResultEvent
+  | CreateAgentEvent
+  | CreateAgentResultEvent
+  | UpdateAgentEvent
+  | UpdateAgentResultEvent
+  | DeleteAgentEvent
+  | DeleteAgentResultEvent
   | GetEventsEvent
   | GetEventsResultEvent
   | StreamThreadEvent

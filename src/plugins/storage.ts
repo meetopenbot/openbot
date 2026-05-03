@@ -115,6 +115,23 @@ export interface Storage {
   getAgents: () => Promise<Agent[]>;
   getPlugins: () => Promise<Plugin[]>;
   getAgentDetails: ({ agentId }: { agentId: string }) => Promise<AgentDetails>;
+  createAgent: (args: {
+    agentId: string;
+    name: string;
+    description?: string;
+    instructions: string;
+    plugins?: AgentDetails['plugins'];
+    runtime?: AgentDetails['runtime'];
+  }) => Promise<void>;
+  updateAgent: (args: {
+    agentId: string;
+    name?: string;
+    description?: string;
+    instructions?: string;
+    plugins?: AgentDetails['plugins'];
+    runtime?: AgentDetails['runtime'];
+  }) => Promise<void>;
+  deleteAgent: ({ agentId }: { agentId: string }) => Promise<void>;
   getEvents: ({
     channelId,
     threadId,
@@ -404,11 +421,93 @@ export const storagePlugin =
     });
 
     builder.on('action:storage:get-agent-details', async function* (event, state) {
-      const agentDetails = await storage.getAgentDetails({ agentId: event.data.agentId });
-      yield {
-        type: 'action:storage:get-agent-details-result',
-        data: { agentDetails },
-      };
+      try {
+        const agentDetails = await storage.getAgentDetails({ agentId: event.data.agentId });
+        yield {
+          type: 'action:storage:get-agent-details-result',
+          data: { agentDetails },
+        };
+      } catch (error) {
+        console.error(`[storage] Failed to get agent details for ${event.data.agentId}`, error);
+        yield {
+          type: 'action:storage:get-agent-details-result',
+          data: {
+            agentDetails: null as any,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    });
+
+    builder.on('action:storage:create-agent', async function* (event) {
+      try {
+        const { agentId, name, description, instructions, plugins, runtime } = event.data;
+        await storage.createAgent({
+          agentId,
+          name,
+          description,
+          instructions,
+          plugins,
+          runtime,
+        });
+        yield {
+          type: 'action:storage:create-agent-result',
+          data: { success: true },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:storage:create-agent-result',
+          data: {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    });
+
+    builder.on('action:storage:update-agent', async function* (event) {
+      try {
+        const { agentId, name, description, instructions, plugins, runtime } = event.data;
+        await storage.updateAgent({
+          agentId,
+          name,
+          description,
+          instructions,
+          plugins,
+          runtime,
+        });
+        yield {
+          type: 'action:storage:update-agent-result',
+          data: { success: true },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:storage:update-agent-result',
+          data: {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    });
+
+    builder.on('action:storage:delete-agent', async function* (event) {
+      try {
+        const { agentId } = event.data;
+        await storage.deleteAgent({ agentId });
+        yield {
+          type: 'action:storage:delete-agent-result',
+          data: { success: true },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:storage:delete-agent-result',
+          data: {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
     });
 
     builder.on('action:storage:get-events', async function* (_, state) {

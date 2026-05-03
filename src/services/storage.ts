@@ -105,6 +105,22 @@ const getConversationDir = (channelId: string, threadId?: string) => {
   return threadId ? `${base}/threads/${threadId}` : base;
 };
 
+const RESERVED_DISK_AGENT_IDS = new Set(['system']);
+
+const assertValidDiskAgentId = (agentId: string): void => {
+  if (!agentId || typeof agentId !== 'string') {
+    throw new Error('agentId is required');
+  }
+  if (RESERVED_DISK_AGENT_IDS.has(agentId)) {
+    throw new Error(`Agent id "${agentId}" is reserved`);
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) {
+    throw new Error('agentId must contain only letters, digits, underscores, and hyphens');
+  }
+};
+
+const getAgentsRootDir = () => path.join(resolveBaseDir(), DEFAULT_AGENTS_DIR);
+
 const getLastReadFilePath = () =>
   path.join(resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR), '_meta', 'last-read.json');
 
@@ -695,6 +711,8 @@ export const storageService = {
       const { data, content: instructions } = matter(agentMd);
       const discoveredImage = await resolveEntityImageDataUrl(agentDir);
 
+      const stats = await fs.stat(agentMdPath);
+
       diskDetails = {
         id: agentId,
         name: data.name || agentId,
@@ -703,8 +721,8 @@ export const storageService = {
         plugins: data.plugins || [],
         description: data.description || '',
         image: discoveredImage || undefined,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: stats.birthtime,
+        updatedAt: stats.mtime,
       };
     } catch (error) {
       if (agentId !== 'system') {
@@ -725,6 +743,135 @@ export const storageService = {
     }
 
     return diskDetails as AgentDetails;
+  },
+  createAgent: async ({
+    agentId,
+    name,
+    description = '',
+    instructions,
+    plugins,
+    runtime,
+  }: {
+    agentId: string;
+    name: string;
+    description?: string;
+    instructions: string;
+    plugins?: AgentDetails['plugins'];
+    runtime?: AgentDetails['runtime'];
+  }): Promise<void> => {
+    assertValidDiskAgentId(agentId);
+    const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
+    const agentMdPath = path.join(agentDir, 'AGENT.md');
+
+    try {
+      await fs.access(agentMdPath);
+      throw new Error(`Agent "${agentId}" already exists`);
+    } catch (error: unknown) {
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code === 'ENOENT') {
+        // proceed
+      } else if (error instanceof Error && error.message.includes('already exists')) {
+        throw error;
+      } else {
+        throw error;
+      }
+    }
+
+    await fs.mkdir(agentDir, { recursive: true });
+
+    const data: Record<string, unknown> = { name, description };
+    if (plugins !== undefined) data.plugins = plugins;
+    if (runtime !== undefined) data.runtime = runtime;
+
+    const body = matter.stringify(`${instructions.trim()}\n`, data);
+    await fs.writeFile(agentMdPath, body, 'utf-8');
+  },
+  updateAgent: async ({
+    agentId,
+    name,
+    description,
+    instructions,
+    plugins,
+    runtime,
+  }: {
+    agentId: string;
+    name?: string;
+    description?: string;
+    instructions?: string;
+    plugins?: AgentDetails['plugins'];
+    runtime?: AgentDetails['runtime'];
+  }): Promise<void> => {
+    assertValidDiskAgentId(agentId);
+    const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
+    const agentMdPath = path.join(agentDir, 'AGENT.md');
+
+    let raw: string;
+    try {
+      raw = await fs.readFile(agentMdPath, 'utf-8');
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        const err = new Error(`Agent "${agentId}" does not exist.`);
+        (err as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
+        throw err;
+      }
+      throw error;
+    }
+
+    const parsed = matter(raw);
+    const nextData: Record<string, unknown> = { ...parsed.data };
+    if (name !== undefined) nextData.name = name;
+    if (description !== undefined) nextData.description = description;
+    if (plugins !== undefined) nextData.plugins = plugins;
+    if (runtime !== undefined) nextData.runtime = runtime;
+
+    const nextContent = instructions !== undefined ? instructions : parsed.content;
+    const body = matter.stringify(`${String(nextContent).trim()}\n`, nextData);
+    await fs.writeFile(agentMdPath, body, 'utf-8');
+  },
+  deleteAgent: async ({ agentId }: { agentId: string }): Promise<void> => {
+    assertValidDiskAgentId(agentId);
+    const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
+    const agentMdPath = path.join(agentDir, 'AGENT.md');
+    const packageJsonPath = path.join(agentDir, 'package.json');
+
+    try {
+      await fs.access(agentDir);
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        const err = new Error(`Agent "${agentId}" does not exist.`);
+        (err as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
+        throw err;
+      }
+      throw error;
+    }
+
+    let hasPackage = false;
+    let hasAgentMd = false;
+    try {
+      await fs.access(packageJsonPath);
+      hasPackage = true;
+    } catch {
+      // ignore
+    }
+    try {
+      await fs.access(agentMdPath);
+      hasAgentMd = true;
+    } catch {
+      // ignore
+    }
+
+    if (hasPackage && !hasAgentMd) {
+      throw new Error(
+        `Cannot delete TypeScript agent package "${agentId}" through this action; remove the folder manually.`,
+      );
+    }
+    if (!hasAgentMd) {
+      throw new Error(
+        `Agent "${agentId}" has no AGENT.md and cannot be deleted through this action.`,
+      );
+    }
+
+    await fs.rm(agentDir, { recursive: true, force: true });
   },
   getEvents: async ({
     channelId,
