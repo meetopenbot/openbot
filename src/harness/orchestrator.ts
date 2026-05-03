@@ -1,5 +1,5 @@
 import { melony, Runtime } from 'melony';
-import { AgentInvokeEvent, OpenBotEvent, OpenBotState } from '../app/types.js';
+import { AgentInvokeEvent, DelegationRequestEvent, OpenBotEvent, OpenBotState } from '../app/types.js';
 import { resolvePlugin } from '../registry/plugins.js';
 import { storageService } from '../services/storage.js';
 import { ensureEventId } from '../app/utils.js';
@@ -207,35 +207,33 @@ export const orchestratorService = {
             currentThreadId = chunk.data.threadId || currentThreadId;
           }
 
-          // 2. Detect delegations to queue them for the next iteration
-          let targetAgentId: string | null = null;
-          let targetEvent: OpenBotEvent | null = null;
-
-          if (
-            chunk.type === 'agent:invoke' &&
-            chunk.data.agentId &&
-            chunk.data.agentId !== agentId
-          ) {
-            targetAgentId = chunk.data.agentId;
-            targetEvent = {
-              ...chunk,
-              meta: {
-                ...(chunk.meta || {}),
-                threadId: currentThreadId,
-              },
-            };
+          // 2. Delegation routing (delegation:request is internal — not forwarded to clients/storage)
+          if (chunk.type === 'delegation:request') {
+            const d = chunk as DelegationRequestEvent;
+            const targetAgentId = d.data?.agentId;
+            if (
+              targetAgentId &&
+              targetAgentId !== agentId &&
+              !queuedAgents.has(targetAgentId)
+            ) {
+              queuedAgents.add(targetAgentId);
+              const targetEvent = ensureEventId({
+                type: 'agent:invoke',
+                data: {
+                  role: 'user',
+                  content: d.data.content,
+                },
+                meta: {
+                  ...(d.meta || {}),
+                  threadId: currentThreadId,
+                },
+              } satisfies AgentInvokeEvent) as AgentInvokeEvent;
+              delegations.push({ agentId: targetAgentId, event: targetEvent });
+            }
+            return;
           }
 
-          // 3. Queue only if not already queued in this step
-          if (targetAgentId && targetEvent && !queuedAgents.has(targetAgentId)) {
-            queuedAgents.add(targetAgentId);
-            delegations.push({
-              agentId: targetAgentId,
-              event: targetEvent,
-            });
-          }
-
-          // Propagate all events
+          // Propagate all other events
           await onEvent(chunk, state);
         },
       });

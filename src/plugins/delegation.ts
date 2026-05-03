@@ -22,13 +22,10 @@ export const delegationPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => 
       },
     };
 
-    // 2. Trigger the linear execution loop in orchestratorService
+    // 2. Orchestrator turns this into a real agent:invoke for the target (avoids Melony re-dispatching invoke on the current runtime).
     yield {
-      type: 'agent:invoke',
-      data: {
-        agentId,
-        content,
-      },
+      type: 'delegation:request',
+      data: { agentId, content },
       meta: {
         ...(event.meta || {}),
         agentId: context.state.agentId,

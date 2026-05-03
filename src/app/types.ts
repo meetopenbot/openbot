@@ -487,6 +487,16 @@ export type DelegateEvent = BaseEvent & {
   };
 };
 
+/** Internal routing: delegation plugin → orchestrator only (not stored or broadcast). */
+export type DelegationRequestEvent = BaseEvent & {
+  type: 'delegation:request';
+  data: {
+    agentId: string;
+    content: string;
+  };
+  meta?: Record<string, unknown>;
+};
+
 export type MCPListToolsEvent = BaseEvent & {
   type: 'action:mcp_list_tools';
   data: {
@@ -618,6 +628,7 @@ export type OpenBotEvent =
   | RenderUIWidgetEvent
   | UIWidgetResponseEvent
   | DelegateEvent
+  | DelegationRequestEvent
   | MCPListToolsEvent
   | MCPListToolsResultEvent
   | MCPCallEvent

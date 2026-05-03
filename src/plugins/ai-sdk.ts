@@ -134,6 +134,12 @@ export const aiSdkPlugin =
     const model = resolveModel(modelString);
 
     builder.on('agent:invoke', async function* (event, context) {
+      // if the agent:invoke is routed to a different agent, don't process it, it prevents infinite loops
+      const routedTo = (event as { data?: { agentId?: string } }).data?.agentId;
+      if (typeof routedTo === 'string' && routedTo && routedTo !== context.state.agentId) {
+        return;
+      }
+
       // extract threadId if model decides to reply in a thread
       const threadId = event.meta?.threadId || context.state.threadId;
       const systemPrompt = await buildSystemPrompt(context.state, system, context, storage);
