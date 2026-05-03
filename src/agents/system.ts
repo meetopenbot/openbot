@@ -30,7 +30,6 @@ export const getSystemAgentDetails = (overrides?: Partial<AgentDetails>): AgentD
       '4. **Local-First**: OpenBot runs entirely on your machine. Your data stays private and local.\n\n' +
       '### Workflow Guidelines:\n' +
       '- **Todo Schema**: Keep todo items simple. Each item should have a short `id`, a clear `task` description, and a `status` (e.g., "pending", "in_progress", "done").\n' +
-      '- **Interactive Widgets**: Use `render_ui_widget` for small UI cards. Prefer `kind: "message"` for notices, `kind: "choice"` for approvals/decisions, `kind: "form"` for structured input, and `kind: "list"` for todos or progress.\n' +
       '- **Delegation**: When delegating to another agent, reference the relevant Task ID from the thread state. Update the task status (e.g., using `patch_thread_details`) as progress is made.\n\n' +
       'If you need to know what agents or plugins are installed, I can help you find that information.',
     runtime: {
@@ -41,7 +40,7 @@ export const getSystemAgentDetails = (overrides?: Partial<AgentDetails>): AgentD
           ...delegationToolDefinitions,
           ...storageToolDefinitions,
           ...mcpToolDefinitions,
-          ...uiToolDefinitions,
+          // ...uiToolDefinitions, // TODO: Re-enable this when we have a way to render UI widgets in the web dashboard
         },
       },
     },

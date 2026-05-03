@@ -142,6 +142,38 @@ export type GetVariablesResultEvent = BaseEvent & {
   };
 };
 
+export type CreateVariableEvent = BaseEvent & {
+  type: 'action:storage:create-variable';
+  data: {
+    key: string;
+    value: string;
+    secret?: boolean;
+  };
+};
+
+export type CreateVariableResultEvent = BaseEvent & {
+  type: 'action:storage:create-variable-result';
+  data: {
+    success: boolean;
+    error?: string;
+  };
+};
+
+export type DeleteVariableEvent = BaseEvent & {
+  type: 'action:storage:delete-variable';
+  data: {
+    key: string;
+  };
+};
+
+export type DeleteVariableResultEvent = BaseEvent & {
+  type: 'action:storage:delete-variable-result';
+  data: {
+    success: boolean;
+    error?: string;
+  };
+};
+
 export type PatchChannelStateEvent = BaseEvent & {
   type: 'action:storage:patch-channel-state';
   data: {
@@ -423,6 +455,10 @@ export type RenderUIWidgetData =
 export type UIWidgetEvent = BaseEvent & {
   type: 'client:ui:widget';
   data: UIWidgetSpec;
+  meta: {
+    agentId: string;
+    threadId?: string;
+  };
 };
 
 export type RenderUIWidgetEvent = BaseEvent & {
@@ -524,6 +560,10 @@ export type OpenBotEvent =
   | StreamThreadEvent
   | GetVariablesEvent
   | GetVariablesResultEvent
+  | CreateVariableEvent
+  | CreateVariableResultEvent
+  | DeleteVariableEvent
+  | DeleteVariableResultEvent
   | PatchChannelStateEvent
   | PatchChannelStateResultEvent
   | PatchThreadStateEvent

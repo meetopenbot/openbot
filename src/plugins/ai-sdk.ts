@@ -205,7 +205,7 @@ export const aiSdkPlugin =
               kind: 'form',
               widgetId: `api_key_request_${Date.now()}`,
               title: `${provider.toUpperCase()} API Key Required`,
-              description: `The ${provider} API returned an authentication error. Please provide a valid API key to continue.`,
+              description: `The ${provider} API returned an authentication error. Please provide a valid API key to continue. The key provided here never leaves your runtime Computer.`,
               fields: [
                 {
                   id: 'apiKey',
@@ -232,6 +232,57 @@ export const aiSdkPlugin =
 
         // Re-throw other errors
         throw error;
+      }
+    });
+
+    builder.on('client:ui:widget:response', async function* (event, context) {
+      const { metadata, values } = event.data;
+
+      if (metadata?.type === 'api_key_request' && values?.apiKey) {
+        const key = metadata.envVar as string;
+        const value = values.apiKey as string;
+
+        if (storage) {
+          try {
+            await storage.createVariable({ key, value, secret: true });
+
+            yield {
+              type: 'agent:output',
+              data: {
+                content: `Successfully saved ${metadata.provider} API key to workspace variables.`,
+              },
+              meta: {
+                agentId: context.state.agentId,
+              },
+            };
+
+            // Update the widget to show success
+            yield {
+              type: 'client:ui:widget',
+              data: {
+                widgetId: event.data.widgetId,
+                kind: 'message',
+                title: 'API Key Saved',
+                body: `Successfully saved ${metadata.provider} API key. You can now continue your conversation.`,
+                state: 'submitted',
+                actions: [{ id: 'ok', label: 'Got it', variant: 'primary' }],
+              },
+              meta: {
+                agentId: context.state.agentId,
+              },
+            };
+          } catch (error) {
+            yield {
+              type: 'agent:output',
+              data: {
+                content: `Failed to save API key: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              },
+              meta: {
+                agentId: context.state.agentId,
+              },
+            };
+          }
+        }
       }
     });
   };

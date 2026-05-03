@@ -24,6 +24,7 @@ import {
 } from '../plugins/storage.js';
 import { getSystemAgentDetails } from '../agents/system.js';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
+import { processService } from '../harness/process.js';
 import { pathToFileURL } from 'node:url';
 
 const mapNameToPlugin = (
@@ -843,6 +844,77 @@ export const storageService = {
 
     // Legacy or simple format
     return toVariablesRecord(raw);
+  },
+
+  createVariable: async ({
+    key,
+    value,
+    secret = false,
+  }: {
+    key: string;
+    value: string;
+    secret?: boolean;
+  }): Promise<void> => {
+    const variablesFilePath = resolvePath(resolveBaseDir() + '/' + VARIABLES_FILE);
+    const raw = await readJsonFile<any>(variablesFilePath, { version: 1, variables: [] });
+
+    let variables: StoredVariable[] = [];
+    if (raw && typeof raw === 'object' && 'variables' in raw && Array.isArray(raw.variables)) {
+      variables = raw.variables as StoredVariable[];
+    } else {
+      // Convert legacy format to new format
+      variables = Object.entries(toVariablesRecord(raw)).map(([k, v]) => ({
+        key: k,
+        value: v,
+        secret: false,
+      }));
+    }
+
+    const existingIndex = variables.findIndex((v) => v.key === key);
+    if (existingIndex !== -1) {
+      variables[existingIndex] = { key, value, secret };
+    } else {
+      variables.push({ key, value, secret });
+    }
+
+    await fs.mkdir(path.dirname(variablesFilePath), { recursive: true });
+    await fs.writeFile(
+      variablesFilePath,
+      JSON.stringify({ version: 1, variables }, null, 2),
+      'utf-8',
+    );
+    processService.syncWorkspaceVariablesToProcessEnv();
+  },
+
+  deleteVariable: async ({ key }: { key: string }): Promise<void> => {
+    const variablesFilePath = resolvePath(resolveBaseDir() + '/' + VARIABLES_FILE);
+    const raw = await readJsonFile<any>(variablesFilePath, { version: 1, variables: [] });
+
+    let variables: StoredVariable[] = [];
+    if (raw && typeof raw === 'object' && 'variables' in raw && Array.isArray(raw.variables)) {
+      variables = raw.variables as StoredVariable[];
+    } else {
+      // Convert legacy format to new format
+      variables = Object.entries(toVariablesRecord(raw)).map(([k, v]) => ({
+        key: k,
+        value: v,
+        secret: false,
+      }));
+    }
+
+    const newVariables = variables.filter((v) => v.key !== key);
+
+    if (newVariables.length === variables.length) {
+      return; // Nothing to delete
+    }
+
+    await fs.mkdir(path.dirname(variablesFilePath), { recursive: true });
+    await fs.writeFile(
+      variablesFilePath,
+      JSON.stringify({ version: 1, variables: newVariables }, null, 2),
+      'utf-8',
+    );
+    processService.syncWorkspaceVariablesToProcessEnv();
   },
 
   listFiles: async ({

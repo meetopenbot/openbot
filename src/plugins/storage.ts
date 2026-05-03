@@ -143,6 +143,16 @@ export interface Storage {
     spec: string;
   }) => Promise<void>;
   getVariables: () => Promise<Record<string, string | { value: string; secret: boolean }>>;
+  createVariable: ({
+    key,
+    value,
+    secret,
+  }: {
+    key: string;
+    value: string;
+    secret?: boolean;
+  }) => Promise<void>;
+  deleteVariable: ({ key }: { key: string }) => Promise<void>;
   listFiles: (options: {
     channelId: string;
     path?: string;
@@ -223,6 +233,20 @@ export const storageToolDefinitions = {
       .refine((value) => value.state !== undefined || value.spec !== undefined, {
         message: 'Provide at least one of state or spec.',
       }),
+  },
+  create_variable: {
+    description: 'Create or update a variable in the workspace storage.',
+    inputSchema: z.object({
+      key: z.string().describe('The key of the variable.'),
+      value: z.string().describe('The value of the variable.'),
+      secret: z.boolean().optional().describe('Whether the variable is a secret.'),
+    }),
+  },
+  delete_variable: {
+    description: 'Delete a variable from the workspace storage.',
+    inputSchema: z.object({
+      key: z.string().describe('The key of the variable to delete.'),
+    }),
   },
 };
 
@@ -423,6 +447,44 @@ export const storagePlugin =
         type: 'action:storage:get-variables-result',
         data: { variables: maskedVariables },
       } as any;
+    });
+
+    builder.on('action:storage:create-variable', async function* (event) {
+      try {
+        const { key, value, secret } = event.data;
+        await storage.createVariable({ key, value, secret });
+        yield {
+          type: 'action:storage:create-variable-result',
+          data: { success: true },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:storage:create-variable-result',
+          data: {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    });
+
+    builder.on('action:storage:delete-variable', async function* (event) {
+      try {
+        const { key } = event.data;
+        await storage.deleteVariable({ key });
+        yield {
+          type: 'action:storage:delete-variable-result',
+          data: { success: true },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:storage:delete-variable-result',
+          data: {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
     });
 
     builder.on('action:storage:patch-channel-state', async function* (event, state) {

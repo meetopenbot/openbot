@@ -72,7 +72,11 @@ export function isConfigured(): boolean {
 }
 
 export function loadVariables(): { version: number; variables: StoredVariable[] } {
-  const variablesPath = path.join(resolvePath(DEFAULT_BASE_DIR), VARIABLES_FILE);
+  const config = loadConfig();
+  const variablesPath = path.join(
+    resolvePath(config.baseDir || DEFAULT_BASE_DIR),
+    VARIABLES_FILE,
+  );
   if (fs.existsSync(variablesPath)) {
     return JSON.parse(fs.readFileSync(variablesPath, 'utf-8')) as {
       version: number;

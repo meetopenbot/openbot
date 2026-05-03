@@ -8,7 +8,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json');
 import { generateId } from 'melony';
-import { DEFAULT_BASE_DIR, loadConfig, loadVariables, resolvePath } from '../app/config.js';
+import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
 import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
 import { processService } from '../harness/process.js';
 import { storageService } from '../services/storage.js';
@@ -31,9 +31,7 @@ export async function startServer(options: ServerOptions = {}) {
     .passthrough();
 
   const config = loadConfig();
-  const variables = loadVariables();
-
-  processService.applyVariablesToProcessEnv(variables.variables);
+  processService.syncWorkspaceVariablesToProcessEnv();
 
   const baseDir = config.baseDir || DEFAULT_BASE_DIR;
   const openBotDir = resolvePath(baseDir);
