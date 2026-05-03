@@ -1,6 +1,7 @@
 import { MelonyPlugin } from 'melony';
 import { OpenBotState, OpenBotEvent } from '../app/types.js';
 import { storageService } from '../services/storage.js';
+import { pluginService } from '../services/plugins.js';
 import z from 'zod';
 
 export type PluginKind = 'runtime' | 'tool';
@@ -774,6 +775,38 @@ export const storagePlugin =
             path: filePath,
             error: error instanceof Error ? error.message : 'Unknown error',
           },
+        };
+      }
+    });
+
+    builder.on('action:plugin:install', async function* (event) {
+      try {
+        const { name, version } = event.data;
+        const result = await pluginService.installPlugin({ packageName: name, version });
+        yield {
+          type: 'action:plugin:install:result',
+          data: { success: true, plugin: result },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:plugin:install:result',
+          data: { success: false, error: (error as Error).message },
+        };
+      }
+    });
+
+    builder.on('action:plugin:uninstall', async function* (event) {
+      try {
+        const { id } = event.data;
+        await pluginService.uninstallPlugin(id);
+        yield {
+          type: 'action:plugin:uninstall:result',
+          data: { success: true },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:plugin:uninstall:result',
+          data: { success: false, error: (error as Error).message },
         };
       }
     });

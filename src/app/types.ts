@@ -536,6 +536,38 @@ export type UserInputEvent = BaseEvent & {
   };
 };
 
+export type InstallPluginEvent = BaseEvent & {
+  type: 'action:plugin:install';
+  data: {
+    name: string;
+    version?: string;
+  };
+};
+
+export type InstallPluginResultEvent = BaseEvent & {
+  type: 'action:plugin:install:result';
+  data: {
+    success: boolean;
+    plugin?: { name: string; version: string };
+    error?: string;
+  };
+};
+
+export type UninstallPluginEvent = BaseEvent & {
+  type: 'action:plugin:uninstall';
+  data: {
+    id: string;
+  };
+};
+
+export type UninstallPluginResultEvent = BaseEvent & {
+  type: 'action:plugin:uninstall:result';
+  data: {
+    success: boolean;
+    error?: string;
+  };
+};
+
 export type OpenBotEvent =
   | UserInputEvent
   | AgentInvokeEvent
@@ -589,4 +621,8 @@ export type OpenBotEvent =
   | MCPListToolsEvent
   | MCPListToolsResultEvent
   | MCPCallEvent
-  | MCPCallResultEvent;
+  | MCPCallResultEvent
+  | InstallPluginEvent
+  | InstallPluginResultEvent
+  | UninstallPluginEvent
+  | UninstallPluginResultEvent;

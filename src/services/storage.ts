@@ -28,12 +28,13 @@ import { processService } from '../harness/process.js';
 import { pathToFileURL } from 'node:url';
 
 const mapNameToPlugin = (
+  id: string,
   name: string,
   description: string,
   kind: PluginKind = 'tool',
   image?: string,
 ): Plugin => ({
-  id: name,
+  id,
   name,
   description,
   kind,
@@ -165,9 +166,9 @@ const toVariablesRecord = (raw: unknown): Record<string, string> => {
 
 const listBuiltInPlugins = async (): Promise<Plugin[]> => {
   return [
-    mapNameToPlugin('storage', 'Built-in storage plugin'),
-    mapNameToPlugin('ai-sdk', 'Built-in AI SDK plugin', 'runtime'),
-    mapNameToPlugin('delegation', 'Built-in delegation plugin'),
+    mapNameToPlugin('storage', 'storage', 'Built-in storage plugin'),
+    mapNameToPlugin('ai-sdk', 'ai-sdk', 'Built-in AI SDK plugin', 'runtime'),
+    mapNameToPlugin('delegation', 'delegation', 'Built-in delegation plugin'),
   ];
 };
 
@@ -189,6 +190,7 @@ const listPluginsFromDisk = async (): Promise<Plugin[]> => {
       const pluginDir = path.join(pluginsDir, entry.name);
       const image = await resolveEntityImageDataUrl(pluginDir);
       return mapNameToPlugin(
+        entry.name,
         module.plugin.name || entry.name,
         module.plugin.description || '',
         module.plugin.kind || 'tool',
@@ -948,7 +950,13 @@ export const storageService = {
       }));
   },
 
-  readFile: async ({ channelId, path: filePath }: { channelId: string; path: string }): Promise<string> => {
+  readFile: async ({
+    channelId,
+    path: filePath,
+  }: {
+    channelId: string;
+    path: string;
+  }): Promise<string> => {
     const details = await storageService.getChannelDetails({ channelId });
     const baseCwd = details.cwd;
 
