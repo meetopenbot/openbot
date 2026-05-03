@@ -146,45 +146,92 @@ export const aiSdkPlugin =
         },
       ];
 
-      const result = await generateText({
-        model,
-        system: systemPrompt,
-        messages: context.state.shortTermMessages,
-        tools: toolDefinitions,
-      });
+      try {
+        const result = await generateText({
+          model,
+          system: systemPrompt,
+          messages: context.state.shortTermMessages,
+          tools: toolDefinitions,
+        });
 
-      const toolCalls = result.toolCalls ?? [];
+        const toolCalls = result.toolCalls ?? [];
 
-      if (toolCalls.length > 0) {
-        for (const toolCall of toolCalls) {
-          const toolEvent = {
-            type: `action:${toolCall.toolName}` as OpenBotEvent['type'],
-            data: toolCall.input,
+        if (toolCalls.length > 0) {
+          for (const toolCall of toolCalls) {
+            const toolEvent = {
+              type: `action:${toolCall.toolName}` as OpenBotEvent['type'],
+              data: toolCall.input,
+              meta: {
+                toolCallId: toolCall.toolCallId,
+                agentId: context.state.agentId,
+                threadId,
+              },
+            } as unknown as OpenBotEvent;
+            yield toolEvent;
+          }
+        }
+
+        if (result.text) {
+          context.state.shortTermMessages = [
+            ...(context.state.shortTermMessages ?? []),
+            { role: 'assistant', content: result.text },
+          ];
+
+          yield {
+            type: 'agent:output',
+            data: {
+              content: result.text,
+            },
             meta: {
-              toolCallId: toolCall.toolCallId,
+              agentId: context.state.agentId,
+            },
+          };
+        }
+      } catch (error: any) {
+        const errorMessage = error?.message || String(error);
+        const isApiKeyError =
+          errorMessage.includes('API key') ||
+          errorMessage.includes('401') ||
+          errorMessage.includes('Unauthorized') ||
+          errorMessage.includes('authentication');
+
+        if (isApiKeyError) {
+          const provider = modelString.split('/')[0];
+          const envVar = provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+
+          yield {
+            type: 'client:ui:widget',
+            data: {
+              kind: 'form',
+              widgetId: `api_key_request_${Date.now()}`,
+              title: `${provider.toUpperCase()} API Key Required`,
+              description: `The ${provider} API returned an authentication error. Please provide a valid API key to continue.`,
+              fields: [
+                {
+                  id: 'apiKey',
+                  label: 'API Key',
+                  type: 'text',
+                  placeholder: `sk-...`,
+                  required: true,
+                },
+              ],
+              submitLabel: 'Save API Key',
+              metadata: {
+                type: 'api_key_request',
+                provider,
+                envVar,
+              },
+            },
+            meta: {
               agentId: context.state.agentId,
               threadId,
             },
-          } as unknown as OpenBotEvent;
-          yield toolEvent;
+          };
+          return;
         }
-      }
 
-      if (result.text) {
-        context.state.shortTermMessages = [
-          ...(context.state.shortTermMessages ?? []),
-          { role: 'assistant', content: result.text },
-        ];
-
-        yield {
-          type: 'agent:output',
-          data: {
-            content: result.text,
-          },
-          meta: {
-            agentId: context.state.agentId,
-          },
-        };
+        // Re-throw other errors
+        throw error;
       }
     });
   };

@@ -10,6 +10,32 @@ Plugins are the building blocks of the OpenBot platform's capabilities. They pro
 - **delegation**: Allows agents to delegate tasks to other agents.
 - **ui**: Server-driven UI components.
 
+## In-depth: UI Plugin
+
+The `ui` plugin lets agents render small server-driven widgets through the event stream.
+Agents call the `render_ui_widget` tool, which emits a `client:ui:widget` event for clients.
+
+Preferred widget kinds:
+- `message`: a simple card for notices, warnings, or summaries.
+- `choice`: a decision card with one or more actions, such as approve/deny.
+- `form`: structured fields for user input.
+- `list`: todo lists, progress lists, or checklists.
+
+Clients can submit clicks or form values back through `client:ui:widget:response`:
+
+```ts
+{
+  type: 'client:ui:widget:response',
+  data: {
+    widgetId: 'widget_tool-call-id',
+    actionId: 'approve',
+    values: { reason: 'Looks good' }
+  }
+}
+```
+
+The legacy `approval` and `todo_list` presets are still accepted by `render_ui_widget`, but new agents should prefer `choice` and `list`.
+
 ## In-depth: Approval Plugin
 
 The `approval` plugin is a safety layer that can be added to any agent. It intercepts specified actions and suspends execution until a user manually approves or denies the action via the UI.
