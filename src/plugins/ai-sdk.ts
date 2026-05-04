@@ -1,10 +1,11 @@
 import { MelonyPlugin, RuntimeContext } from 'melony';
-import { generateText, ModelMessage, type LanguageModel } from 'ai';
+import { generateText, type LanguageModel } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
-import { OpenBotEvent, OpenBotState, ShortTermMessage } from '../app/types.js';
+import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { Storage } from './storage.js';
+import { createDefaultContextEngine } from '../harness/context.js';
 
 export interface AISDKPluginOptions {
   /**
@@ -14,6 +15,9 @@ export interface AISDKPluginOptions {
   model?: string;
   system?: string | ((context: RuntimeContext) => string | Promise<string>);
   storage?: Storage;
+  contextEngine?: {
+    buildContext: (state: OpenBotState, storage?: Storage) => Promise<string>;
+  };
   toolDefinitions?: Record<
     string,
     {
@@ -49,68 +53,22 @@ async function buildSystemPrompt(
   system?: string | ((context: RuntimeContext) => string | Promise<string>),
   context?: RuntimeContext,
   storage?: Storage,
+  contextEngine?: {
+    buildContext: (state: OpenBotState, storage?: Storage) => Promise<string>;
+  },
 ): Promise<string> {
   const sections: string[] = [];
 
-  if (state.agentDetails) {
-    sections.push(`## AGENT NAME\n${state.agentDetails.name}`);
-    sections.push(`## AGENT SPECIFICATION\n${state.agentDetails.instructions}`);
-  }
-
-  if (state.channelDetails) {
-    sections.push(`## CHANNEL NAME\n${state.channelDetails.name}`);
-    sections.push(`## CHANNEL SPECIFICATION\n${state.channelDetails.spec}`);
-    // sections.push(`## CHANNEL STATE\n${JSON.stringify(state.channelDetails.state, null, 2)}`);
-
-    if (storage) {
-      try {
-        const channelEvents = await storage.getEvents({ channelId: state.channelId });
-        if (channelEvents.length > 0) {
-          const formattedEvents = channelEvents
-            .slice(-20)
-            .map((e) => `- ${e.type}: ${JSON.stringify((e as any).data || {})}`)
-            .join('\n');
-          sections.push(`## CHANNEL RECENT ACTIVITIES (events)\n${formattedEvents}`);
-        }
-      } catch (error) {
-        console.warn(`[ai-sdk] Failed to fetch channel events for ${state.channelId}`, error);
-      }
-    }
-  }
-
-  if (state.threadDetails) {
-    sections.push(`## THREAD NAME\n${state.threadDetails.name}`);
-    sections.push(`## THREAD SPECIFICATION\n${state.threadDetails.spec}`);
-    // sections.push(`## THREAD STATE\n${JSON.stringify(state.threadDetails.state, null, 2)}`);
-
-    if (storage && state.threadId) {
-      try {
-        const threadEvents = await storage.getEvents({
-          channelId: state.channelId,
-          threadId: state.threadId,
-        });
-        if (threadEvents.length > 0) {
-          const formattedEvents = threadEvents
-            .slice(-20)
-            .map((e) => `- ${e.type}: ${JSON.stringify((e as any).data || {})}`)
-            .join('\n');
-          sections.push(`## THREAD RECENT ACTIVITIES (events)\n${formattedEvents}`);
-        }
-      } catch (error) {
-        console.warn(
-          `[ai-sdk] Failed to fetch thread events for channel ${state.channelId} thread ${state.threadId}`,
-          error,
-        );
-      }
-    }
-  }
-
   if (system && typeof system === 'string') {
-    sections.push(`## SYSTEM INSTRUCTIONS\n${system}`);
+    sections.push(system);
   }
 
   if (system && typeof system === 'function' && context) {
     sections.push(await system(context));
+  }
+
+  if (contextEngine) {
+    sections.push(await contextEngine.buildContext(state, storage));
   }
 
   return sections.join('\n\n');
@@ -128,6 +86,7 @@ export const aiSdkPlugin =
       model: modelString = 'openai/gpt-4o-mini',
       system,
       storage,
+      contextEngine = createDefaultContextEngine(),
       toolDefinitions = {},
     } = options;
 
@@ -142,7 +101,13 @@ export const aiSdkPlugin =
 
       // extract threadId if model decides to reply in a thread
       const threadId = event.meta?.threadId || context.state.threadId;
-      const systemPrompt = await buildSystemPrompt(context.state, system, context, storage);
+      const systemPrompt = await buildSystemPrompt(
+        context.state,
+        system,
+        context,
+        storage,
+        contextEngine,
+      );
 
       context.state.shortTermMessages = [
         ...(context.state.shortTermMessages ?? []),
