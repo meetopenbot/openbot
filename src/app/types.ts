@@ -613,7 +613,7 @@ export type InstallPluginResultEvent = BaseEvent & {
   type: 'action:plugin:install:result';
   data: {
     success: boolean;
-    plugin?: { name: string; version: string };
+    plugin?: { name: string; id: string; version: string };
     error?: string;
   };
 };

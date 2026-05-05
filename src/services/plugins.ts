@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
 import { DEFAULT_BASE_DIR, DEFAULT_PLUGINS_DIR, loadConfig, resolvePath } from '../app/config.js';
 
 const execAsync = promisify(exec);
@@ -18,7 +19,10 @@ export const pluginService = {
    * For simplicity, we use the npm CLI if available, or we could fetch the tarball.
    * Given the user's request for "straightforward", we'll use npm install --prefix.
    */
-  installPlugin: async ({ packageName, version }: PluginInstallOptions): Promise<{ name: string; version: string }> => {
+  installPlugin: async ({
+    packageName,
+    version,
+  }: PluginInstallOptions): Promise<{ name: string; id: string; version: string }> => {
     const config = loadConfig();
     const baseDir = resolvePath(config.baseDir || DEFAULT_BASE_DIR);
     const pluginsDir = path.join(baseDir, DEFAULT_PLUGINS_DIR);
@@ -26,23 +30,31 @@ export const pluginService = {
     await fs.mkdir(pluginsDir, { recursive: true });
 
     const target = version ? `${packageName}@${version}` : packageName;
-    
-    const pkgNameOnly = packageName.includes('/') ? packageName.split('/').pop()! : packageName;
-    const finalPath = path.join(pluginsDir, pkgNameOnly);
 
-    // Check if already installed
-    if (existsSync(path.join(finalPath, 'package.json'))) {
-      try {
-        const pkgJson = JSON.parse(await fs.readFile(path.join(finalPath, 'package.json'), 'utf-8'));
-        if (!version || pkgJson.version === version) {
-          console.log(`[plugins] Plugin ${packageName}${version ? `@${version}` : ''} is already installed.`);
-          return {
-            name: pkgJson.name,
-            version: pkgJson.version
-          };
+    // Check if already installed (scan all plugin dirs because id might differ from package name)
+    const entries = await fs.readdir(pluginsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() || entry.isSymbolicLink()) {
+        const pkgPath = path.join(pluginsDir, entry.name, 'package.json');
+        if (existsSync(pkgPath)) {
+          try {
+            const pkgJson = JSON.parse(await fs.readFile(pkgPath, 'utf-8'));
+            if (pkgJson.name === packageName && (!version || pkgJson.version === version)) {
+              console.log(
+                `[plugins] Plugin ${packageName}${
+                  version ? `@${version}` : ''
+                } is already installed at ${entry.name}.`,
+              );
+              return {
+                name: pkgJson.name,
+                id: entry.name,
+                version: pkgJson.version,
+              };
+            }
+          } catch (e) {
+            // Ignore corrupted package.json
+          }
         }
-      } catch (e) {
-        // If package.json is corrupted, proceed with reinstall
       }
     }
 
@@ -61,7 +73,25 @@ export const pluginService = {
       // Move from node_modules/<pkg> to plugins/<pkg>
       const pkgNameOnly = packageName.includes('/') ? packageName.split('/').pop()! : packageName;
       const installedPath = path.join(tempDir, 'node_modules', packageName);
-      const finalPath = path.join(pluginsDir, pkgNameOnly);
+
+      // Try to read plugin metadata to find custom ID
+      let finalId = pkgNameOnly;
+      try {
+        const distPath = path.join(installedPath, 'dist', 'index.js');
+        if (existsSync(distPath)) {
+          const module = await import(pathToFileURL(distPath).href);
+          if (module.plugin?.id) {
+            finalId = module.plugin.id;
+          }
+        }
+      } catch (e) {
+        console.warn(
+          `[plugins] Could not read plugin metadata for ${packageName}, falling back to package name as ID.`,
+          e,
+        );
+      }
+
+      const finalPath = path.join(pluginsDir, finalId);
 
       // Remove existing if any
       await fs.rm(finalPath, { recursive: true, force: true });
@@ -72,10 +102,11 @@ export const pluginService = {
 
       // Read package.json for confirmation
       const pkgJson = JSON.parse(await fs.readFile(path.join(finalPath, 'package.json'), 'utf-8'));
-      
+
       return {
         name: pkgJson.name,
-        version: pkgJson.version
+        id: finalId,
+        version: pkgJson.version,
       };
     } catch (error) {
       console.error(`[plugins] Failed to install plugin ${packageName}:`, error);

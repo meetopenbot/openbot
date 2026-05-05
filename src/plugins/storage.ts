@@ -7,6 +7,7 @@ import z from 'zod';
 export type PluginKind = 'runtime' | 'tool';
 
 export type PluginMetadata = {
+  id?: string;
   name: string;
   description: string;
   kind?: PluginKind;
@@ -885,12 +886,12 @@ export const storagePlugin =
         yield {
           type: 'action:plugin:install:result',
           data: { success: true, plugin: result },
-        };
+        } as OpenBotEvent;
       } catch (error) {
         yield {
           type: 'action:plugin:install:result',
           data: { success: false, error: (error as Error).message },
-        };
+        } as OpenBotEvent;
       }
     });
 

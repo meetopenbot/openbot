@@ -206,7 +206,7 @@ const listPluginsFromDisk = async (): Promise<Plugin[]> => {
       const pluginDir = path.join(pluginsDir, entry.name);
       const image = await resolveEntityImageDataUrl(pluginDir);
       return mapNameToPlugin(
-        entry.name,
+        module.plugin.id || entry.name,
         module.plugin.name || entry.name,
         module.plugin.description || '',
         module.plugin.kind || 'tool',

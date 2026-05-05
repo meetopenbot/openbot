@@ -259,8 +259,9 @@ export const aiSdkPlugin =
   };
 
 export const plugin = {
-  name: 'ai-sdk',
+  id: 'ai-sdk',
+  name: 'AI SDK',
   description: 'Built-in AI SDK plugin',
   kind: 'runtime' as const,
-  factory: aiSdkPlugin,
+  factory: () => aiSdkPlugin({}),
 };
