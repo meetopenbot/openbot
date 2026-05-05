@@ -589,6 +589,35 @@ export type MCPCallResultEvent = BaseEvent & {
   };
 };
 
+export type ShellExecEvent = BaseEvent & {
+  type: 'action:shell_exec';
+  data: {
+    command: string;
+    cwd?: string;
+    shell?: string;
+    timeoutMs?: number;
+  };
+  meta?: {
+    toolCallId?: string;
+    approvalId?: string;
+    approvalStatus?: 'approved' | 'denied';
+    [key: string]: any;
+  };
+};
+
+export type ShellExecResultEvent = BaseEvent & {
+  type: 'action:shell_exec:result';
+  data: {
+    success: boolean;
+    approved?: boolean;
+    exitCode: number | null;
+    stdout: string;
+    stderr: string;
+    timedOut: boolean;
+    error?: string;
+  };
+};
+
 export type UserInputEvent = BaseEvent & {
   type: 'user:input';
   data: {
@@ -694,6 +723,8 @@ export type OpenBotEvent =
   | MCPListToolsResultEvent
   | MCPCallEvent
   | MCPCallResultEvent
+  | ShellExecEvent
+  | ShellExecResultEvent
   | InstallPluginEvent
   | InstallPluginResultEvent
   | UninstallPluginEvent

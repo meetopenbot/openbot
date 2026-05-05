@@ -3,6 +3,7 @@ import { delegationToolDefinitions } from '../plugins/delegation.js';
 import { storageToolDefinitions } from '../plugins/storage.js';
 import { mcpToolDefinitions } from '../plugins/mcp.js';
 import { uiToolDefinitions } from '../plugins/ui.js';
+import { shellToolDefinitions } from '../plugins/shell.js';
 import { storageService } from '../services/storage.js';
 import { readFileSync } from 'node:fs';
 
@@ -35,11 +36,12 @@ export const getSystemAgentDetails = (overrides?: Partial<AgentDetails>): AgentD
     runtime: {
       name: 'ai-sdk',
       config: {
-        model: 'openai/gpt-4o-mini',
+        model: 'openai/gpt-5.4-nano',
         toolDefinitions: {
           ...delegationToolDefinitions,
           ...storageToolDefinitions,
           ...mcpToolDefinitions,
+          ...shellToolDefinitions,
           // ...uiToolDefinitions, // TODO: Re-enable this when we have a way to render UI widgets in the web dashboard
         },
       },
@@ -49,6 +51,27 @@ export const getSystemAgentDetails = (overrides?: Partial<AgentDetails>): AgentD
       { name: 'delegation', config: {} },
       { name: 'mcp', config: {} },
       { name: 'ui', config: {} },
+      {
+        name: 'approval',
+        config: {
+          rules: [
+            {
+              action: 'action:shell_exec',
+              denyEvent: 'action:shell_exec:result',
+              message: 'The agent wants to run a terminal command.',
+              detailKeys: ['command', 'cwd', 'shell', 'timeoutMs'],
+              hiddenKeys: ['env'],
+              denyData: {
+                exitCode: null,
+                stdout: '',
+                stderr: 'Command execution was denied by the user.',
+                timedOut: false,
+              },
+            },
+          ],
+        },
+      },
+      { name: 'shell', config: {} },
     ],
     description: 'System coordinator agent',
     createdAt: new Date(),

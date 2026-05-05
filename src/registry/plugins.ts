@@ -10,6 +10,8 @@ import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
 import { delegationPlugin } from '../plugins/delegation.js';
 import { mcpPlugin } from '../plugins/mcp.js';
 import { uiPlugin } from '../plugins/ui.js';
+import { shellPlugin } from '../plugins/shell.js';
+import { approvalPlugin } from '../plugins/approval.js';
 
 let pluginsDir: string | null = null;
 const loadedPlugins = new Set<string>();
@@ -49,6 +51,10 @@ export async function resolvePlugin(
       return mcpPlugin();
     case 'ui':
       return uiPlugin();
+    case 'shell':
+      return shellPlugin();
+    case 'approval':
+      return approvalPlugin(config);
   }
 
   // 2. Search for external plugins in the initialized plugins directory

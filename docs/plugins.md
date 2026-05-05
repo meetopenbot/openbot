@@ -8,6 +8,8 @@ Plugins are the building blocks of the OpenBot platform's capabilities. They pro
 - **storage**: Local file-based persistence for events and state.
 - **mcp**: Model Context Protocol integration.
 - **delegation**: Allows agents to delegate tasks to other agents.
+- **approval**: Approval gate for sensitive actions.
+- **shell**: Execute terminal commands.
 - **ui**: Server-driven UI components.
 
 ## In-depth: UI Plugin
@@ -36,9 +38,32 @@ Clients can submit clicks or form values back through `client:ui:widget:response
 
 The legacy `approval` and `todo_list` presets are still accepted by `render_ui_widget`, but new agents should prefer `choice` and `list`.
 
+## In-depth: Shell Plugin
+
+The `shell` plugin gives agents the ability to execute terminal commands. It provides the `shell_exec` tool.
+
+### Tool: `shell_exec`
+
+- `command`: The shell command to execute.
+- `cwd`: Optional working directory.
+- `shell`: Optional shell interpreter (`bash`, `sh`, `zsh`). Defaults to `bash`.
+- `timeoutMs`: Optional timeout in milliseconds. Defaults to 30000.
+
+### Safety
+
+The shell action is designed to run through approval first:
+
+1. `action:shell_exec` is emitted from the tool call.
+2. The approval plugin requests user confirmation.
+3. On approve, `action:shell_exec` is re-emitted with approval metadata.
+4. The shell plugin executes and emits `action:shell_exec:result`.
+
+Commands are executed via `child_process.spawn`. Output is capped at 100KB to prevent memory issues.
+
 ## In-depth: Approval Plugin
 
-The `approval` plugin is a safety layer that can be added to any agent. It intercepts specified actions and suspends execution until a user manually approves or denies the action via the UI.
+The `approval` plugin is a safety layer for protected actions.
+It stores pending approvals in channel/thread state, shows an approval widget, and only emits execute events after user confirmation.
 
 ### Configuration
 
@@ -49,38 +74,21 @@ plugins:
   - name: approval
     config:
       rules:
-        - action: "action:executeCommand"
+        - action: "action:shell_exec"
           message: "The agent wants to execute a terminal command."
-          detailKeys: ["command", "cwd"]
+          detailKeys: ["command", "cwd", "shell", "timeoutMs"]
           hiddenKeys: ["env"]
-        - action: "action:writeFile"
-          message: "The agent wants to modify a file."
-          detailKeys: ["path"]
 ```
 
-- `action`: The event type prefix to intercept (e.g., `action:executeCommand`).
+- `action`: The event type prefix to intercept (for example `action:shell_exec`).
+- `executeEvent`: Optional event emitted after user approval (defaults to the same action event).
+- `denyEvent`: Event emitted when approval is denied (defaults to `${action}:result`).
+- `denyData`: Optional payload merged into deny event data.
 - `message`: Optional custom message to display in the approval UI.
 - `detailKeys`: Optional ordered list of event data keys to show in the compact details block.
 - `hiddenKeys`: Optional list of keys to redact from details and full payload.
 
-### Approval UI Details Payload
-
-The approval card keeps the same visual widget but now renders structured details for clearer decisions.
-
-Payload shape sent to the widget:
-
-```ts
-{
-  summary: string;
-  details?: Array<{ label: string; value: string }>;
-  rawPayload?: string;
-}
-```
-
-What users now see before approving:
-- Action label and event type.
-- A compact details list based on `detailKeys` (or auto-derived keys if omitted).
-- A sanitized full action payload (sensitive keys are redacted and very large values are truncated).
+The approval plugin is fully rule-driven. If no `rules` are configured, it does not gate any actions.
 
 ## Shared Plugins
 

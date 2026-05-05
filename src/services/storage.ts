@@ -185,6 +185,8 @@ const listBuiltInPlugins = async (): Promise<Plugin[]> => {
     mapNameToPlugin('storage', 'storage', 'Built-in storage plugin'),
     mapNameToPlugin('ai-sdk', 'ai-sdk', 'Built-in AI SDK plugin', 'runtime'),
     mapNameToPlugin('delegation', 'delegation', 'Built-in delegation plugin'),
+    mapNameToPlugin('approval', 'approval', 'Built-in approval plugin'),
+    mapNameToPlugin('shell', 'shell', 'Built-in shell plugin'),
   ];
 };
 
