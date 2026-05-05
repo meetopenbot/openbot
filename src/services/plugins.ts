@@ -100,6 +100,15 @@ export const pluginService = {
       // Cleanup temp
       await fs.rm(tempDir, { recursive: true, force: true });
 
+      // Run npm install in the final directory to ensure dependencies are installed
+      console.log(`[plugins] Running npm install in ${finalPath}...`);
+      try {
+        await execAsync(`npm install`, { cwd: finalPath });
+        console.log(`[plugins] npm install completed in ${finalPath}`);
+      } catch (e) {
+        console.warn(`[plugins] Failed to run npm install in ${finalPath}:`, e);
+      }
+
       // Read package.json for confirmation
       const pkgJson = JSON.parse(await fs.readFile(path.join(finalPath, 'package.json'), 'utf-8'));
 
