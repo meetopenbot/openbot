@@ -80,6 +80,8 @@ export async function startServer(options: ServerOptions = {}) {
 
   const getClientKey = (channelId: string, threadId?: string) =>
     threadId ? `${channelId}:${threadId}` : channelId;
+  const getRunKey = (runId: string, agentId: string, channelId: string, threadId?: string) =>
+    `${runId}:${agentId}:${channelId}:${threadId || ''}`;
 
   const sendToClientKey = (clientKey: string, chunk: OpenBotEvent) => {
     const threadClients = clients.get(clientKey);
@@ -201,14 +203,19 @@ export async function startServer(options: ServerOptions = {}) {
       const targetClientKey = getClientKey(targetChannelId, targetThreadId);
 
       if (chunk.type === 'agent:run:start') {
-        activeRuns.set(chunk.data.runId, {
+        activeRuns.set(
+          getRunKey(chunk.data.runId, chunk.data.agentId, chunk.data.channelId, chunk.data.threadId),
+          {
           runId: chunk.data.runId,
           channelId: chunk.data.channelId,
           threadId: chunk.data.threadId,
           agentId: chunk.data.agentId,
-        });
+          },
+        );
       } else if (chunk.type === 'agent:run:end') {
-        activeRuns.delete(chunk.data.runId);
+        activeRuns.delete(
+          getRunKey(chunk.data.runId, chunk.data.agentId, chunk.data.channelId, chunk.data.threadId),
+        );
       }
 
       await storageService.storeEvent({

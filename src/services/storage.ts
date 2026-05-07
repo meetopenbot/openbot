@@ -182,11 +182,11 @@ const toVariablesRecord = (raw: unknown): Record<string, string> => {
 
 const listBuiltInPlugins = async (): Promise<Plugin[]> => {
   return [
-    mapNameToPlugin('storage', 'storage', 'Built-in storage plugin'),
-    mapNameToPlugin('ai-sdk', 'ai-sdk', 'Built-in AI SDK plugin', 'runtime'),
-    mapNameToPlugin('delegation', 'delegation', 'Built-in delegation plugin'),
-    mapNameToPlugin('approval', 'approval', 'Built-in approval plugin'),
-    mapNameToPlugin('shell', 'shell', 'Built-in shell plugin'),
+    mapNameToPlugin('storage', 'Storage', 'Built-in storage plugin'),
+    mapNameToPlugin('ai-sdk', 'AI SDK', 'Built-in AI SDK plugin', 'runtime'),
+    mapNameToPlugin('delegation', 'Delegation', 'Built-in delegation plugin'),
+    mapNameToPlugin('approval', 'Approval', 'Built-in approval plugin'),
+    mapNameToPlugin('shell', 'Shell', 'Built-in shell plugin'),
   ];
 };
 
@@ -1145,7 +1145,7 @@ export const storageService = {
     }
 
     let channelDetails;
-    if (channelId && channelId !== 'general') {
+    if (channelId) {
       try {
         channelDetails = await storageService.getChannelDetails({ channelId });
       } catch (error) {

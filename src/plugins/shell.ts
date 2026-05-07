@@ -88,24 +88,24 @@ export const shellPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (buil
         meta: event.meta,
       } as any;
 
-      const output = [
-        `Command: \`${command}\``,
-        result.exitCode !== null ? `Exit code: ${result.exitCode}` : 'Exit code: unknown',
-        result.timedOut ? '⚠️ Command timed out.' : '',
-        result.stdout ? `\n**STDOUT**:\n${result.stdout}` : '',
-        result.stderr ? `\n**STDERR**:\n${result.stderr}` : '',
-      ].filter(Boolean).join('\n');
+      // const output = [
+      //   `Command: \`${command}\``,
+      //   result.exitCode !== null ? `Exit code: ${result.exitCode}` : 'Exit code: unknown',
+      //   result.timedOut ? '⚠️ Command timed out.' : '',
+      //   result.stdout ? `\n**STDOUT**:\n${result.stdout}` : '',
+      //   result.stderr ? `\n**STDERR**:\n${result.stderr}` : '',
+      // ].filter(Boolean).join('\n');
 
-      yield {
-        type: 'agent:output',
-        data: {
-          content: output,
-        },
-        meta: {
-          ...(event.meta || {}),
-          agentId: context.state.agentId,
-        },
-      } as any;
+      // yield {
+      //   type: 'agent:output',
+      //   data: {
+      //     content: output,
+      //   },
+      //   meta: {
+      //     ...(event.meta || {}),
+      //     agentId: context.state.agentId,
+      //   },
+      // } as any;
 
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown shell error';
@@ -122,16 +122,16 @@ export const shellPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (buil
         meta: event.meta,
       } as any;
 
-      yield {
-        type: 'agent:output',
-        data: {
-          content: `Failed to execute shell command: ${message}`,
-        },
-        meta: {
-          ...(event.meta || {}),
-          agentId: context.state.agentId,
-        },
-      } as any;
+      // yield {
+      //   type: 'agent:output',
+      //   data: {
+      //     content: `Failed to execute shell command: ${message}`,
+      //   },
+      //   meta: {
+      //     ...(event.meta || {}),
+      //     agentId: context.state.agentId,
+      //   },
+      // } as any;
     }
   });
 };

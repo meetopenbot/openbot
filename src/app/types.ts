@@ -20,10 +20,11 @@ export interface OpenBotState {
   shortTermMessages?: ShortTermMessage[];
 }
 
-export type ShortTermMessage = {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-};
+export type ShortTermMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string }
+  | { role: 'assistant'; content: string; toolCalls?: any[] }
+  | { role: 'tool'; content: string; toolCallId: string; toolName: string };
 
 export type BaseEvent = {
   id?: string;
@@ -531,15 +532,68 @@ export type UIWidgetResponseEvent = BaseEvent & {
   };
 };
 
+export type HandoffEvent = BaseEvent & {
+  type: 'action:handoff';
+  data: {
+    agentId: string;
+    content: string;
+  };
+  meta?: {
+    toolCallId?: string;
+    [key: string]: any;
+  };
+};
+
+export type HandoffResultEvent = BaseEvent & {
+  type: 'action:handoff:result';
+  data: {
+    success: boolean;
+    agentId: string;
+    accepted: boolean;
+  };
+  meta: {
+    toolCallId: string;
+    agentId: string;
+    threadId?: string;
+    [key: string]: any;
+  };
+};
+
 export type DelegateEvent = BaseEvent & {
   type: 'action:delegate';
   data: {
     agentId: string;
     content: string;
   };
+  meta?: {
+    toolCallId?: string;
+    [key: string]: any;
+  };
+};
+
+export type DelegateResultEvent = BaseEvent & {
+  type: 'action:delegate:result';
+  data: {
+    success: boolean;
+    agentId: string;
+    summary: string;
+  };
   meta: {
     toolCallId: string;
+    agentId: string;
+    threadId?: string;
+    [key: string]: any;
   };
+};
+
+/** Internal routing: delegation plugin → orchestrator only (not stored or broadcast). */
+export type HandoffRequestEvent = BaseEvent & {
+  type: 'handoff:request';
+  data: {
+    agentId: string;
+    content: string;
+  };
+  meta?: Record<string, unknown>;
 };
 
 /** Internal routing: delegation plugin → orchestrator only (not stored or broadcast). */
@@ -717,7 +771,11 @@ export type OpenBotEvent =
   | UIWidgetEvent
   | RenderUIWidgetEvent
   | UIWidgetResponseEvent
+  | HandoffEvent
+  | HandoffResultEvent
   | DelegateEvent
+  | DelegateResultEvent
+  | HandoffRequestEvent
   | DelegationRequestEvent
   | MCPListToolsEvent
   | MCPListToolsResultEvent
