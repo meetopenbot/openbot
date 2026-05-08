@@ -716,6 +716,48 @@ export type UninstallPluginResultEvent = BaseEvent & {
   };
 };
 
+export type ListMarketplaceAgentsEvent = BaseEvent & {
+  type: 'action:marketplace:list';
+};
+
+export type ListMarketplaceAgentsResultEvent = BaseEvent & {
+  type: 'action:marketplace:list:result';
+  data: {
+    success: boolean;
+    agents: Array<{
+      id: string;
+      name: string;
+      description: string;
+      image?: string;
+      instructions: string;
+      runtime?: any;
+      plugins?: any[];
+    }>;
+    error?: string;
+  };
+};
+
+export type InstallAgentEvent = BaseEvent & {
+  type: 'action:agent:install';
+  data: {
+    agentId: string;
+    name: string;
+    description?: string;
+    instructions: string;
+    runtime?: any;
+    plugins?: any[];
+  };
+};
+
+export type InstallAgentResultEvent = BaseEvent & {
+  type: 'action:agent:install:result';
+  data: {
+    success: boolean;
+    agentId: string;
+    error?: string;
+  };
+};
+
 export type OpenBotEvent =
   | UserInputEvent
   | AgentInvokeEvent
@@ -786,4 +828,8 @@ export type OpenBotEvent =
   | InstallPluginEvent
   | InstallPluginResultEvent
   | UninstallPluginEvent
-  | UninstallPluginResultEvent;
+  | UninstallPluginResultEvent
+  | ListMarketplaceAgentsEvent
+  | ListMarketplaceAgentsResultEvent
+  | InstallAgentEvent
+  | InstallAgentResultEvent;

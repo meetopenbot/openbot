@@ -910,6 +910,67 @@ export const storagePlugin =
         };
       }
     });
+
+    builder.on('action:marketplace:list', async function* () {
+      // Mock marketplace agents for MVP
+      const agents = [
+        {
+          id: 'researcher',
+          name: 'Researcher',
+          description: 'Specialized in web research and information synthesis.',
+          // image: 'https://registry.openbot.local/agents/researcher/icon.svg',
+          instructions: 'You are a research assistant. Use available tools to find information.',
+          runtime: { name: 'ai-sdk', config: { model: 'openai/gpt-4o' } },
+        },
+        {
+          id: 'coder',
+          name: 'Coder',
+          description: 'Expert in multiple programming languages and software architecture.',
+          // image: 'https://registry.openbot.local/agents/coder/icon.svg',
+          instructions: 'You are an expert software engineer. Help the user with coding tasks.',
+          runtime: { name: 'ai-sdk', config: { model: 'openai/gpt-4o' } },
+        },
+      ];
+
+      yield {
+        type: 'action:marketplace:list:result',
+        data: { success: true, agents },
+      } as OpenBotEvent;
+    });
+
+    builder.on('action:agent:install', async function* (event) {
+      try {
+        const { agentId, name, description, instructions, runtime, plugins } = event.data;
+        await storage.createAgent({
+          agentId,
+          name,
+          description,
+          instructions,
+          runtime,
+          plugins,
+        });
+
+        yield {
+          type: 'action:agent:install:result',
+          data: { success: true, agentId },
+        } as OpenBotEvent;
+
+        yield {
+          type: 'agent:output',
+          data: { content: `Successfully installed agent **${name}** (${agentId}) from marketplace.` },
+          meta: { agentId: 'system' },
+        } as OpenBotEvent;
+      } catch (error) {
+        yield {
+          type: 'action:agent:install:result',
+          data: {
+            success: false,
+            agentId: event.data.agentId,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        } as OpenBotEvent;
+      }
+    });
   };
 
 export const plugin = {
