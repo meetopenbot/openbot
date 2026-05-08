@@ -77,6 +77,17 @@ export type GetChannelDetailsResultEvent = BaseEvent & {
   };
 };
 
+export type GetThreadDetailsEvent = BaseEvent & {
+  type: 'action:storage:get-thread-details';
+};
+
+export type GetThreadDetailsResultEvent = BaseEvent & {
+  type: 'action:storage:get-thread-details-result';
+  data: {
+    threadDetails: ThreadDetails | null;
+  };
+};
+
 export type GetAgentsEvent = BaseEvent & {
   type: 'action:storage:get-agents';
 };
@@ -771,6 +782,8 @@ export type OpenBotEvent =
   | GetThreadsResultEvent
   | GetChannelDetailsEvent
   | GetChannelDetailsResultEvent
+  | GetThreadDetailsEvent
+  | GetThreadDetailsResultEvent
   | GetAgentsEvent
   | GetAgentsResultEvent
   | GetPluginsEvent
