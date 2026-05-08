@@ -13,6 +13,21 @@ export type PluginMetadata = {
   kind?: PluginKind;
   factory: (config?: any) => MelonyPlugin<any, any>;
   toolDefinitions?: Record<string, any>;
+  configSchema?: {
+    type: 'object';
+    properties: {
+      [key: string]: {
+        type: 'string' | 'number' | 'boolean' | 'integer';
+        description?: string;
+        default?: any;
+        enum?: any[];
+        minimum?: number;
+        maximum?: number;
+        format?: 'password' | 'url' | 'email';
+      };
+    };
+    required?: string[];
+  };
   [key: string]: any;
 };
 
@@ -40,6 +55,21 @@ export type Plugin = {
   kind: PluginKind;
   createdAt: Date;
   updatedAt: Date;
+  configSchema?: {
+    type: 'object';
+    properties: {
+      [key: string]: {
+        type: 'string' | 'number' | 'boolean' | 'integer';
+        description?: string;
+        default?: any;
+        enum?: any[];
+        minimum?: number;
+        maximum?: number;
+        format?: 'password' | 'url' | 'email';
+      };
+    };
+    required?: string[];
+  };
 };
 
 export type Channel = {
@@ -964,9 +994,11 @@ export const storagePlugin =
       });
     };
 
-export const plugin = {
+export const plugin: PluginMetadata = {
+  id: 'storage',
   name: 'storage',
   description: 'Built-in storage plugin',
+  kind: 'tool' as const,
   factory: storagePlugin,
   toolDefinitions: storageToolDefinitions,
 };

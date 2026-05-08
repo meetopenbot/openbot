@@ -1,6 +1,7 @@
 import { MelonyPlugin } from 'melony';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { storageService } from '../services/storage.js';
+import { PluginMetadata } from './storage.js';
 
 type ApprovalRule = {
   action: string;
@@ -209,9 +210,11 @@ export const approvalPlugin =
       });
     };
 
-export const plugin = {
+export const plugin: PluginMetadata = {
+  id: 'approval',
   name: 'approval',
   description: 'Approval workflow for protected actions',
+  kind: 'tool' as const,
   version: '1.0.0',
   author: 'OpenBot',
   license: 'MIT',

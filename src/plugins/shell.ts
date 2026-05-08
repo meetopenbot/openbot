@@ -2,6 +2,7 @@ import { MelonyPlugin } from 'melony';
 import { z } from 'zod';
 import { spawn } from 'node:child_process';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
+import { PluginMetadata } from './storage.js';
 
 export const shellToolDefinitions = {
   shell_exec: {
@@ -136,9 +137,11 @@ export const shellPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (buil
   });
 };
 
-export const plugin = {
+export const plugin: PluginMetadata = {
+  id: 'shell',
   name: 'shell',
   description: 'Execute shell commands in the terminal',
+  kind: 'tool' as const,
   version: '1.0.0',
   author: 'OpenBot',
   license: 'MIT',

@@ -4,7 +4,7 @@ import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { OpenBotEvent, OpenBotState, ShortTermMessage } from '../app/types.js';
-import { Storage } from './storage.js';
+import { PluginMetadata, Storage } from './storage.js';
 import { createDefaultContextEngine } from '../harness/context.js';
 
 export interface AISDKPluginOptions {
@@ -419,10 +419,21 @@ export const aiSdkPlugin =
       });
     };
 
-export const plugin = {
+export const plugin: PluginMetadata = {
   id: 'ai-sdk',
   name: 'AI SDK',
   description: 'Built-in AI SDK plugin',
   kind: 'runtime' as const,
   factory: () => aiSdkPlugin({}),
+  configSchema: {
+    type: 'object' as const,
+    properties: {
+      model: {
+        type: 'string' as const,
+        description:
+          'Provider model as a standardized string (e.g. openai/gpt-4o-mini, anthropic/claude-3-5-sonnet-20240620)',
+        default: 'openai/gpt-4o-mini',
+      },
+    },
+  },
 };

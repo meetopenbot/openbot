@@ -7,6 +7,7 @@ import {
   UIWidgetListItem,
   UIWidgetSpec,
 } from '../app/types.js';
+import { PluginMetadata } from './storage.js';
 import z from 'zod';
 
 const actionSchema = z.object({
@@ -243,9 +244,11 @@ export const uiToolDefinitions = {
   },
 };
 
-export const plugin = {
+export const plugin: PluginMetadata = {
+  id: 'ui',
   name: 'ui',
   description: 'UI Widgets plugin',
+  kind: 'tool' as const,
   version: '1.0.0',
   author: 'OpenBot',
   license: 'MIT',

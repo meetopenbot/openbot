@@ -1,5 +1,6 @@
 import { MelonyPlugin } from 'melony';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
+import { PluginMetadata } from './storage.js';
 import z from 'zod';
 
 /**
@@ -109,9 +110,11 @@ export const delegationToolDefinitions = {
   },
 };
 
-export const plugin = {
+export const plugin: PluginMetadata = {
+  id: 'delegation',
   name: 'delegation',
   description: 'Delegation plugin',
+  kind: 'tool' as const,
   version: '1.0.0',
   author: 'OpenBot',
   license: 'MIT',

@@ -2,6 +2,7 @@ import { MelonyPlugin } from 'melony';
 import z from 'zod';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { mcpService } from '../harness/mcp.js';
+import { PluginMetadata } from './storage.js';
 
 function stringifyResult(value: unknown): string {
   if (typeof value === 'string') {
@@ -146,9 +147,11 @@ export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builde
   });
 };
 
-export const plugin = {
+export const plugin: PluginMetadata = {
+  id: 'mcp',
   name: 'mcp',
   description: 'Basic MCP integration for configured servers',
+  kind: 'tool' as const,
   factory: mcpPlugin,
   toolDefinitions: mcpToolDefinitions,
 };

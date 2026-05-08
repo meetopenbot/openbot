@@ -33,12 +33,14 @@ const mapNameToPlugin = (
   description: string,
   kind: PluginKind = 'tool',
   image?: string,
+  configSchema?: Plugin['configSchema'],
 ): Plugin => ({
   id,
   name,
   description,
   kind,
   image,
+  configSchema,
   createdAt: new Date(),
   updatedAt: new Date(),
 });
@@ -180,13 +182,72 @@ const toVariablesRecord = (raw: unknown): Record<string, string> => {
   );
 };
 
+import { plugin as storagePluginDef } from '../plugins/storage.js';
+import { plugin as aiSdkPluginDef } from '../plugins/ai-sdk.js';
+import { plugin as delegationPluginDef } from '../plugins/delegation.js';
+import { plugin as approvalPluginDef } from '../plugins/approval.js';
+import { plugin as shellPluginDef } from '../plugins/shell.js';
+import { plugin as mcpPluginDef } from '../plugins/mcp.js';
+import { plugin as uiPluginDef } from '../plugins/ui.js';
+
 const listBuiltInPlugins = async (): Promise<Plugin[]> => {
   return [
-    mapNameToPlugin('storage', 'Storage', 'Built-in storage plugin'),
-    mapNameToPlugin('ai-sdk', 'AI SDK', 'Built-in AI SDK plugin', 'runtime'),
-    mapNameToPlugin('delegation', 'Delegation', 'Built-in delegation plugin'),
-    mapNameToPlugin('approval', 'Approval', 'Built-in approval plugin'),
-    mapNameToPlugin('shell', 'Shell', 'Built-in shell plugin'),
+    mapNameToPlugin(
+      storagePluginDef.id || 'storage',
+      storagePluginDef.name,
+      storagePluginDef.description,
+      storagePluginDef.kind,
+      undefined,
+      (storagePluginDef as any).configSchema,
+    ),
+    mapNameToPlugin(
+      aiSdkPluginDef.id || 'ai-sdk',
+      aiSdkPluginDef.name,
+      aiSdkPluginDef.description,
+      aiSdkPluginDef.kind,
+      undefined,
+      (aiSdkPluginDef as any).configSchema,
+    ),
+    mapNameToPlugin(
+      delegationPluginDef.id || 'delegation',
+      delegationPluginDef.name,
+      delegationPluginDef.description,
+      delegationPluginDef.kind,
+      undefined,
+      (delegationPluginDef as any).configSchema,
+    ),
+    mapNameToPlugin(
+      approvalPluginDef.id || 'approval',
+      approvalPluginDef.name,
+      approvalPluginDef.description,
+      approvalPluginDef.kind,
+      undefined,
+      (approvalPluginDef as any).configSchema,
+    ),
+    mapNameToPlugin(
+      shellPluginDef.id || 'shell',
+      shellPluginDef.name,
+      shellPluginDef.description,
+      shellPluginDef.kind,
+      undefined,
+      (shellPluginDef as any).configSchema,
+    ),
+    mapNameToPlugin(
+      mcpPluginDef.id || 'mcp',
+      mcpPluginDef.name,
+      mcpPluginDef.description,
+      mcpPluginDef.kind,
+      undefined,
+      (mcpPluginDef as any).configSchema,
+    ),
+    mapNameToPlugin(
+      uiPluginDef.id || 'ui',
+      uiPluginDef.name,
+      uiPluginDef.description,
+      uiPluginDef.kind,
+      undefined,
+      (uiPluginDef as any).configSchema,
+    ),
   ];
 };
 
@@ -213,6 +274,7 @@ const listPluginsFromDisk = async (): Promise<Plugin[]> => {
         module.plugin.description || '',
         module.plugin.kind || 'tool',
         image,
+        module.plugin.configSchema,
       );
     });
 
