@@ -10,6 +10,11 @@ export interface OpenBotconfig {
   baseDir?: string;
   port?: number;
   mcpServers?: MCPServerConfig[];
+  /**
+   * Overrides the default public marketplace registry URL. If omitted or blank,
+   * {@link DEFAULT_MARKETPLACE_REGISTRY_URL} is used.
+   */
+  marketplaceRegistryUrl?: string;
 }
 
 export interface MCPServerConfig {
@@ -32,6 +37,10 @@ export const DEFAULT_AGENTS_DIR = 'agents';
 export const DEFAULT_CHANNELS_DIR = 'channels';
 export const CONFIG_FILE = 'config.json';
 export const VARIABLES_FILE = 'variables.json';
+
+/** Public agent registry used when `marketplaceRegistryUrl` is not set. */
+export const DEFAULT_MARKETPLACE_REGISTRY_URL =
+  'https://raw.githubusercontent.com/meetopenbot/openbot-registry/main/registry.json';
 
 export function resolvePath(p: string) {
   return p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : path.resolve(p);

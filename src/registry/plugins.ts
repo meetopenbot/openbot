@@ -3,8 +3,6 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Plugin } from '../bus/plugin.js';
 import { aiSdkPlugin } from '../plugins/ai-sdk/index.js';
-import { claudeCodePlugin } from '../plugins/claude-code/index.js';
-import { geminiCliPlugin } from '../plugins/gemini-cli/index.js';
 import { shellPlugin } from '../plugins/shell/index.js';
 import { mcpPlugin } from '../plugins/mcp/index.js';
 import { delegationPlugin } from '../plugins/delegation/index.js';
@@ -19,8 +17,6 @@ const cache = new Map<string, Plugin>();
 
 const BUILT_IN: Record<string, Plugin> = {
   [aiSdkPlugin.id]: aiSdkPlugin,
-  [claudeCodePlugin.id]: claudeCodePlugin,
-  [geminiCliPlugin.id]: geminiCliPlugin,
   [shellPlugin.id]: shellPlugin,
   [mcpPlugin.id]: mcpPlugin,
   [delegationPlugin.id]: delegationPlugin,

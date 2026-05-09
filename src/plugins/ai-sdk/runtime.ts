@@ -6,6 +6,7 @@ import { OpenBotEvent, OpenBotState, ShortTermMessage } from '../../app/types.js
 import { Storage } from '../../bus/types.js';
 import type { ToolDefinition } from '../../bus/plugin.js';
 import { createDefaultContextEngine } from '../../harness/context.js';
+import { saveConfig } from '../../app/config.js';
 
 export interface AiSdkRuntimeOptions {
   /** Provider model string (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20240620`). */
@@ -102,7 +103,8 @@ export const aiSdkRuntime =
       toolDefinitions = {},
     } = options;
 
-    const model = resolveModel(modelString);
+    let currentModelString = modelString;
+    let model = resolveModel(currentModelString);
 
     const ensureShortTermMessages = (state: OpenBotState) => {
       if (!state.shortTermMessages || state.shortTermMessages.length === 0) {
@@ -226,16 +228,37 @@ export const aiSdkRuntime =
           errorMessage.includes('authentication');
 
         if (isApiKeyError) {
-          const provider = modelString.split('/')[0];
-          const envVar = provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+          const [currentProvider, ...rest] = currentModelString.split('/');
+          const currentModelId = rest.join('/');
           yield {
             type: 'client:ui:widget',
             data: {
               kind: 'form',
               widgetId: `api_key_request_${Date.now()}`,
-              title: `${provider.toUpperCase()} API Key Required`,
-              description: `The ${provider} API returned an authentication error. Please provide a valid API key to continue. The key never leaves your local runtime.`,
+              title: `AI Provider API Key Required`,
+              description: `The AI provider returned an authentication error. Select your provider, model, and provide a valid API key to continue. The key never leaves your local runtime.`,
               fields: [
+                {
+                  id: 'provider',
+                  label: 'Provider',
+                  type: 'select',
+                  required: true,
+                  options: [
+                    { label: 'OpenAI', value: 'openai' },
+                    { label: 'Anthropic', value: 'anthropic' },
+                  ],
+                  defaultValue: currentProvider === 'anthropic' ? 'anthropic' : 'openai',
+                },
+                {
+                  id: 'model',
+                  label: 'Model',
+                  type: 'text',
+                  description:
+                    'Model name without the provider prefix (e.g. `gpt-4o-mini` or `claude-3-5-sonnet-20240620`).',
+                  placeholder: 'gpt-4o-mini',
+                  required: true,
+                  defaultValue: currentModelId,
+                },
                 {
                   id: 'apiKey',
                   label: 'API Key',
@@ -244,11 +267,9 @@ export const aiSdkRuntime =
                   required: true,
                 },
               ],
-              submitLabel: 'Save API Key',
+              submitLabel: 'Save & Continue',
               metadata: {
                 type: 'api_key_request',
-                provider,
-                envVar,
               },
             },
             meta: { agentId: context.state.agentId, threadId },
@@ -322,46 +343,68 @@ export const aiSdkRuntime =
 
     builder.on('client:ui:widget:response', async function* (event, context) {
       const { metadata, values } = event.data;
-      if (metadata?.type === 'api_key_request' && values?.apiKey) {
-        const key = metadata.envVar as string;
-        const value = values.apiKey as string;
+      if (metadata?.type !== 'api_key_request') return;
+      if (!values?.apiKey || !values?.provider || !values?.model) return;
 
-        if (storage) {
-          try {
-            await storage.createVariable({ key, value, secret: true });
+      const provider = String(values.provider);
+      const modelId = String(values.model).trim();
+      const apiKey = String(values.apiKey);
 
-            yield {
-              type: 'agent:output',
-              data: {
-                content: `Successfully saved ${metadata.provider} API key to workspace variables.`,
-              },
-              meta: { agentId: context.state.agentId },
-            };
+      if (provider !== 'openai' && provider !== 'anthropic') {
+        yield {
+          type: 'agent:output',
+          data: { content: `Unsupported provider: ${provider}` },
+          meta: { agentId: context.state.agentId },
+        };
+        return;
+      }
 
-            yield {
-              type: 'client:ui:widget',
-              data: {
-                widgetId: event.data.widgetId,
-                kind: 'message',
-                title: 'API Key Saved',
-                body: `Successfully saved ${metadata.provider} API key. You can now continue your conversation.`,
-                state: 'submitted',
-                actions: [{ id: 'ok', label: 'Got it', variant: 'primary' }],
-              },
-              meta: { agentId: context.state.agentId },
-            };
-          } catch (error) {
-            yield {
-              type: 'agent:output',
-              data: {
-                content: `Failed to save API key: ${
-                  error instanceof Error ? error.message : 'Unknown error'
-                }`,
-              },
-              meta: { agentId: context.state.agentId },
-            };
-          }
+      const envVar = provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+      const newModelString = `${provider}/${modelId}`;
+
+      if (!storage) return;
+      try {
+        await storage.createVariable({ key: envVar, value: apiKey, secret: true });
+        process.env[envVar] = apiKey;
+
+        currentModelString = newModelString;
+        model = resolveModel(currentModelString);
+        try {
+          saveConfig({ model: currentModelString });
+        } catch {
+          // best-effort: config persistence failure shouldn't block the conversation
         }
+
+        yield {
+          type: 'agent:output',
+          data: {
+            content: `Saved ${provider} API key and set model to \`${newModelString}\`.`,
+          },
+          meta: { agentId: context.state.agentId },
+        };
+
+        yield {
+          type: 'client:ui:widget',
+          data: {
+            widgetId: event.data.widgetId,
+            kind: 'message',
+            title: 'API Key Saved',
+            body: `Successfully saved ${provider} API key and selected model \`${newModelString}\`. You can now continue your conversation.`,
+            state: 'submitted',
+            actions: [{ id: 'ok', label: 'Got it', variant: 'primary' }],
+          },
+          meta: { agentId: context.state.agentId },
+        };
+      } catch (error) {
+        yield {
+          type: 'agent:output',
+          data: {
+            content: `Failed to save API key: ${
+              error instanceof Error ? error.message : 'Unknown error'
+            }`,
+          },
+          meta: { agentId: context.state.agentId },
+        };
       }
     });
   };

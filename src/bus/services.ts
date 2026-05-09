@@ -1,8 +1,104 @@
 import { MelonyPlugin } from 'melony';
+import { DEFAULT_MARKETPLACE_REGISTRY_URL, loadConfig } from '../app/config.js';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
+import type { PluginRef } from './plugin.js';
 import { Storage } from './types.js';
 import { storageService } from '../services/storage.js';
 import { pluginService } from '../services/plugins.js';
+
+/** One marketplace entry; matches `action:marketplace:list:result` agent shape. */
+export type MarketplaceAgentListing = {
+  id: string;
+  name: string;
+  description: string;
+  image?: string;
+  instructions: string;
+  plugins: PluginRef[];
+};
+
+const DEFAULT_MARKETPLACE_AGENTS: MarketplaceAgentListing[] = [
+  {
+    id: 'researcher',
+    name: 'Researcher',
+    description: 'Specialized in web research and information synthesis.',
+    instructions:
+      'You are a research assistant. Use available tools to find information.',
+    plugins: [
+      { id: 'ai-sdk', config: { model: 'openai/gpt-4o' } },
+      { id: 'mcp' },
+      { id: 'shell' },
+    ],
+  },
+  {
+    id: 'coder',
+    name: 'Coder',
+    description: 'Expert in multiple programming languages and software architecture.',
+    instructions: 'You are an expert software engineer. Help the user with coding tasks.',
+    plugins: [{ id: 'claude-code' }],
+  },
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Parses JSON from a remote registry file. Supports either
+ * `{ "agents": [ ... ] }` or a top-level array.
+ */
+export function parseMarketplaceRegistryJson(data: unknown): MarketplaceAgentListing[] {
+  const rawAgents: unknown =
+    Array.isArray(data) ? data : isRecord(data) && Array.isArray(data.agents) ? data.agents : null;
+  if (!Array.isArray(rawAgents)) {
+    throw new Error('Registry JSON must be an array or an object with an "agents" array');
+  }
+  return rawAgents.map((item, i) => {
+    if (!isRecord(item)) {
+      throw new Error(`agents[${i}]: expected object`);
+    }
+    const id = item.id;
+    const name = item.name;
+    const description = item.description;
+    const instructions = item.instructions;
+    const pluginsRaw = item.plugins;
+    if (typeof id !== 'string' || !id) throw new Error(`agents[${i}].id must be a non-empty string`);
+    if (typeof name !== 'string') throw new Error(`agents[${i}].name must be a string`);
+    if (typeof description !== 'string') throw new Error(`agents[${i}].description must be a string`);
+    if (typeof instructions !== 'string') {
+      throw new Error(`agents[${i}].instructions must be a string`);
+    }
+    if (!Array.isArray(pluginsRaw)) throw new Error(`agents[${i}].plugins must be an array`);
+    const plugins: PluginRef[] = pluginsRaw.map((p, j) => {
+      if (!isRecord(p) || typeof p.id !== 'string' || !p.id) {
+        throw new Error(`agents[${i}].plugins[${j}]: expected { "id": string, "config"?: object }`);
+      }
+      const ref: PluginRef = { id: p.id };
+      if (p.config !== undefined) {
+        if (!isRecord(p.config)) throw new Error(`agents[${i}].plugins[${j}].config must be an object`);
+        ref.config = p.config;
+      }
+      return ref;
+    });
+    const listing: MarketplaceAgentListing = { id, name, description, instructions, plugins };
+    if (item.image !== undefined) {
+      if (typeof item.image !== 'string') throw new Error(`agents[${i}].image must be a string`);
+      listing.image = item.image;
+    }
+    return listing;
+  });
+}
+
+async function fetchMarketplaceAgentsFromUrl(url: string): Promise<MarketplaceAgentListing[]> {
+  const res = await fetch(url, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) {
+    throw new Error(`Registry HTTP ${res.status} ${res.statusText}`);
+  }
+  const json: unknown = await res.json();
+  return parseMarketplaceRegistryJson(json);
+}
 
 /**
  * Bus-level service plugin.
@@ -501,30 +597,18 @@ export const busServicesPlugin =
       });
 
       builder.on('action:marketplace:list', async function* () {
-        // Mock marketplace entries for MVP. Each entry references the plugin
-        // refs needed to seed an AGENT.md from the marketplace.
-        const agents = [
-          {
-            id: 'researcher',
-            name: 'Researcher',
-            description: 'Specialized in web research and information synthesis.',
-            instructions:
-              'You are a research assistant. Use available tools to find information.',
-            plugins: [
-              { id: 'ai-sdk', config: { model: 'openai/gpt-4o' } },
-              { id: 'mcp' },
-              { id: 'shell' },
-            ],
-          },
-          {
-            id: 'coder',
-            name: 'Coder',
-            description: 'Expert in multiple programming languages and software architecture.',
-            instructions:
-              'You are an expert software engineer. Help the user with coding tasks.',
-            plugins: [{ id: 'claude-code' }],
-          },
-        ];
+        const { marketplaceRegistryUrl } = loadConfig();
+        const registryUrl =
+          marketplaceRegistryUrl?.trim() || DEFAULT_MARKETPLACE_REGISTRY_URL;
+        let agents = DEFAULT_MARKETPLACE_AGENTS;
+        try {
+          agents = await fetchMarketplaceAgentsFromUrl(registryUrl);
+        } catch (err) {
+          console.warn(
+            `[bus] marketplace registry fetch failed (${registryUrl}), using built-in list:`,
+            err instanceof Error ? err.message : err,
+          );
+        }
         yield {
           type: 'action:marketplace:list:result',
           data: { success: true, agents },

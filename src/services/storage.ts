@@ -88,10 +88,10 @@ const SYSTEM_AGENT_ID = 'system';
 const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
   { id: 'ai-sdk', config: { model: 'openai/gpt-5.4-nano' } },
   { id: 'storage-tools' },
-  { id: 'mcp' },
+  // { id: 'mcp' },
   { id: 'shell' },
   { id: 'delegation' },
-  { id: 'ui' },
+  // { id: 'ui' },
   { id: 'approval' },
 ];
 
@@ -207,6 +207,7 @@ const listBuiltInPluginDescriptors = async (): Promise<PluginDescriptor[]> => {
     id: plugin.id,
     name: plugin.name,
     description: plugin.description,
+    builtIn: true,
     image: plugin.image,
     defaultInstructions: plugin.defaultInstructions,
     configSchema: plugin.configSchema,
@@ -276,6 +277,7 @@ const listPluginsFromDisk = async (): Promise<PluginDescriptor[]> => {
           id,
           name: parsed.name || id,
           description: parsed.description || '',
+          builtIn: false,
           image: parsed.image || image,
           defaultInstructions: parsed.defaultInstructions,
           configSchema: parsed.configSchema,
