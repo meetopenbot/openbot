@@ -1,11 +1,12 @@
 import z from 'zod';
+import type { Plugin } from '../../bus/plugin.js';
 
 /**
- * Tool schemas the OpenBot orchestrator agent exposes to its LLM for talking to
- * the bus's storage service. The actual handlers live in `src/bus/services.ts`
- * since storage is platform infrastructure, not agent behaviour.
+ * `storage-tools` — exposes channel/thread/variable mutation tools to runtime
+ * plugins. The actual handlers live in `bus/services.ts` because storage is
+ * platform infrastructure, not agent behaviour.
  */
-export const storageToolDefinitions = {
+const storageToolDefinitions = {
   create_channel: {
     description:
       'Create a new channel. Use when the user intent is clearly different from the current channel and should be split. Always confirm before creating. Skip for simple Q&A.',
@@ -86,3 +87,15 @@ export const storageToolDefinitions = {
     }),
   },
 };
+
+export const storageToolsPlugin: Plugin = {
+  id: 'storage-tools',
+  name: 'Storage Tools',
+  description: 'Tools for creating channels, patching state, and managing workspace variables.',
+  toolDefinitions: storageToolDefinitions,
+  factory: () => () => {
+    // Handlers live in bus/services.ts; this plugin only contributes tool definitions.
+  },
+};
+
+export default storageToolsPlugin;

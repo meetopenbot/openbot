@@ -1,12 +1,21 @@
 import { MelonyPlugin } from 'melony';
-import { OpenBotEvent, OpenBotState } from '../../../app/types.js';
-import { storageService } from '../../../services/storage.js';
+import type { Plugin } from '../../bus/plugin.js';
+import { OpenBotEvent, OpenBotState } from '../../app/types.js';
+import { storageService } from '../../services/storage.js';
 
 /**
- * Approval gating for protected tool calls (e.g. shell_exec).
+ * `approval` — gates protected tool calls behind a UI confirmation widget.
  *
- * This is OpenBot-agent-internal middleware. Other agent packages may implement
- * approval differently (or not at all); we don't want to bake it into the bus.
+ * Configuration is read from the per-agent plugin config in AGENT.md:
+ * ```yaml
+ * plugins:
+ *   - id: approval
+ *     config:
+ *       rules:
+ *         - action: action:shell_exec
+ *           message: The agent wants to run a terminal command.
+ *           detailKeys: [command, cwd, shell, timeoutMs]
+ * ```
  */
 
 export type ApprovalRule = {
@@ -19,9 +28,21 @@ export type ApprovalRule = {
   denyData?: Record<string, unknown>;
 };
 
-type ApprovalPluginOptions = {
-  rules?: ApprovalRule[];
-};
+export const DEFAULT_APPROVAL_RULES: ApprovalRule[] = [
+  {
+    action: 'action:shell_exec',
+    denyEvent: 'action:shell_exec:result',
+    message: 'The agent wants to run a terminal command.',
+    detailKeys: ['command', 'cwd', 'shell', 'timeoutMs'],
+    hiddenKeys: ['env'],
+    denyData: {
+      exitCode: null,
+      stdout: '',
+      stderr: 'Command execution was denied by the user.',
+      timedOut: false,
+    },
+  },
+];
 
 type PendingApproval = {
   id: string;
@@ -65,11 +86,9 @@ const persistApprovals = async (
   });
 };
 
-export const approvalPlugin =
-  (options: ApprovalPluginOptions = {}): MelonyPlugin<OpenBotState, OpenBotEvent> =>
+const buildApprovalPlugin =
+  (rules: ApprovalRule[]): MelonyPlugin<OpenBotState, OpenBotEvent> =>
   (builder) => {
-    const rules = options.rules || [];
-
     for (const rule of rules) {
       builder.on(rule.action as OpenBotEvent['type'], async function* (event, context) {
         const meta = asRecord(event.meta);
@@ -189,3 +208,21 @@ export const approvalPlugin =
       } as OpenBotEvent;
     });
   };
+
+const readRules = (config: Record<string, unknown>): ApprovalRule[] => {
+  const raw = config.rules;
+  if (!Array.isArray(raw)) return DEFAULT_APPROVAL_RULES;
+  return raw.filter(
+    (entry): entry is ApprovalRule =>
+      !!entry && typeof entry === 'object' && typeof (entry as { action?: unknown }).action === 'string',
+  );
+};
+
+export const approvalPlugin: Plugin = {
+  id: 'approval',
+  name: 'Approval',
+  description: 'Gate protected tool calls (e.g. shell_exec) behind a UI confirmation prompt.',
+  factory: ({ config }) => buildApprovalPlugin(readRules(config)),
+};
+
+export default approvalPlugin;

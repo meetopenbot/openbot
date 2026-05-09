@@ -4,9 +4,10 @@ import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { OpenBotEvent, OpenBotState, ShortTermMessage } from '../../app/types.js';
 import { Storage } from '../../bus/types.js';
+import type { ToolDefinition } from '../../bus/plugin.js';
 import { createDefaultContextEngine } from '../../harness/context.js';
 
-export interface OpenBotRuntimeOptions {
+export interface AiSdkRuntimeOptions {
   /** Provider model string (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20240620`). */
   model?: string;
   /** Static or dynamic system prompt. */
@@ -15,7 +16,8 @@ export interface OpenBotRuntimeOptions {
   contextEngine?: {
     buildContext: (state: OpenBotState, storage?: Storage) => Promise<string>;
   };
-  toolDefinitions?: Record<string, { description: string; inputSchema: any }>;
+  /** Tool definitions merged from all tool plugins attached to this agent. */
+  toolDefinitions?: Record<string, ToolDefinition>;
 }
 
 function resolveModel(modelString: string): LanguageModel {
@@ -83,14 +85,14 @@ async function buildSystemPrompt(
 }
 
 /**
- * The ai-sdk based runtime that drives OpenBot's first-party agent.
+ * Generic ai-sdk runtime plugin.
  *
- * It owns `agent:invoke`, runs the LLM, emits tool-call events and stitches
- * tool results back into the conversation. The runtime is intentionally
- * agent-package-internal: it is not a generic OpenBot abstraction.
+ * Owns `agent:invoke`, runs the LLM, emits tool-call events, and stitches tool
+ * results back into the conversation. Tools are supplied externally by the
+ * loader (merged from every tool plugin attached to the same agent).
  */
-export const openBotRuntime =
-  (options: OpenBotRuntimeOptions): MelonyPlugin<OpenBotState, OpenBotEvent> =>
+export const aiSdkRuntime =
+  (options: AiSdkRuntimeOptions): MelonyPlugin<OpenBotState, OpenBotEvent> =>
   (builder) => {
     const {
       model: modelString = 'openai/gpt-4o-mini',
@@ -164,7 +166,7 @@ export const openBotRuntime =
           model,
           system: systemPrompt,
           messages: coreMessages,
-          tools: toolDefinitions,
+          tools: toolDefinitions as Record<string, { description: string; inputSchema: any }>,
         });
 
         const toolCalls = result.toolCalls ?? [];
@@ -215,8 +217,8 @@ export const openBotRuntime =
             meta: { agentId: context.state.agentId, threadId },
           };
         }
-      } catch (error: any) {
-        const errorMessage = error?.message || String(error);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         const isApiKeyError =
           errorMessage.includes('API key') ||
           errorMessage.includes('401') ||
@@ -287,7 +289,7 @@ export const openBotRuntime =
       ensureShortTermMessages(context.state);
 
       const toolName = event.type.replace(/^action:/, '').replace(/:result$/, '');
-      const resultData = (event as any).data;
+      const resultData = (event as { data?: unknown }).data;
       const content = typeof resultData === 'string' ? resultData : JSON.stringify(resultData);
 
       context.state.shortTermMessages = [
@@ -298,17 +300,19 @@ export const openBotRuntime =
 
       const lastAssistant = [...(context.state.shortTermMessages ?? [])]
         .reverse()
-        .find((m: any) => m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0);
+        .find(
+          (m): m is Extract<ShortTermMessage, { role: 'assistant' }> =>
+            m.role === 'assistant' && Array.isArray(m.toolCalls) && m.toolCalls.length > 0,
+        );
 
-      if (lastAssistant && (lastAssistant as any).toolCalls) {
-        const allFulfilled = (lastAssistant as any).toolCalls.every((tc: any) =>
+      if (lastAssistant && lastAssistant.toolCalls) {
+        const allFulfilled = lastAssistant.toolCalls.every((tc) =>
           context.state.shortTermMessages?.some(
-            (m: any) => m.role === 'tool' && m.toolCallId === tc.id,
+            (m) => m.role === 'tool' && m.toolCallId === tc.id,
           ),
         );
 
         if (allFulfilled) {
-          // handoff terminates the current agent path; the orchestrator continues with the target agent.
           if (toolName === 'handoff') return;
           const threadId = event.meta?.threadId || context.state.threadId;
           yield* runLLM(context, threadId);

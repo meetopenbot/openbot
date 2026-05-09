@@ -1,5 +1,6 @@
 import { MelonyPlugin } from 'melony';
 import z from 'zod';
+import type { Plugin } from '../../bus/plugin.js';
 import {
   OpenBotEvent,
   OpenBotState,
@@ -7,7 +8,7 @@ import {
   UIWidgetField,
   UIWidgetListItem,
   UIWidgetSpec,
-} from '../../../app/types.js';
+} from '../../app/types.js';
 
 const actionSchema = z.object({
   id: z.string().describe('Stable action ID returned by client:ui:widget:response.'),
@@ -196,7 +197,7 @@ const normalizeWidget = (
   throw new Error(`Unsupported UI widget kind: ${(data as { kind?: string }).kind || 'unknown'}`);
 };
 
-export const uiToolDefinitions = {
+const uiToolDefinitions = {
   render_ui_widget: {
     description:
       'Render a small server-driven UI widget in the conversation. Prefer primitive kinds: message, choice, form, or list. Legacy presets approval and todo_list are accepted.',
@@ -204,7 +205,7 @@ export const uiToolDefinitions = {
   },
 };
 
-export const uiPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
+const uiPluginRuntime = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
   builder.on('action:render_ui_widget', async function* (event, context) {
     const widget = normalizeWidget(event.data, context.state, event.meta?.toolCallId);
     yield {
@@ -214,3 +215,13 @@ export const uiPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder
     };
   });
 };
+
+export const uiPlugin: Plugin = {
+  id: 'ui',
+  name: 'UI Widgets',
+  description: 'Render server-driven UI widgets (messages, choices, forms, lists) in the conversation.',
+  toolDefinitions: uiToolDefinitions,
+  factory: () => uiPluginRuntime(),
+};
+
+export default uiPlugin;

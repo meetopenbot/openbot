@@ -1,11 +1,12 @@
 import type { OpenBotEvent } from '../app/types.js';
+import type { PluginRef } from './plugin.js';
 
 /**
  * Public data types exposed by the OpenBot bus.
  *
  * The bus is the platform layer that owns channels, threads, the agent registry,
- * and the event stream. Agents (including the first-party OpenBot agent) are
- * peers on the bus; their internal implementation is opaque to the bus.
+ * and the event stream. Agents are composed entirely of Plugins (see
+ * `bus/plugin.ts`); their internal implementation is opaque to the bus.
  */
 
 export type Agent = {
@@ -13,19 +14,19 @@ export type Agent = {
   name: string;
   description: string;
   image?: string;
-  /** Identifier of the agent package that handles this agent's invocations. */
-  packageId: string;
+  /** Plugin ids that compose this agent (mirrors AGENT.md `plugins[].id`). */
+  plugins: string[];
   createdAt: Date;
   updatedAt: Date;
 };
 
 export type AgentDetails = Agent & {
   instructions: string;
-  /** Package-specific configuration (e.g. model name for ai-sdk based packages). */
-  config?: Record<string, unknown>;
+  /** Full plugin refs from AGENT.md (with per-plugin config). */
+  pluginRefs: PluginRef[];
 };
 
-export type AgentPackageDescriptor = {
+export type PluginDescriptor = {
   id: string;
   name: string;
   description: string;
@@ -106,23 +107,21 @@ export interface Storage {
   getThreads: (args: { channelId: string }) => Promise<Thread[]>;
   getThreadDetails: (args: { channelId: string; threadId: string }) => Promise<ThreadDetails>;
   getAgents: () => Promise<Agent[]>;
-  getAgentPackages: () => Promise<AgentPackageDescriptor[]>;
+  getPlugins: () => Promise<PluginDescriptor[]>;
   getAgentDetails: (args: { agentId: string }) => Promise<AgentDetails>;
   createAgent: (args: {
     agentId: string;
     name: string;
     description?: string;
     instructions: string;
-    packageId: string;
-    config?: Record<string, unknown>;
+    plugins: PluginRef[];
   }) => Promise<void>;
   updateAgent: (args: {
     agentId: string;
     name?: string;
     description?: string;
     instructions?: string;
-    packageId?: string;
-    config?: Record<string, unknown>;
+    plugins?: PluginRef[];
   }) => Promise<void>;
   deleteAgent: (args: { agentId: string }) => Promise<void>;
   getEvents: (args: { channelId: string; threadId?: string }) => Promise<OpenBotEvent[]>;

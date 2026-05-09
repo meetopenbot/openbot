@@ -1,15 +1,9 @@
 import { MelonyPlugin } from 'melony';
 import z from 'zod';
-import { OpenBotEvent, OpenBotState } from '../../../app/types.js';
+import type { Plugin } from '../../bus/plugin.js';
+import { OpenBotEvent, OpenBotState } from '../../app/types.js';
 
-/**
- * Tool definitions for the OpenBot orchestrator's delegation/handoff capability.
- *
- * The actual cross-agent routing lives in the bus's queue processor: when this
- * plugin yields `handoff:request` / `delegation:request` events, the orchestrator
- * intercepts them and dispatches an `agent:invoke` to the target agent.
- */
-export const delegationToolDefinitions = {
+const delegationToolDefinitions = {
   handoff: {
     description:
       'Transfer control to another agent. The target agent continues the task and you do not wait for a tool result.',
@@ -28,7 +22,7 @@ export const delegationToolDefinitions = {
   },
 };
 
-export const delegationPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
+const delegationPluginRuntime = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
   builder.on('action:handoff', async function* (event, context) {
     const { agentId, content } = event.data;
 
@@ -88,3 +82,13 @@ export const delegationPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => 
     };
   });
 };
+
+export const delegationPlugin: Plugin = {
+  id: 'delegation',
+  name: 'Delegation',
+  description: 'Hand off or delegate sub-tasks to other agents on the bus.',
+  toolDefinitions: delegationToolDefinitions,
+  factory: () => delegationPluginRuntime(),
+};
+
+export default delegationPlugin;

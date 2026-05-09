@@ -1,7 +1,8 @@
 import { MelonyPlugin } from 'melony';
 import z from 'zod';
-import { OpenBotEvent, OpenBotState } from '../../../app/types.js';
-import { mcpService } from '../../../harness/mcp.js';
+import type { Plugin } from '../../bus/plugin.js';
+import { OpenBotEvent, OpenBotState } from '../../app/types.js';
+import { mcpService } from '../../harness/mcp.js';
 
 function stringifyResult(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -12,7 +13,7 @@ function stringifyResult(value: unknown): string {
   }
 }
 
-export const mcpToolDefinitions = {
+const mcpToolDefinitions = {
   mcp_list_tools: {
     description:
       'List available tools from a configured MCP server. Use this first before calling tools on an unknown server.',
@@ -34,9 +35,9 @@ export const mcpToolDefinitions = {
   },
 };
 
-export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
+const mcpPluginRuntime = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
   builder.on('action:mcp_list_tools', async function* (event, context) {
-    const serverId = (event.data as any)?.serverId as string;
+    const serverId = (event.data as { serverId?: string })?.serverId as string;
 
     try {
       const tools = await mcpService.listTools(serverId);
@@ -76,9 +77,14 @@ export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builde
   });
 
   builder.on('action:mcp_call', async function* (event, context) {
-    const serverId = (event.data as any)?.serverId as string;
-    const toolName = (event.data as any)?.toolName as string;
-    const args = ((event.data as any)?.args || {}) as Record<string, unknown>;
+    const data = event.data as {
+      serverId?: string;
+      toolName?: string;
+      args?: Record<string, unknown>;
+    };
+    const serverId = data?.serverId as string;
+    const toolName = data?.toolName as string;
+    const args = (data?.args || {}) as Record<string, unknown>;
 
     try {
       const result = await mcpService.callTool(serverId, toolName, args);
@@ -110,3 +116,13 @@ export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builde
     }
   });
 };
+
+export const mcpPlugin: Plugin = {
+  id: 'mcp',
+  name: 'MCP',
+  description: 'Connect to Model Context Protocol servers and call their tools.',
+  toolDefinitions: mcpToolDefinitions,
+  factory: () => mcpPluginRuntime(),
+};
+
+export default mcpPlugin;

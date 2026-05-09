@@ -1,5 +1,5 @@
 import {
-  DEFAULT_AGENT_PACKAGES_DIR,
+  DEFAULT_PLUGINS_DIR,
   DEFAULT_AGENTS_DIR,
   DEFAULT_BASE_DIR,
   DEFAULT_CHANNELS_DIR,
@@ -15,15 +15,16 @@ import matter from 'gray-matter';
 import {
   Agent,
   AgentDetails,
-  AgentPackageDescriptor,
   Channel,
   ChannelDetails,
+  PluginDescriptor,
   Thread,
   ThreadDetails,
 } from '../bus/types.js';
-import { openBotAgentPackage } from '../agents/openbot/index.js';
-import { OPENBOT_SYSTEM_PROMPT } from '../agents/openbot/system-prompt.js';
-import { listBuiltInAgentPackages, parseAgentPackageModule } from '../registry/agents.js';
+import type { PluginRef } from '../bus/plugin.js';
+import { aiSdkPlugin } from '../plugins/ai-sdk/index.js';
+import { AI_SDK_SYSTEM_PROMPT } from '../plugins/ai-sdk/system-prompt.js';
+import { listBuiltInPlugins, parsePluginModule } from '../registry/plugins.js';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { processService } from '../harness/process.js';
 import { pathToFileURL } from 'node:url';
@@ -49,15 +50,6 @@ const tryReadSvgDataUrl = async (filePath: string): Promise<string | null> => {
   }
 };
 
-/**
- * Auto-discovers an entity SVG avatar and returns it as a data URL.
- *
- * Search order:
- * 1) <entity>/assets/avatar.svg|icon.svg|image.svg|logo.svg
- * 2) <entity>/avatar.svg|icon.svg|image.svg|logo.svg
- * 3) first *.svg in <entity>/assets
- * 4) first *.svg in <entity>
- */
 const resolveEntityImageDataUrl = async (entityDir: string): Promise<string | undefined> => {
   const preferredDirs = [path.join(entityDir, 'assets'), entityDir];
 
@@ -78,7 +70,7 @@ const resolveEntityImageDataUrl = async (entityDir: string): Promise<string | un
       const dataUrl = await tryReadSvgDataUrl(path.join(dir, firstSvg.name));
       if (dataUrl) return dataUrl;
     } catch {
-      // ignore missing/unreadable folders
+      // ignore
     }
   }
 
@@ -90,33 +82,52 @@ const getConversationDir = (channelId: string, threadId?: string) => {
   return threadId ? `${base}/threads/${threadId}` : base;
 };
 
-/** Built-in orchestrator agent id. Not creatable as a normal disk agent (`agents/<id>/AGENT.md`). */
+/** Built-in orchestrator agent id. Not creatable as a normal disk agent. */
 const SYSTEM_AGENT_ID = 'system';
+
+const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
+  { id: 'ai-sdk', config: { model: 'openai/gpt-5.4-nano' } },
+  { id: 'storage-tools' },
+  { id: 'mcp' },
+  { id: 'shell' },
+  { id: 'delegation' },
+  { id: 'ui' },
+  { id: 'approval' },
+];
 
 function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails {
   const defaults: AgentDetails = {
     id: SYSTEM_AGENT_ID,
-    name: openBotAgentPackage.name,
-    image: openBotAgentPackage.image,
-    description: openBotAgentPackage.description,
-    instructions: OPENBOT_SYSTEM_PROMPT,
-    packageId: openBotAgentPackage.id,
-    config: { model: 'openai/gpt-5.4-nano' },
+    name: 'OpenBot',
+    image: undefined,
+    description:
+      'First-party orchestration agent for OpenBot. Coordinates other agents via handoff and delegation.',
+    instructions: AI_SDK_SYSTEM_PROMPT,
+    plugins: SYSTEM_DEFAULT_PLUGINS.map((ref) => ref.id),
+    pluginRefs: SYSTEM_DEFAULT_PLUGINS,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
 
   if (!overrides) return defaults;
 
+  const refs = overrides.pluginRefs && overrides.pluginRefs.length > 0
+    ? overrides.pluginRefs
+    : defaults.pluginRefs;
+
   return {
     ...defaults,
     ...overrides,
     id: SYSTEM_AGENT_ID,
     image: overrides.image || defaults.image,
-    config: { ...(defaults.config || {}), ...(overrides.config || {}) },
+    plugins: refs.map((ref) => ref.id),
+    pluginRefs: refs,
     updatedAt: new Date(),
   };
 }
+
+// Suppress unused warning until system agent customization re-uses aiSdkPlugin metadata.
+void aiSdkPlugin;
 
 const RESERVED_DISK_AGENT_IDS = new Set([SYSTEM_AGENT_ID]);
 
@@ -176,7 +187,6 @@ const toVariablesRecord = (raw: unknown): Record<string, string> => {
     return {};
   }
 
-  // Current format: { version: number, variables: StoredVariable[] }
   if ('variables' in raw && Array.isArray((raw as { variables?: unknown }).variables)) {
     const entries = (raw as { variables: StoredVariable[] }).variables
       .filter((variable) => typeof variable?.key === 'string')
@@ -184,7 +194,6 @@ const toVariablesRecord = (raw: unknown): Record<string, string> => {
     return Object.fromEntries(entries);
   }
 
-  // Legacy format: { [key: string]: string }
   return Object.fromEntries(
     Object.entries(raw as Record<string, unknown>).map(([key, value]) => [
       key,
@@ -193,28 +202,28 @@ const toVariablesRecord = (raw: unknown): Record<string, string> => {
   );
 };
 
-const listBuiltInAgentPackageDescriptors = async (): Promise<AgentPackageDescriptor[]> => {
-  return listBuiltInAgentPackages().map((pkg) => ({
-    id: pkg.id,
-    name: pkg.name,
-    description: pkg.description,
-    image: pkg.image,
-    defaultInstructions: pkg.defaultInstructions,
-    configSchema: pkg.configSchema,
+const listBuiltInPluginDescriptors = async (): Promise<PluginDescriptor[]> => {
+  return listBuiltInPlugins().map((plugin) => ({
+    id: plugin.id,
+    name: plugin.name,
+    description: plugin.description,
+    image: plugin.image,
+    defaultInstructions: plugin.defaultInstructions,
+    configSchema: plugin.configSchema,
     createdAt: new Date(),
     updatedAt: new Date(),
   }));
 };
 
 /**
- * Walk `agent-packages/` and yield candidate package ids (npm names). Includes
- * scoped packages by recursing one level into directories starting with `@`.
+ * Walk `plugins/` and yield candidate plugin ids (npm names). Includes scoped
+ * packages by recursing one level into directories starting with `@`.
  */
-const listInstalledPackageIds = async (packagesDir: string): Promise<string[]> => {
+const listInstalledPluginIds = async (pluginsDir: string): Promise<string[]> => {
   const out: string[] = [];
   let topEntries;
   try {
-    topEntries = await fs.readdir(packagesDir, { withFileTypes: true });
+    topEntries = await fs.readdir(pluginsDir, { withFileTypes: true });
   } catch {
     return out;
   }
@@ -225,7 +234,7 @@ const listInstalledPackageIds = async (packagesDir: string): Promise<string[]> =
 
     if (entry.name.startsWith('@')) {
       try {
-        const inner = await fs.readdir(path.join(packagesDir, entry.name), { withFileTypes: true });
+        const inner = await fs.readdir(path.join(pluginsDir, entry.name), { withFileTypes: true });
         for (const sub of inner) {
           if (sub.name.startsWith('.')) continue;
           if (sub.isDirectory() || sub.isSymbolicLink()) {
@@ -244,25 +253,25 @@ const listInstalledPackageIds = async (packagesDir: string): Promise<string[]> =
   return out;
 };
 
-const listAgentPackagesFromDisk = async (): Promise<AgentPackageDescriptor[]> => {
-  const packagesDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_AGENT_PACKAGES_DIR);
+const listPluginsFromDisk = async (): Promise<PluginDescriptor[]> => {
+  const pluginsDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_PLUGINS_DIR);
   try {
-    await fs.access(packagesDir);
+    await fs.access(pluginsDir);
   } catch {
-    await fs.mkdir(packagesDir, { recursive: true });
+    await fs.mkdir(pluginsDir, { recursive: true });
   }
 
-  const ids = await listInstalledPackageIds(packagesDir);
+  const ids = await listInstalledPluginIds(pluginsDir);
 
   const descriptors = await Promise.all(
-    ids.map(async (id): Promise<AgentPackageDescriptor | null> => {
+    ids.map(async (id): Promise<PluginDescriptor | null> => {
       try {
-        const packageDir = path.join(packagesDir, id);
-        const distPath = path.join(packageDir, 'dist', 'index.js');
+        const pluginDir = path.join(pluginsDir, id);
+        const distPath = path.join(pluginDir, 'dist', 'index.js');
         const module = await import(pathToFileURL(distPath).href);
-        const parsed = parseAgentPackageModule(module as Record<string, unknown>);
+        const parsed = parsePluginModule(module as Record<string, unknown>);
         if (!parsed) return null;
-        const image = await resolveEntityImageDataUrl(packageDir);
+        const image = await resolveEntityImageDataUrl(pluginDir);
         return {
           id,
           name: parsed.name || id,
@@ -274,14 +283,40 @@ const listAgentPackagesFromDisk = async (): Promise<AgentPackageDescriptor[]> =>
           updatedAt: new Date(),
         };
       } catch (error) {
-        console.warn(`[storage] Failed to load agent package ${id}:`, error);
+        console.warn(`[storage] Failed to load plugin ${id}:`, error);
         return null;
       }
     }),
   );
 
-  return descriptors.filter((d): d is AgentPackageDescriptor => d !== null);
+  return descriptors.filter((d): d is PluginDescriptor => d !== null);
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * Parse the `plugins:` array from AGENT.md frontmatter. Each entry must have an
+ * `id`; `config` is optional. Strings are accepted as a shorthand for `{ id }`.
+ */
+const parsePluginRefs = (raw: unknown): PluginRef[] => {
+  if (!Array.isArray(raw)) return [];
+  const refs: PluginRef[] = [];
+  for (const entry of raw) {
+    if (typeof entry === 'string' && entry.trim()) {
+      refs.push({ id: entry.trim() });
+      continue;
+    }
+    if (isRecord(entry) && typeof entry.id === 'string' && entry.id.trim()) {
+      const config = isRecord(entry.config) ? (entry.config as Record<string, unknown>) : undefined;
+      refs.push({ id: entry.id.trim(), ...(config ? { config } : {}) });
+    }
+  }
+  return refs;
+};
+
+const serializePluginRefs = (refs: PluginRef[]): unknown[] =>
+  refs.map((ref) => (ref.config ? { id: ref.id, config: ref.config } : { id: ref.id }));
 
 export const storageService = {
   getLastReadByChannel: async (): Promise<Record<string, string>> => {
@@ -326,7 +361,7 @@ export const storageService = {
           const state = JSON.parse(stateContent);
           cwd = typeof state.cwd === 'string' ? state.cwd : undefined;
         } catch {
-          // Ignore if state.json is missing or invalid
+          // ignore
         }
 
         const channel: Channel = {
@@ -347,7 +382,6 @@ export const storageService = {
         }
 
         try {
-          // Fetch up to 5 most recent threads for the sidebar
           const allThreads = await storageService.getThreads({ channelId: name });
           channel.recentThreads = allThreads
             .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
@@ -385,8 +419,9 @@ export const storageService = {
     try {
       await fs.access(channelDir);
       throw new Error(`Channel "${normalizedChannelId}" already exists`);
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error: unknown) {
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code !== 'ENOENT') {
         throw error;
       }
     }
@@ -396,7 +431,7 @@ export const storageService = {
     };
 
     if (cwd) {
-      finalState.cwd = cwd;
+      (finalState as Record<string, unknown>).cwd = cwd;
     }
 
     await fs.mkdir(channelDir, { recursive: true });
@@ -423,12 +458,8 @@ export const storageService = {
     const normalizedChannelId = channelId.trim();
     const normalizedThreadId = threadId.trim();
 
-    if (!normalizedChannelId) {
-      throw new Error('channelId is required');
-    }
-    if (!normalizedThreadId) {
-      throw new Error('threadId is required');
-    }
+    if (!normalizedChannelId) throw new Error('channelId is required');
+    if (!normalizedThreadId) throw new Error('threadId is required');
 
     const threadDir = getConversationDir(normalizedChannelId, normalizedThreadId);
     const specPath = `${threadDir}/SPEC.md`;
@@ -439,13 +470,14 @@ export const storageService = {
       throw new Error(
         `Thread "${normalizedThreadId}" already exists in channel "${normalizedChannelId}"`,
       );
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error: unknown) {
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code !== 'ENOENT') {
         throw error;
       }
     }
 
-    const baseState = { ...(initialState || {}) };
+    const baseState: Record<string, unknown> = { ...(initialState || {}) };
     if (threadTitle?.trim()) {
       baseState.generatedName = threadTitle.trim();
     }
@@ -485,8 +517,8 @@ export const storageService = {
           if (generatedName) {
             threadDisplayName = generatedName;
           }
-        } catch (error: any) {
-          if (error.code !== 'ENOENT') {
+        } catch (error: unknown) {
+          if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
             console.error(
               `Failed to read thread state for channel ${channelId} thread ${name}`,
               error,
@@ -520,8 +552,8 @@ export const storageService = {
     let spec = '';
     try {
       spec = await fs.readFile(specPath, 'utf-8');
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
         console.error(
           `Failed to read thread spec for channel ${channelId} thread ${threadId}`,
           error,
@@ -529,12 +561,12 @@ export const storageService = {
       }
     }
 
-    let state = {};
+    let state: unknown = {};
     try {
       const stateContent = await fs.readFile(statePath, 'utf-8');
       state = JSON.parse(stateContent);
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
         console.error(
           `Failed to read thread state for channel ${channelId} thread ${threadId}`,
           error,
@@ -543,8 +575,8 @@ export const storageService = {
     }
 
     const generatedName =
-      typeof (state as Record<string, unknown>).generatedName === 'string'
-        ? ((state as Record<string, unknown>).generatedName as string).trim()
+      isRecord(state) && typeof state.generatedName === 'string'
+        ? state.generatedName.trim()
         : '';
 
     return {
@@ -563,28 +595,30 @@ export const storageService = {
     let spec = '';
     try {
       spec = await fs.readFile(specPath, 'utf-8');
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
         console.error(`Failed to read spec file for channel ${channelId}`, error);
       }
     }
 
-    let state = {};
+    let state: unknown = {};
     try {
       const stateContent = await fs.readFile(statePath, 'utf-8');
       state = JSON.parse(stateContent);
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
         console.error(`Failed to read state file for channel ${channelId}`, error);
       }
     }
+
+    const cwd = isRecord(state) && typeof state.cwd === 'string' ? state.cwd : undefined;
 
     const details: ChannelDetails = {
       id: channelId,
       name: channelId,
       spec,
       state,
-      cwd: typeof (state as any).cwd === 'string' ? (state as any).cwd : undefined,
+      cwd,
     };
 
     details.threads = await storageService.getThreads({ channelId });
@@ -602,17 +636,14 @@ export const storageService = {
     const statePath = `${channelDir}/state.json`;
 
     try {
-      // 1. Fetch current details to get the existing state
       const currentDetails = await storageService.getChannelDetails({ channelId });
       const currentState = (currentDetails.state as Record<string, unknown>) || {};
 
-      // 2. Perform a shallow merge (patch)
       const newState = {
         ...currentState,
         ...(patch as Record<string, unknown>),
       };
 
-      // 3. Write back the merged state
       await fs.mkdir(channelDir, { recursive: true });
       await fs.writeFile(statePath, JSON.stringify(newState, null, 2));
     } catch (error) {
@@ -633,17 +664,14 @@ export const storageService = {
     const statePath = `${threadDir}/state.json`;
 
     try {
-      // 1. Fetch current details to get the existing state
       const currentDetails = await storageService.getThreadDetails({ channelId, threadId });
       const currentState = (currentDetails.state as Record<string, unknown>) || {};
 
-      // 2. Perform a shallow merge (patch)
       const newState = {
         ...currentState,
         ...(patch as Record<string, unknown>),
       };
 
-      // 3. Write back the merged state
       await fs.mkdir(threadDir, { recursive: true });
       await fs.writeFile(statePath, JSON.stringify(newState, null, 2));
     } catch (error) {
@@ -714,7 +742,7 @@ export const storageService = {
             name: details.name || id,
             description: details.description || '',
             image: details.image,
-            packageId: details.packageId,
+            plugins: details.plugins,
             createdAt: details.createdAt,
             updatedAt: details.updatedAt,
           } satisfies Agent;
@@ -723,7 +751,7 @@ export const storageService = {
             id,
             name: id,
             description: '',
-            packageId: '',
+            plugins: [],
             createdAt: new Date(),
             updatedAt: new Date(),
           } satisfies Agent;
@@ -737,7 +765,7 @@ export const storageService = {
       name: system.name,
       description: system.description || '',
       image: system.image,
-      packageId: system.packageId,
+      plugins: system.plugins,
       createdAt: system.createdAt,
       updatedAt: system.updatedAt,
     };
@@ -750,17 +778,17 @@ export const storageService = {
 
     return Array.from(deduped.values());
   },
-  getAgentPackages: async (): Promise<AgentPackageDescriptor[]> => {
+  getPlugins: async (): Promise<PluginDescriptor[]> => {
     const [builtIn, fromDisk] = await Promise.all([
-      listBuiltInAgentPackageDescriptors(),
-      listAgentPackagesFromDisk(),
+      listBuiltInPluginDescriptors(),
+      listPluginsFromDisk(),
     ]);
 
     const merged = [...builtIn, ...fromDisk];
-    const deduped = new Map<string, AgentPackageDescriptor>();
-    for (const pkg of merged) {
-      if (!deduped.has(pkg.id)) {
-        deduped.set(pkg.id, pkg);
+    const deduped = new Map<string, PluginDescriptor>();
+    for (const plugin of merged) {
+      if (!deduped.has(plugin.id)) {
+        deduped.set(plugin.id, plugin);
       }
     }
     return Array.from(deduped.values());
@@ -776,16 +804,17 @@ export const storageService = {
       const agentMd = await fs.readFile(agentMdPath, 'utf-8');
       const { data, content: instructions } = matter(agentMd);
       const discoveredImage = await resolveEntityImageDataUrl(agentDir);
-
       const stats = await fs.stat(agentMdPath);
+
+      const pluginRefs = parsePluginRefs(data.plugins);
 
       diskDetails = {
         id: agentId,
-        name: data.name || agentId,
+        name: typeof data.name === 'string' ? data.name : agentId,
         instructions: instructions.trim(),
-        packageId: typeof data.packageId === 'string' ? data.packageId : 'openbot',
-        config: (data.config as Record<string, unknown> | undefined) || {},
-        description: data.description || '',
+        plugins: pluginRefs.map((ref) => ref.id),
+        pluginRefs,
+        description: typeof data.description === 'string' ? data.description : '',
         image: discoveredImage || undefined,
         createdAt: stats.birthtime,
         updatedAt: stats.mtime,
@@ -796,6 +825,8 @@ export const storageService = {
         (err as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
         throw err;
       }
+      // swallow: system agent has on-disk overrides optional
+      void error;
     }
 
     if (agentId === SYSTEM_AGENT_ID) {
@@ -815,15 +846,13 @@ export const storageService = {
     name,
     description = '',
     instructions,
-    packageId,
-    config,
+    plugins,
   }: {
     agentId: string;
     name: string;
     description?: string;
     instructions: string;
-    packageId: string;
-    config?: AgentDetails['config'];
+    plugins: PluginRef[];
   }): Promise<void> => {
     assertValidDiskAgentId(agentId);
     const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
@@ -845,8 +874,11 @@ export const storageService = {
 
     await fs.mkdir(agentDir, { recursive: true });
 
-    const data: Record<string, unknown> = { name, description, packageId };
-    if (config !== undefined) data.config = config;
+    const data: Record<string, unknown> = {
+      name,
+      description,
+      plugins: serializePluginRefs(plugins),
+    };
 
     const body = matter.stringify(`${instructions.trim()}\n`, data);
     await fs.writeFile(agentMdPath, body, 'utf-8');
@@ -856,15 +888,13 @@ export const storageService = {
     name,
     description,
     instructions,
-    packageId,
-    config,
+    plugins,
   }: {
     agentId: string;
     name?: string;
     description?: string;
     instructions?: string;
-    packageId?: string;
-    config?: AgentDetails['config'];
+    plugins?: PluginRef[];
   }): Promise<void> => {
     assertValidDiskAgentId(agentId);
     const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
@@ -886,8 +916,7 @@ export const storageService = {
     const nextData: Record<string, unknown> = { ...parsed.data };
     if (name !== undefined) nextData.name = name;
     if (description !== undefined) nextData.description = description;
-    if (packageId !== undefined) nextData.packageId = packageId;
-    if (config !== undefined) nextData.config = config;
+    if (plugins !== undefined) nextData.plugins = serializePluginRefs(plugins);
 
     const nextContent = instructions !== undefined ? instructions : parsed.content;
     const body = matter.stringify(`${String(nextContent).trim()}\n`, nextData);
@@ -963,7 +992,6 @@ export const storageService = {
           return event;
         });
 
-      // If we are at the channel level (no threadId), check which events have threads
       if (!threadId) {
         const threadsDir = resolvePath(
           resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR + '/' + channelId + '/threads',
@@ -973,32 +1001,26 @@ export const storageService = {
           const threadSet = new Set(threadDirs);
 
           return events.map((event) => {
-            // Check if this event has a threadId associated with it
-            // The frontend provides the threadId, and it matches the directory name on disk
-            const threadId = event.id;
-
-            // If an explicit threadId exists and has a directory, use it
-            if (threadId && threadSet.has(threadId)) {
+            const eventThreadId = event.id;
+            if (eventThreadId && threadSet.has(eventThreadId)) {
               return {
                 ...event,
                 meta: {
-                  ...(event as any)?.meta,
+                  ...(event.meta || {}),
                   hasThread: true,
                 },
               };
             }
-
             return event;
           });
         } catch {
-          // No threads folder or other error, just return events as is
           return events;
         }
       }
 
       return events;
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
         console.error(`Failed to get events for channel ${channelId} thread ${threadId}`, error);
       }
       return [];
@@ -1018,8 +1040,8 @@ export const storageService = {
       if (threadId) {
         try {
           await fs.access(threadDir);
-        } catch (error: any) {
-          if (error.code === 'ENOENT') {
+        } catch (error: unknown) {
+          if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
             const threadTitle = buildThreadTitleFromEvent(event);
             await storageService.createThread({
               channelId,
@@ -1034,7 +1056,6 @@ export const storageService = {
         await fs.mkdir(threadDir, { recursive: true });
       }
 
-      // Ensure the event has a unique ID
       if (!event.id) {
         event.id = crypto.randomUUID();
       }
@@ -1047,16 +1068,20 @@ export const storageService = {
   },
   getVariables: async (): Promise<Record<string, string | { value: string; secret: boolean }>> => {
     const variablesFilePath = resolvePath(resolveBaseDir() + '/' + VARIABLES_FILE);
-    const raw = await readJsonFile<any>(variablesFilePath, {});
+    const raw = await readJsonFile<unknown>(variablesFilePath, {});
 
-    if (raw && typeof raw === 'object' && 'variables' in raw && Array.isArray(raw.variables)) {
-      const entries = (raw.variables as StoredVariable[])
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      'variables' in raw &&
+      Array.isArray((raw as { variables: unknown }).variables)
+    ) {
+      const entries = ((raw as { variables: StoredVariable[] }).variables)
         .filter((v) => typeof v?.key === 'string')
         .map((v) => [v.key, { value: String(v.value ?? ''), secret: !!v.secret }] as const);
       return Object.fromEntries(entries);
     }
 
-    // Legacy or simple format
     return toVariablesRecord(raw);
   },
 
@@ -1070,13 +1095,17 @@ export const storageService = {
     secret?: boolean;
   }): Promise<void> => {
     const variablesFilePath = resolvePath(resolveBaseDir() + '/' + VARIABLES_FILE);
-    const raw = await readJsonFile<any>(variablesFilePath, { version: 1, variables: [] });
+    const raw = await readJsonFile<unknown>(variablesFilePath, { version: 1, variables: [] });
 
     let variables: StoredVariable[] = [];
-    if (raw && typeof raw === 'object' && 'variables' in raw && Array.isArray(raw.variables)) {
-      variables = raw.variables as StoredVariable[];
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      'variables' in raw &&
+      Array.isArray((raw as { variables: unknown }).variables)
+    ) {
+      variables = (raw as { variables: StoredVariable[] }).variables;
     } else {
-      // Convert legacy format to new format
       variables = Object.entries(toVariablesRecord(raw)).map(([k, v]) => ({
         key: k,
         value: v,
@@ -1102,13 +1131,17 @@ export const storageService = {
 
   deleteVariable: async ({ key }: { key: string }): Promise<void> => {
     const variablesFilePath = resolvePath(resolveBaseDir() + '/' + VARIABLES_FILE);
-    const raw = await readJsonFile<any>(variablesFilePath, { version: 1, variables: [] });
+    const raw = await readJsonFile<unknown>(variablesFilePath, { version: 1, variables: [] });
 
     let variables: StoredVariable[] = [];
-    if (raw && typeof raw === 'object' && 'variables' in raw && Array.isArray(raw.variables)) {
-      variables = raw.variables as StoredVariable[];
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      'variables' in raw &&
+      Array.isArray((raw as { variables: unknown }).variables)
+    ) {
+      variables = (raw as { variables: StoredVariable[] }).variables;
     } else {
-      // Convert legacy format to new format
       variables = Object.entries(toVariablesRecord(raw)).map(([k, v]) => ({
         key: k,
         value: v,
@@ -1119,7 +1152,7 @@ export const storageService = {
     const newVariables = variables.filter((v) => v.key !== key);
 
     if (newVariables.length === variables.length) {
-      return; // Nothing to delete
+      return;
     }
 
     await fs.mkdir(path.dirname(variablesFilePath), { recursive: true });
@@ -1148,14 +1181,13 @@ export const storageService = {
     const resolvedBase = path.resolve(baseCwd);
     const targetDir = path.resolve(resolvedBase, subPath);
 
-    // Security check: ensure target is within baseCwd
     if (!targetDir.startsWith(resolvedBase)) {
       throw new Error('Access denied: directory escape');
     }
 
     const entries = await fs.readdir(targetDir, { withFileTypes: true });
     return entries
-      .filter((e) => !e.name.startsWith('.')) // Hide hidden files by default for MVP
+      .filter((e) => !e.name.startsWith('.'))
       .map((e) => ({
         name: e.name,
         isDirectory: e.isDirectory(),
@@ -1179,7 +1211,6 @@ export const storageService = {
     const resolvedBase = path.resolve(baseCwd);
     const targetFile = path.resolve(resolvedBase, filePath);
 
-    // Security check: ensure target is within baseCwd
     if (!targetFile.startsWith(resolvedBase)) {
       throw new Error('Access denied: directory escape');
     }
@@ -1240,8 +1271,8 @@ export const storageService = {
         description: agentDetails.description || '',
         image: agentDetails.image,
         instructions: agentDetails.instructions || '',
-        packageId: agentDetails.packageId,
-        config: agentDetails.config,
+        plugins: agentDetails.plugins,
+        pluginRefs: agentDetails.pluginRefs,
         createdAt: agentDetails.createdAt,
         updatedAt: agentDetails.updatedAt,
       } satisfies AgentDetails,

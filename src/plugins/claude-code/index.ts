@@ -1,18 +1,14 @@
-import type { AgentPackage } from '../../bus/agent-package.js';
+import type { Plugin } from '../../bus/plugin.js';
 import { claudeCodeRuntime } from './runtime.js';
 import { CLAUDE_CODE_SYSTEM_PROMPT } from './system-prompt.js';
 
 /**
- * Claude Code — an OpenBot agent package backed by `@anthropic-ai/claude-agent-sdk`.
+ * `claude-code` — runtime plugin backed by `@anthropic-ai/claude-agent-sdk`.
  *
- * This folder is intentionally self-contained: it only depends on the bus
- * public types (`AgentPackage`, `OpenBotEvent`, `OpenBotState`), `melony`, and
- * the Claude Agent SDK. It can be lifted out of this repo into a standalone
- * npm package (e.g. `openbot-plugin-claude-code`) without code changes; only
- * the import paths to the bus types need to be replaced with a peer-dep
- * import (e.g. `import type { AgentPackage } from 'openbot/bus'`).
+ * This plugin owns its own tool loop (Read / Edit / Bash / ...) inside the
+ * Claude Agent SDK, so it does not consume tools contributed by other plugins.
  */
-export const claudeCodeAgentPackage: AgentPackage = {
+export const claudeCodePlugin: Plugin = {
   id: 'claude-code',
   name: 'Claude Code',
   description:
@@ -51,4 +47,4 @@ export const claudeCodeAgentPackage: AgentPackage = {
   },
 };
 
-export default claudeCodeAgentPackage;
+export default claudeCodePlugin;

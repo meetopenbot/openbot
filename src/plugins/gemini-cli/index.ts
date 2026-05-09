@@ -1,18 +1,15 @@
-import type { AgentPackage } from '../../bus/agent-package.js';
+import type { Plugin } from '../../bus/plugin.js';
 import { geminiCliRuntime } from './runtime.js';
 import { GEMINI_CLI_SYSTEM_PROMPT } from './system-prompt.js';
 
 /**
- * Gemini CLI — an OpenBot agent package backed by Google's `gemini` CLI in
- * headless (`--output-format stream-json`) mode.
+ * `gemini-cli` — runtime plugin backed by Google's `gemini` CLI in headless
+ * (`--output-format stream-json`) mode.
  *
- * Like the `claude-code` package, this folder is intentionally self-contained:
- * it depends only on the bus public types (`AgentPackage`, `OpenBotEvent`,
- * `OpenBotState`) and `melony`, plus the `gemini` binary on PATH. It can be
- * lifted into a standalone npm package (e.g. `openbot-plugin-gemini-cli`)
- * without code changes.
+ * Like `claude-code`, this plugin owns its own tool loop and does not consume
+ * tools contributed by other plugins.
  */
-export const geminiCliAgentPackage: AgentPackage = {
+export const geminiCliPlugin: Plugin = {
   id: 'gemini-cli',
   name: 'Gemini CLI',
   description:
@@ -59,4 +56,4 @@ export const geminiCliAgentPackage: AgentPackage = {
   },
 };
 
-export default geminiCliAgentPackage;
+export default geminiCliPlugin;

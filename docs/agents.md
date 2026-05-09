@@ -1,83 +1,56 @@
 # Agents
 
-Agents are specialized entities within the OpenBot platform, each designed to handle specific domains or tasks. The platform orchestrates these agents to solve complex problems through collaboration.
+Agents are participants on the OpenBot bus. An agent is just a markdown file
+(`AGENT.md`) that lists which **plugins** compose it. Plugins provide both the
+LLM runtime and the tools the agent can call.
 
-## Built-in Agents
+## Authoring an agent
 
-### Orchestrator Agent (Default)
-The central intelligence of the platform. It manages the conversation flow, handles long-term memory, and coordinates other agents.
+You define an agent with a YAML-fronted markdown file at
+`~/.openbot/agents/<agentId>/AGENT.md`. The folder name is the agent id.
 
-### OS Agent (`os`)
-Specialized in low-level system interactions. It uses shell and file tooling via the orchestrator. (Default orchestrator behaviour lives in `src/agents/openbot/`; the built-in `system` agent defaults are merged in `src/services/storage.ts`.)
-
-### Topic Agent (`topic`)
-A utility agent that observes completions and automatically generates concise titles for conversations to keep the workspace organized.
-
-### Codex Agent (`codex`)
-A world-class software engineer agent. It assists with architectural decisions, refactoring, and debugging, with full access to the development environment.
-
-## YAML Agents
-
-You can define custom agents using YAML files in `~/.openbot/agents/`.
-
-### Installing Agents
-
-You can easily install official agents using the CLI:
-
-```bash
-openbot add codex
-```
-
-This will automatically download the agent and install it into your local agents directory.
-
-Example `codex.yaml`:
 ```yaml
-name: codex
-description: "A specialized agent for writing and refactoring code"
+---
+name: Researcher
+description: Web research and synthesis specialist.
 plugins:
-  - name: file-system
-  - name: shell
-prompt: |
-  You are an expert software engineer. 
-  You use the provided tools to write high-quality code.
+  - id: ai-sdk
+    config:
+      model: anthropic/claude-3-5-sonnet-20240620
+  - id: mcp
+  - id: shell
+  - id: delegation
+---
+
+You are a web research specialist. Use the available tools to gather and
+synthesize information. Be concise and cite sources where relevant.
 ```
 
-YAML agents are automatically discovered and registered by OpenBot on startup.
+The body below the frontmatter is the system prompt passed to the runtime
+plugin as `agentDetails.instructions`.
 
-## TS Agents (Packages)
+### Required: at least one runtime plugin
 
-For more advanced use cases, you can create a full TypeScript package as an agent. This is useful if you need custom logic, additional event handlers, or private plugins that you don't want to expose globally.
+A runtime plugin is one that handles `agent:invoke` (the LLM loop). Without
+one, the agent will not respond to user input. Built-in runtime plugins:
 
-Place these in `~/.openbot/agents/my-ts-agent/`.
+- `ai-sdk` — generic LLM runtime (Vercel AI SDK). Consumes tools from other
+  plugins listed alongside it.
+- `claude-code` — runs Claude inside the Claude Agent SDK with its own tools.
+- `gemini-cli` — spawns Google's `gemini` CLI in headless mode.
 
-### Structure
+`claude-code` and `gemini-cli` own their own tool loops, so attaching tool
+plugins like `shell` or `mcp` to them has no effect. Pair tool plugins with
+`ai-sdk`.
 
-- `package.json`: Standard npm package configuration.
-- `index.ts`: The entry point that exports a `TSAgentDefinition`.
+## Built-in agent
 
-### Example `index.ts`
+OpenBot ships a built-in `system` agent (the orchestrator) with the
+`ai-sdk` runtime plus the standard tool plugins (storage, shell, mcp,
+delegation, ui, approval). It cannot be deleted.
 
-```typescript
-import { TSAgentDefinition } from "openbot";
+## Installing community agents
 
-export const agent: TSAgentDefinition = {
-  name: "my-ts-agent",
-  description: "An agent with custom TypeScript logic.",
-  factory: ({ model }) => (builder) => {
-    // 1. You can use standard plugins
-    // 2. Or implement custom event handling logic here
-    // 3. Finally, wire up an LLM loop for it
-    builder.use(llmPlugin({
-      model,
-      system: "You are a specialized TS Agent...",
-      toolDefinitions: { /* custom tools */ },
-      // I/O defaults to standardized: user:input / agent:output
-    }));
-  },
-  capabilities: {
-    "do_something": "Performs a custom TS-driven action"
-  }
-};
-```
-
-TS agents are automatically compiled and loaded on startup.
+Marketplace entries reference plugin ids (built-in or npm package names).
+Installing an agent ensures every referenced plugin is available locally,
+fetching unknown ids from npm into `~/.openbot/plugins/<id>/` on first use.

@@ -4,27 +4,42 @@
 # File location: ~/.openbot/agents/<agentId>/AGENT.md
 # The agent id is the folder name (<agentId>), not a field in this file.
 #
-# Required-ish for clarity (defaults exist—see below):
 name: Example Agent
 description: One-line description shown in agent pickers and lists.
 
-# Which AgentPackage handles invocations for this agent.
-# Built-in: "openbot" (orchestrator / ai-sdk runtime + tools).
-# Community packages: use the npm package name (globally unique on npmjs.com),
-# e.g. "openbot-plugin-codex" or "@scope/openbot-plugin-foo". OpenBot will
-# auto-install the package on first use into ~/.openbot/agent-packages/<packageId>/.
-packageId: openbot
-
-# Package-specific options. Shape depends on packageId.
-# For "openbot", common keys:
-config:
-  model: openai/gpt-4o-mini
-  # model: anthropic/claude-3-5-sonnet-20240620
+# Plugins compose the agent. Order matters for tool collisions (first wins).
+# At least one plugin must handle `agent:invoke` (a "runtime" plugin like
+# `ai-sdk`, `claude-code`, or `gemini-cli`). Tool plugins like `shell`, `mcp`,
+# `delegation`, `storage-tools`, and `ui` contribute tools to whichever runtime
+# plugin can consume them.
+#
+# Built-in plugin ids: ai-sdk, claude-code, gemini-cli, shell, mcp, delegation,
+# storage-tools, ui, approval.
+#
+# Community plugins are referenced by their npm package name (e.g.
+# `openbot-plugin-search` or `@scope/openbot-plugin-foo`) and are auto-installed
+# on first use into ~/.openbot/plugins/<id>/.
+plugins:
+  - id: ai-sdk
+    config:
+      model: openai/gpt-4o-mini
+  - id: shell
+  - id: mcp
+  - id: delegation
+  - id: storage-tools
+  - id: ui
+  - id: approval
+    config:
+      rules:
+        - action: action:shell_exec
+          message: The agent wants to run a terminal command.
+          detailKeys: [command, cwd, shell, timeoutMs]
+          hiddenKeys: [env]
 ---
 
 <!--
   Everything below the closing --- is the agent instructions (system prompt body).
-  It is stored as markdown and passed to the AgentPackage as agentDetails.instructions.
+  It is stored as markdown and passed to runtime plugins as agentDetails.instructions.
 -->
 
 # Role
@@ -39,10 +54,4 @@ You are **Example Agent**, a specialist for [describe domain here].
 ## Scope
 
 - **In scope:** [list what you handle]
-- **Out of scope:** [defer to OpenBot or another agent for…]
-
-## Tools
-
-You run on the `openbot` package: you can use workspace tools exposed by that package
-(storage channels/threads, MCP, shell where allowed, handoff/delegate to other agents, etc.)
-as described in OpenBot’s documentation.
+- **Out of scope:** [defer to another agent for…]

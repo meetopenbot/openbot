@@ -13,7 +13,7 @@ import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js'
 import { processService } from '../harness/process.js';
 import { storageService } from '../services/storage.js';
 import { AgentHarness } from '../harness/agent-harness.js';
-import { initAgentPackages } from '../registry/agents.js';
+import { initPlugins } from '../registry/plugins.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
 
 export interface ServerOptions {
@@ -45,12 +45,12 @@ export async function startServer(options: ServerOptions = {}) {
   >();
 
   const agentsDir = path.join(openBotDir, 'agents');
-  const agentPackagesDir = path.join(openBotDir, 'agent-packages');
+  const pluginsDir = path.join(openBotDir, 'plugins');
 
   await fs.mkdir(agentsDir, { recursive: true });
-  await fs.mkdir(agentPackagesDir, { recursive: true });
+  await fs.mkdir(pluginsDir, { recursive: true });
 
-  initAgentPackages(agentPackagesDir);
+  initPlugins(pluginsDir);
 
   const getContext = (req: express.Request) => {
     const channelId =

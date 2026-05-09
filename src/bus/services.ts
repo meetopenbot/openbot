@@ -2,7 +2,7 @@ import { MelonyPlugin } from 'melony';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { Storage } from './types.js';
 import { storageService } from '../services/storage.js';
-import { agentPackageService } from '../services/agent-packages.js';
+import { pluginService } from '../services/plugins.js';
 
 /**
  * Bus-level service plugin.
@@ -266,9 +266,9 @@ export const busServicesPlugin =
         yield { type: 'action:storage:get-agents-result', data: { agents } };
       });
 
-      builder.on('action:storage:get-agent-packages', async function* () {
-        const packages = await storage.getAgentPackages();
-        yield { type: 'action:storage:get-agent-packages-result', data: { packages } };
+      builder.on('action:storage:get-plugins', async function* () {
+        const plugins = await storage.getPlugins();
+        yield { type: 'action:storage:get-plugins-result', data: { plugins } };
       });
 
       builder.on('action:storage:get-agent-details', async function* (event) {
@@ -289,8 +289,8 @@ export const busServicesPlugin =
 
       builder.on('action:storage:create-agent', async function* (event) {
         try {
-          const { agentId, name, description, instructions, packageId, config } = event.data;
-          await storage.createAgent({ agentId, name, description, instructions, packageId, config });
+          const { agentId, name, description, instructions, plugins } = event.data;
+          await storage.createAgent({ agentId, name, description, instructions, plugins });
           yield { type: 'action:storage:create-agent-result', data: { success: true } };
         } catch (error) {
           yield {
@@ -305,8 +305,8 @@ export const busServicesPlugin =
 
       builder.on('action:storage:update-agent', async function* (event) {
         try {
-          const { agentId, name, description, instructions, packageId, config } = event.data;
-          await storage.updateAgent({ agentId, name, description, instructions, packageId, config });
+          const { agentId, name, description, instructions, plugins } = event.data;
+          await storage.updateAgent({ agentId, name, description, instructions, plugins });
           yield { type: 'action:storage:update-agent-result', data: { success: true } };
         } catch (error) {
           yield {
@@ -472,53 +472,57 @@ export const busServicesPlugin =
         }
       });
 
-      builder.on('action:agent-package:install', async function* (event) {
+      builder.on('action:plugin:install', async function* (event) {
         try {
           const { name, version } = event.data;
-          const result = await agentPackageService.install({ packageName: name, version });
+          const result = await pluginService.install({ packageName: name, version });
           yield {
-            type: 'action:agent-package:install:result',
-            data: { success: true, package: result },
+            type: 'action:plugin:install:result',
+            data: { success: true, plugin: result },
           } as OpenBotEvent;
         } catch (error) {
           yield {
-            type: 'action:agent-package:install:result',
+            type: 'action:plugin:install:result',
             data: { success: false, error: (error as Error).message },
           } as OpenBotEvent;
         }
       });
 
-      builder.on('action:agent-package:uninstall', async function* (event) {
+      builder.on('action:plugin:uninstall', async function* (event) {
         try {
-          await agentPackageService.uninstall(event.data.id);
-          yield { type: 'action:agent-package:uninstall:result', data: { success: true } };
+          await pluginService.uninstall(event.data.id);
+          yield { type: 'action:plugin:uninstall:result', data: { success: true } };
         } catch (error) {
           yield {
-            type: 'action:agent-package:uninstall:result',
+            type: 'action:plugin:uninstall:result',
             data: { success: false, error: (error as Error).message },
           };
         }
       });
 
       builder.on('action:marketplace:list', async function* () {
-        // Mock marketplace entries for MVP. Each entry references an installable
-        // agent package + the default config and instructions to seed an Agent row.
+        // Mock marketplace entries for MVP. Each entry references the plugin
+        // refs needed to seed an AGENT.md from the marketplace.
         const agents = [
           {
             id: 'researcher',
             name: 'Researcher',
             description: 'Specialized in web research and information synthesis.',
-            instructions: 'You are a research assistant. Use available tools to find information.',
-            packageId: 'openbot',
-            config: { model: 'openai/gpt-4o' },
+            instructions:
+              'You are a research assistant. Use available tools to find information.',
+            plugins: [
+              { id: 'ai-sdk', config: { model: 'openai/gpt-4o' } },
+              { id: 'mcp' },
+              { id: 'shell' },
+            ],
           },
           {
             id: 'coder',
             name: 'Coder',
             description: 'Expert in multiple programming languages and software architecture.',
-            instructions: 'You are an expert software engineer. Help the user with coding tasks.',
-            packageId: 'openbot-plugin-codex',
-            config: { model: 'openai/gpt-4o' },
+            instructions:
+              'You are an expert software engineer. Help the user with coding tasks.',
+            plugins: [{ id: 'claude-code' }],
           },
         ];
         yield {
@@ -529,13 +533,23 @@ export const busServicesPlugin =
 
       builder.on('action:agent:install', async function* (event) {
         try {
-          const { agentId, name, description, instructions, packageId, config } = event.data;
+          const { agentId, name, description, instructions, plugins } = event.data;
 
-          // Ensure the agent's package is available locally. Built-in ids (e.g.
-          // "openbot") resolve immediately; npm-name ids are fetched on demand.
-          const installedPackage = await agentPackageService.isInstalled(packageId);
-          if (!installedPackage && packageId !== 'openbot') {
-            await agentPackageService.install({ packageName: packageId });
+          // Ensure each plugin is available locally. Built-in ids resolve
+          // immediately; npm-name ids are fetched on demand.
+          for (const ref of plugins) {
+            const installed = await pluginService.isInstalled(ref.id);
+            if (!installed && ref.id.includes('/') === false && ref.id.includes('-plugin-') === false) {
+              // Treat ids without a hyphen+slash signature as built-ins; skip install.
+              continue;
+            }
+            if (!installed) {
+              try {
+                await pluginService.install({ packageName: ref.id });
+              } catch (err) {
+                console.warn(`[bus] Failed to pre-install plugin ${ref.id}`, err);
+              }
+            }
           }
 
           await storage.createAgent({
@@ -543,8 +557,7 @@ export const busServicesPlugin =
             name,
             description,
             instructions,
-            packageId,
-            config,
+            plugins,
           });
           yield {
             type: 'action:agent:install:result',
@@ -553,7 +566,7 @@ export const busServicesPlugin =
           yield {
             type: 'agent:output',
             data: { content: `Successfully installed agent **${name}** (${agentId}) from marketplace.` },
-            meta: { agentId: 'openbot' },
+            meta: { agentId: 'system' },
           } as OpenBotEvent;
         } catch (error) {
           yield {

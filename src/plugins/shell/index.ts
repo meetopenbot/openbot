@@ -1,9 +1,10 @@
 import { MelonyPlugin } from 'melony';
 import { z } from 'zod';
 import { spawn } from 'node:child_process';
-import { OpenBotEvent, OpenBotState } from '../../../app/types.js';
+import type { Plugin } from '../../bus/plugin.js';
+import { OpenBotEvent, OpenBotState } from '../../app/types.js';
 
-export const shellToolDefinitions = {
+const shellToolDefinitions = {
   shell_exec: {
     description:
       'Execute a shell command in the terminal. Use this for file operations, running scripts, or system tasks.',
@@ -25,7 +26,7 @@ export const shellToolDefinitions = {
   },
 };
 
-export const shellPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
+const shellPluginRuntime = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
   builder.on('action:shell_exec', async function* (event, context) {
     const { command, cwd, shell = 'bash', timeoutMs = 30000 } = event.data;
 
@@ -110,3 +111,13 @@ export const shellPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (buil
     }
   });
 };
+
+export const shellPlugin: Plugin = {
+  id: 'shell',
+  name: 'Shell',
+  description: 'Execute shell commands in the channel workspace.',
+  toolDefinitions: shellToolDefinitions,
+  factory: () => shellPluginRuntime(),
+};
+
+export default shellPlugin;
