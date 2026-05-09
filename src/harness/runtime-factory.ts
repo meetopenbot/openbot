@@ -1,11 +1,13 @@
 import { melony, Runtime } from 'melony';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
-import { resolvePlugin } from '../registry/plugins.js';
+import { resolveAgentPackage } from '../registry/agents.js';
 import { storageService } from '../services/storage.js';
-import { loadConfig, PluginSpec } from '../app/config.js';
+import { busServicesPlugin } from '../bus/services.js';
 
 /**
- * Enhances agent instructions with a list of other available agents.
+ * Enhances the agent's instructions with a list of other available agents the
+ * orchestrator can hand off / delegate to. The OpenBot orchestrator relies on
+ * this to surface peers; other agent packages may ignore this enhancement.
  */
 export async function enhanceInstructions(state: OpenBotState) {
   const { agentId, agentDetails } = state;
@@ -33,63 +35,49 @@ export async function enhanceInstructions(state: OpenBotState) {
 }
 
 /**
- * Factory for creating an OpenBot Melony Runtime.
+ * Build the Melony runtime that drives a single agent run on the OpenBot bus.
+ *
+ * The runtime always wires:
+ *   1. `busServicesPlugin` — bus-level services (storage, channels, threads,
+ *      agent registry, agent-package install/marketplace) shared by every agent.
+ *   2. The agent's `AgentPackage` factory — the agent's own behaviour
+ *      (`agent:invoke` handler + tool implementations + middleware).
  */
 export async function createAgentRuntime(
   state: OpenBotState,
 ): Promise<Runtime<OpenBotState, OpenBotEvent>> {
-  // 1. Prepare instructions
   await enhanceInstructions(state);
 
-  // 2. Initialize runtime with the agent plugin
   const runtime = melony<OpenBotState, OpenBotEvent>({
     initialState: state,
   });
 
-  // 3. Normalize plugin specs:
-  // - runtime can be a single spec or an array (for backward/forward compatibility)
-  // - plugins remains supported as additional specs
-  const runtimeSpecs = Array.isArray(state.agentDetails?.runtime)
-    ? state.agentDetails.runtime
-    : state.agentDetails?.runtime
-      ? [state.agentDetails.runtime]
-      : [];
-  const { globalPlugins = [] } = loadConfig();
-  const agentSpecs = [...runtimeSpecs, ...(state.agentDetails?.plugins || [])];
-  const pluginSpecs = mergePluginSpecs(globalPlugins, agentSpecs);
+  runtime.use(busServicesPlugin({ storage: storageService }));
 
-  // 4. Load normalized plugins
-  for (const p of pluginSpecs) {
-    const name = typeof p === 'string' ? p : p?.name;
-    if (!name || typeof name !== 'string') {
-      continue;
-    }
-
-    const config = typeof p === 'string' ? {} : { ...(p.config || {}) };
-    const plugin = await resolvePlugin(name, config);
-    if (plugin) {
-      runtime.use(plugin);
-    }
+  const packageId = state.agentDetails?.packageId;
+  if (!packageId) {
+    console.warn(
+      `[agent] Agent "${state.agentId}" has no packageId; only bus services will be active.`,
+    );
+    return runtime.build();
   }
+
+  const pkg = await resolveAgentPackage(packageId);
+  if (!pkg) {
+    console.warn(
+      `[agent] AgentPackage "${packageId}" for agent "${state.agentId}" could not be resolved.`,
+    );
+    return runtime.build();
+  }
+
+  const factoryPlugin = pkg.factory({
+    agentId: state.agentId,
+    agentDetails: state.agentDetails!,
+    config: state.agentDetails!.config || {},
+    storage: storageService,
+  });
+
+  runtime.use(factoryPlugin);
 
   return runtime.build();
-}
-
-function mergePluginSpecs(globalSpecs: PluginSpec[], agentSpecs: PluginSpec[]): PluginSpec[] {
-  const specsByName = new Map<string, PluginSpec>();
-
-  for (const spec of globalSpecs) {
-    const name = typeof spec === 'string' ? spec : spec?.name;
-    if (!name || typeof name !== 'string') continue;
-    specsByName.set(name, spec);
-  }
-
-  // Agent-defined plugins override global ones with the same name.
-  for (const spec of agentSpecs) {
-    const name = typeof spec === 'string' ? spec : spec?.name;
-    if (!name || typeof name !== 'string') continue;
-    specsByName.set(name, spec);
-  }
-
-  return [...specsByName.values()];
 }

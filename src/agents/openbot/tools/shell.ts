@@ -1,17 +1,26 @@
 import { MelonyPlugin } from 'melony';
 import { z } from 'zod';
 import { spawn } from 'node:child_process';
-import { OpenBotEvent, OpenBotState } from '../app/types.js';
-import { PluginMetadata } from './storage.js';
+import { OpenBotEvent, OpenBotState } from '../../../app/types.js';
 
 export const shellToolDefinitions = {
   shell_exec: {
-    description: 'Execute a shell command in the terminal. Use this for file operations, running scripts, or system tasks.',
+    description:
+      'Execute a shell command in the terminal. Use this for file operations, running scripts, or system tasks.',
     inputSchema: z.object({
       command: z.string().describe('The shell command to execute.'),
-      cwd: z.string().optional().describe('The working directory for the command. Defaults to the channel cwd or workspace root. Leave it empty unless user asks for a specific directory.'),
-      shell: z.enum(['bash', 'sh', 'zsh']).optional().describe('The shell to use. Defaults to bash.'),
-      timeoutMs: z.number().optional().default(30000).describe('Maximum execution time in milliseconds. Defaults to 30000 (30s).'),
+      cwd: z
+        .string()
+        .optional()
+        .describe(
+          'Working directory. Defaults to the channel cwd or workspace root. Leave empty unless the user requests a specific directory.',
+        ),
+      shell: z.enum(['bash', 'sh', 'zsh']).optional().describe('Shell to use. Defaults to bash.'),
+      timeoutMs: z
+        .number()
+        .optional()
+        .default(30000)
+        .describe('Maximum execution time in milliseconds. Defaults to 30000 (30s).'),
     }),
   },
 };
@@ -20,10 +29,7 @@ export const shellPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (buil
   builder.on('action:shell_exec', async function* (event, context) {
     const { command, cwd, shell = 'bash', timeoutMs = 30000 } = event.data;
 
-    // Clamp timeout between 1s and 60s
     const actualTimeout = Math.max(1000, Math.min(timeoutMs, 60000));
-    
-    // Default CWD to channel CWD if not provided
     const actualCwd = cwd || context.state.channelDetails?.cwd || process.cwd();
 
     try {
@@ -50,7 +56,6 @@ export const shellPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (buil
 
         child.stdout.on('data', (data) => {
           stdout += data.toString();
-          // Cap output at 100KB
           if (stdout.length > 100000) {
             stdout = stdout.substring(0, 100000) + '\n... [output truncated]';
             child.kill();
@@ -87,27 +92,7 @@ export const shellPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (buil
           timedOut: result.timedOut,
         },
         meta: event.meta,
-      } as any;
-
-      // const output = [
-      //   `Command: \`${command}\``,
-      //   result.exitCode !== null ? `Exit code: ${result.exitCode}` : 'Exit code: unknown',
-      //   result.timedOut ? '⚠️ Command timed out.' : '',
-      //   result.stdout ? `\n**STDOUT**:\n${result.stdout}` : '',
-      //   result.stderr ? `\n**STDERR**:\n${result.stderr}` : '',
-      // ].filter(Boolean).join('\n');
-
-      // yield {
-      //   type: 'agent:output',
-      //   data: {
-      //     content: output,
-      //   },
-      //   meta: {
-      //     ...(event.meta || {}),
-      //     agentId: context.state.agentId,
-      //   },
-      // } as any;
-
+      } as OpenBotEvent;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown shell error';
       yield {
@@ -121,30 +106,7 @@ export const shellPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (buil
           error: message,
         },
         meta: event.meta,
-      } as any;
-
-      // yield {
-      //   type: 'agent:output',
-      //   data: {
-      //     content: `Failed to execute shell command: ${message}`,
-      //   },
-      //   meta: {
-      //     ...(event.meta || {}),
-      //     agentId: context.state.agentId,
-      //   },
-      // } as any;
+      } as OpenBotEvent;
     }
   });
-};
-
-export const plugin: PluginMetadata = {
-  id: 'shell',
-  name: 'shell',
-  description: 'Execute shell commands in the terminal',
-  kind: 'tool' as const,
-  version: '1.0.0',
-  author: 'OpenBot',
-  license: 'MIT',
-  factory: shellPlugin,
-  toolDefinitions: shellToolDefinitions,
 };

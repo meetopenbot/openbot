@@ -1,5 +1,5 @@
 import { OpenBotState } from '../app/types.js';
-import { Storage } from '../plugins/storage.js';
+import { Storage } from '../bus/types.js';
 
 /**
  * Represents a piece of context that can be used in a prompt.

@@ -1,4 +1,5 @@
 import { MelonyPlugin } from 'melony';
+import z from 'zod';
 import {
   OpenBotEvent,
   OpenBotState,
@@ -6,9 +7,7 @@ import {
   UIWidgetField,
   UIWidgetListItem,
   UIWidgetSpec,
-} from '../app/types.js';
-import { PluginMetadata } from './storage.js';
-import z from 'zod';
+} from '../../../app/types.js';
 
 const actionSchema = z.object({
   id: z.string().describe('Stable action ID returned by client:ui:widget:response.'),
@@ -43,7 +42,7 @@ const listItemSchema = z.object({
 });
 
 const widgetBaseSchema = {
-  widgetId: z.string().optional().describe('Optional stable widget ID. Defaults from toolCallId.'),
+  widgetId: z.string().optional().describe('Stable widget ID. Defaults from toolCallId.'),
   title: z.string().optional(),
   description: z.string().optional(),
   body: z.string().optional(),
@@ -68,10 +67,7 @@ const renderWidgetSchema = z.union([
     fields: z.array(fieldSchema).optional(),
     submitLabel: z.string().optional(),
     actions: z.array(actionSchema).optional(),
-    props: z
-      .record(z.string(), z.unknown())
-      .optional()
-      .describe('Legacy form props. Prefer fields and submitLabel.'),
+    props: z.record(z.string(), z.unknown()).optional(),
   }),
   z.object({
     ...widgetBaseSchema,
@@ -102,12 +98,8 @@ const asListItems = (value: unknown): UIWidgetListItem[] | undefined =>
 
 const todoToListItem = (todo: unknown, index: number): UIWidgetListItem => {
   if (!isRecord(todo)) {
-    return {
-      id: `todo_${index + 1}`,
-      label: String(todo),
-    };
+    return { id: `todo_${index + 1}`, label: String(todo) };
   }
-
   return {
     id: readString(todo.id) || `todo_${index + 1}`,
     label:
@@ -167,10 +159,7 @@ const normalizeWidget = (
       kind: 'list',
       title: data.title || readString(props.title) || 'Task List',
       description: readString(props.description),
-      metadata: {
-        ...(data.metadata || {}),
-        legacyKind: 'todo_list',
-      },
+      metadata: { ...(data.metadata || {}), legacyKind: 'todo_list' },
       items: todos.map(todoToListItem),
     };
   }
@@ -193,65 +182,35 @@ const normalizeWidget = (
   }
 
   if (data.kind === 'list') {
-    return {
-      ...data,
-      widgetId,
-      title: data.title || 'Task List',
-      items: data.items || [],
-    };
+    return { ...data, widgetId, title: data.title || 'Task List', items: data.items || [] };
   }
 
   if (data.kind === 'choice') {
-    return {
-      ...data,
-      widgetId,
-      title: data.title || 'Choose an Option',
-    };
+    return { ...data, widgetId, title: data.title || 'Choose an Option' };
   }
 
   if (data.kind === 'message') {
-    return {
-      ...data,
-      widgetId,
-      title: data.title || 'Message',
-    };
+    return { ...data, widgetId, title: data.title || 'Message' };
   }
 
   throw new Error(`Unsupported UI widget kind: ${(data as { kind?: string }).kind || 'unknown'}`);
 };
 
-/**
- * UI Plugin for Melony.
- * Provides tools for agents to trigger interactive UI widgets.
- */
+export const uiToolDefinitions = {
+  render_ui_widget: {
+    description:
+      'Render a small server-driven UI widget in the conversation. Prefer primitive kinds: message, choice, form, or list. Legacy presets approval and todo_list are accepted.',
+    inputSchema: renderWidgetSchema,
+  },
+};
+
 export const uiPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
   builder.on('action:render_ui_widget', async function* (event, context) {
     const widget = normalizeWidget(event.data, context.state, event.meta?.toolCallId);
-
     yield {
       type: 'client:ui:widget',
       data: widget,
       meta: event.meta,
     };
   });
-};
-
-export const uiToolDefinitions = {
-  render_ui_widget: {
-    description:
-      'Render a small server-driven UI widget in the conversation. Prefer primitive kinds: message, choice, form, or list. Legacy presets approval and todo_list are still accepted.',
-    inputSchema: renderWidgetSchema,
-  },
-};
-
-export const plugin: PluginMetadata = {
-  id: 'ui',
-  name: 'ui',
-  description: 'UI Widgets plugin',
-  kind: 'tool' as const,
-  version: '1.0.0',
-  author: 'OpenBot',
-  license: 'MIT',
-  factory: uiPlugin,
-  toolDefinitions: uiToolDefinitions,
 };

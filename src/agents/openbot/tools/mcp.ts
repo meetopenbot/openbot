@@ -1,14 +1,10 @@
 import { MelonyPlugin } from 'melony';
 import z from 'zod';
-import { OpenBotEvent, OpenBotState } from '../app/types.js';
-import { mcpService } from '../harness/mcp.js';
-import { PluginMetadata } from './storage.js';
+import { OpenBotEvent, OpenBotState } from '../../../app/types.js';
+import { mcpService } from '../../../harness/mcp.js';
 
 function stringifyResult(value: unknown): string {
-  if (typeof value === 'string') {
-    return value;
-  }
-
+  if (typeof value === 'string') return value;
   try {
     return JSON.stringify(value, null, 2);
   } catch {
@@ -21,7 +17,7 @@ export const mcpToolDefinitions = {
     description:
       'List available tools from a configured MCP server. Use this first before calling tools on an unknown server.',
     inputSchema: z.object({
-      serverId: z.string().describe('Configured MCP server id (for example: github, notion, linear).'),
+      serverId: z.string().describe('Configured MCP server id (e.g. github, notion, linear).'),
     }),
   },
   mcp_call: {
@@ -30,7 +26,10 @@ export const mcpToolDefinitions = {
     inputSchema: z.object({
       serverId: z.string().describe('Configured MCP server id.'),
       toolName: z.string().describe('Exact MCP tool name from mcp_list_tools.'),
-      args: z.record(z.string(), z.unknown()).default({}).describe('Tool arguments as a JSON object.'),
+      args: z
+        .record(z.string(), z.unknown())
+        .default({})
+        .describe('Tool arguments as a JSON object.'),
     }),
   },
 };
@@ -41,17 +40,15 @@ export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builde
 
     try {
       const tools = await mcpService.listTools(serverId);
-      const toolNames = tools.map((tool) => `- ${tool.name}${tool.description ? `: ${tool.description}` : ''}`);
+      const toolNames = tools.map(
+        (tool) => `- ${tool.name}${tool.description ? `: ${tool.description}` : ''}`,
+      );
 
       yield {
         type: 'action:mcp_list_tools:result',
-        data: {
-          success: true,
-          serverId,
-          tools,
-        },
+        data: { success: true, serverId, tools },
         meta: event.meta,
-      } as any;
+      } as OpenBotEvent;
 
       yield {
         type: 'agent:output',
@@ -61,33 +58,20 @@ export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builde
               ? `MCP tools available on \`${serverId}\`:\n${toolNames.join('\n')}`
               : `MCP server \`${serverId}\` has no tools.`,
         },
-        meta: {
-          ...(event.meta || {}),
-          agentId: context.state.agentId,
-        },
-      } as any;
+        meta: { ...(event.meta || {}), agentId: context.state.agentId },
+      } as OpenBotEvent;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown MCP error';
       yield {
         type: 'action:mcp_list_tools:result',
-        data: {
-          success: false,
-          serverId,
-          tools: [],
-          error: message,
-        },
+        data: { success: false, serverId, tools: [], error: message },
         meta: event.meta,
-      } as any;
+      } as OpenBotEvent;
       yield {
         type: 'agent:output',
-        data: {
-          content: `Failed to list MCP tools for \`${serverId}\`: ${message}`,
-        },
-        meta: {
-          ...(event.meta || {}),
-          agentId: context.state.agentId,
-        },
-      } as any;
+        data: { content: `Failed to list MCP tools for \`${serverId}\`: ${message}` },
+        meta: { ...(event.meta || {}), agentId: context.state.agentId },
+      } as OpenBotEvent;
     }
   });
 
@@ -102,56 +86,27 @@ export const mcpPlugin = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builde
 
       yield {
         type: 'action:mcp_call:result',
-        data: {
-          success: true,
-          serverId,
-          toolName,
-          result,
-        },
+        data: { success: true, serverId, toolName, result },
         meta: event.meta,
-      } as any;
+      } as OpenBotEvent;
 
       yield {
         type: 'agent:output',
-        data: {
-          content: `MCP \`${serverId}.${toolName}\` result:\n\n${rendered}`,
-        },
-        meta: {
-          ...(event.meta || {}),
-          agentId: context.state.agentId,
-        },
-      } as any;
+        data: { content: `MCP \`${serverId}.${toolName}\` result:\n\n${rendered}` },
+        meta: { ...(event.meta || {}), agentId: context.state.agentId },
+      } as OpenBotEvent;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown MCP error';
       yield {
         type: 'action:mcp_call:result',
-        data: {
-          success: false,
-          serverId,
-          toolName,
-          error: message,
-        },
+        data: { success: false, serverId, toolName, error: message },
         meta: event.meta,
-      } as any;
+      } as OpenBotEvent;
       yield {
         type: 'agent:output',
-        data: {
-          content: `MCP call failed for \`${serverId}.${toolName}\`: ${message}`,
-        },
-        meta: {
-          ...(event.meta || {}),
-          agentId: context.state.agentId,
-        },
-      } as any;
+        data: { content: `MCP call failed for \`${serverId}.${toolName}\`: ${message}` },
+        meta: { ...(event.meta || {}), agentId: context.state.agentId },
+      } as OpenBotEvent;
     }
   });
-};
-
-export const plugin: PluginMetadata = {
-  id: 'mcp',
-  name: 'mcp',
-  description: 'Basic MCP integration for configured servers',
-  kind: 'tool' as const,
-  factory: mcpPlugin,
-  toolDefinitions: mcpToolDefinitions,
 };

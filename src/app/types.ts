@@ -1,12 +1,12 @@
 import {
   Agent,
   AgentDetails,
+  AgentPackageDescriptor,
   Channel,
   ChannelDetails,
-  Plugin,
   Thread,
   ThreadDetails,
-} from '../plugins/storage.js';
+} from '../bus/types.js';
 
 export interface OpenBotState {
   agentId: string;
@@ -99,14 +99,14 @@ export type GetAgentsResultEvent = BaseEvent & {
   };
 };
 
-export type GetPluginsEvent = BaseEvent & {
-  type: 'action:storage:get-plugins';
+export type GetAgentPackagesEvent = BaseEvent & {
+  type: 'action:storage:get-agent-packages';
 };
 
-export type GetPluginsResultEvent = BaseEvent & {
-  type: 'action:storage:get-plugins-result';
+export type GetAgentPackagesResultEvent = BaseEvent & {
+  type: 'action:storage:get-agent-packages-result';
   data: {
-    plugins: Plugin[];
+    packages: AgentPackageDescriptor[];
   };
 };
 
@@ -142,8 +142,8 @@ export type CreateAgentEvent = BaseEvent & {
     name: string;
     description?: string;
     instructions: string;
-    plugins?: AgentDetails['plugins'];
-    runtime?: AgentDetails['runtime'];
+    packageId: string;
+    config?: AgentDetails['config'];
   };
 };
 
@@ -162,8 +162,8 @@ export type UpdateAgentEvent = BaseEvent & {
     name?: string;
     description?: string;
     instructions?: string;
-    plugins?: AgentDetails['plugins'];
-    runtime?: AgentDetails['runtime'];
+    packageId?: string;
+    config?: AgentDetails['config'];
   };
 };
 
@@ -695,32 +695,32 @@ export type UserInputEvent = BaseEvent & {
   };
 };
 
-export type InstallPluginEvent = BaseEvent & {
-  type: 'action:plugin:install';
+export type InstallAgentPackageEvent = BaseEvent & {
+  type: 'action:agent-package:install';
   data: {
     name: string;
     version?: string;
   };
 };
 
-export type InstallPluginResultEvent = BaseEvent & {
-  type: 'action:plugin:install:result';
+export type InstallAgentPackageResultEvent = BaseEvent & {
+  type: 'action:agent-package:install:result';
   data: {
     success: boolean;
-    plugin?: { name: string; id: string; version: string };
+    package?: { name: string; id: string; version: string };
     error?: string;
   };
 };
 
-export type UninstallPluginEvent = BaseEvent & {
-  type: 'action:plugin:uninstall';
+export type UninstallAgentPackageEvent = BaseEvent & {
+  type: 'action:agent-package:uninstall';
   data: {
     id: string;
   };
 };
 
-export type UninstallPluginResultEvent = BaseEvent & {
-  type: 'action:plugin:uninstall:result';
+export type UninstallAgentPackageResultEvent = BaseEvent & {
+  type: 'action:agent-package:uninstall:result';
   data: {
     success: boolean;
     error?: string;
@@ -741,8 +741,8 @@ export type ListMarketplaceAgentsResultEvent = BaseEvent & {
       description: string;
       image?: string;
       instructions: string;
-      runtime?: any;
-      plugins?: any[];
+      packageId: string;
+      config?: Record<string, unknown>;
     }>;
     error?: string;
   };
@@ -755,8 +755,8 @@ export type InstallAgentEvent = BaseEvent & {
     name: string;
     description?: string;
     instructions: string;
-    runtime?: any;
-    plugins?: any[];
+    packageId: string;
+    config?: Record<string, unknown>;
   };
 };
 
@@ -786,8 +786,8 @@ export type OpenBotEvent =
   | GetThreadDetailsResultEvent
   | GetAgentsEvent
   | GetAgentsResultEvent
-  | GetPluginsEvent
-  | GetPluginsResultEvent
+  | GetAgentPackagesEvent
+  | GetAgentPackagesResultEvent
   | GetAgentDetailsEvent
   | GetAgentDetailsResultEvent
   | CreateAgentEvent
@@ -838,10 +838,10 @@ export type OpenBotEvent =
   | MCPCallResultEvent
   | ShellExecEvent
   | ShellExecResultEvent
-  | InstallPluginEvent
-  | InstallPluginResultEvent
-  | UninstallPluginEvent
-  | UninstallPluginResultEvent
+  | InstallAgentPackageEvent
+  | InstallAgentPackageResultEvent
+  | UninstallAgentPackageEvent
+  | UninstallAgentPackageResultEvent
   | ListMarketplaceAgentsEvent
   | ListMarketplaceAgentsResultEvent
   | InstallAgentEvent

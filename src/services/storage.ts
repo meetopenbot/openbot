@@ -1,8 +1,8 @@
 import {
+  DEFAULT_AGENT_PACKAGES_DIR,
   DEFAULT_AGENTS_DIR,
   DEFAULT_BASE_DIR,
   DEFAULT_CHANNELS_DIR,
-  DEFAULT_PLUGINS_DIR,
   loadConfig,
   resolvePath,
   StoredVariable,
@@ -15,35 +15,18 @@ import matter from 'gray-matter';
 import {
   Agent,
   AgentDetails,
+  AgentPackageDescriptor,
   Channel,
   ChannelDetails,
-  Plugin,
-  PluginKind,
   Thread,
   ThreadDetails,
-} from '../plugins/storage.js';
-import { getSystemAgentDetails } from '../agents/system.js';
+} from '../bus/types.js';
+import { openBotAgentPackage } from '../agents/openbot/index.js';
+import { OPENBOT_SYSTEM_PROMPT } from '../agents/openbot/system-prompt.js';
+import { listBuiltInAgentPackages, parseAgentPackageModule } from '../registry/agents.js';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { processService } from '../harness/process.js';
 import { pathToFileURL } from 'node:url';
-
-const mapNameToPlugin = (
-  id: string,
-  name: string,
-  description: string,
-  kind: PluginKind = 'tool',
-  image?: string,
-  configSchema?: Plugin['configSchema'],
-): Plugin => ({
-  id,
-  name,
-  description,
-  kind,
-  image,
-  configSchema,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-});
 
 const resolveBaseDir = () => {
   const config = loadConfig();
@@ -107,7 +90,35 @@ const getConversationDir = (channelId: string, threadId?: string) => {
   return threadId ? `${base}/threads/${threadId}` : base;
 };
 
-const RESERVED_DISK_AGENT_IDS = new Set(['system']);
+/** Built-in orchestrator agent id. Not creatable as a normal disk agent (`agents/<id>/AGENT.md`). */
+const SYSTEM_AGENT_ID = 'system';
+
+function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails {
+  const defaults: AgentDetails = {
+    id: SYSTEM_AGENT_ID,
+    name: openBotAgentPackage.name,
+    image: openBotAgentPackage.image,
+    description: openBotAgentPackage.description,
+    instructions: OPENBOT_SYSTEM_PROMPT,
+    packageId: openBotAgentPackage.id,
+    config: { model: 'openai/gpt-5.4-nano' },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  if (!overrides) return defaults;
+
+  return {
+    ...defaults,
+    ...overrides,
+    id: SYSTEM_AGENT_ID,
+    image: overrides.image || defaults.image,
+    config: { ...(defaults.config || {}), ...(overrides.config || {}) },
+    updatedAt: new Date(),
+  };
+}
+
+const RESERVED_DISK_AGENT_IDS = new Set([SYSTEM_AGENT_ID]);
 
 const assertValidDiskAgentId = (agentId: string): void => {
   if (!agentId || typeof agentId !== 'string') {
@@ -182,103 +193,58 @@ const toVariablesRecord = (raw: unknown): Record<string, string> => {
   );
 };
 
-import { plugin as storagePluginDef } from '../plugins/storage.js';
-import { plugin as aiSdkPluginDef } from '../plugins/ai-sdk.js';
-import { plugin as delegationPluginDef } from '../plugins/delegation.js';
-import { plugin as approvalPluginDef } from '../plugins/approval.js';
-import { plugin as shellPluginDef } from '../plugins/shell.js';
-import { plugin as mcpPluginDef } from '../plugins/mcp.js';
-import { plugin as uiPluginDef } from '../plugins/ui.js';
-
-const listBuiltInPlugins = async (): Promise<Plugin[]> => {
-  return [
-    mapNameToPlugin(
-      storagePluginDef.id || 'storage',
-      storagePluginDef.name,
-      storagePluginDef.description,
-      storagePluginDef.kind,
-      undefined,
-      (storagePluginDef as any).configSchema,
-    ),
-    mapNameToPlugin(
-      aiSdkPluginDef.id || 'ai-sdk',
-      aiSdkPluginDef.name,
-      aiSdkPluginDef.description,
-      aiSdkPluginDef.kind,
-      undefined,
-      (aiSdkPluginDef as any).configSchema,
-    ),
-    mapNameToPlugin(
-      delegationPluginDef.id || 'delegation',
-      delegationPluginDef.name,
-      delegationPluginDef.description,
-      delegationPluginDef.kind,
-      undefined,
-      (delegationPluginDef as any).configSchema,
-    ),
-    mapNameToPlugin(
-      approvalPluginDef.id || 'approval',
-      approvalPluginDef.name,
-      approvalPluginDef.description,
-      approvalPluginDef.kind,
-      undefined,
-      (approvalPluginDef as any).configSchema,
-    ),
-    mapNameToPlugin(
-      shellPluginDef.id || 'shell',
-      shellPluginDef.name,
-      shellPluginDef.description,
-      shellPluginDef.kind,
-      undefined,
-      (shellPluginDef as any).configSchema,
-    ),
-    mapNameToPlugin(
-      mcpPluginDef.id || 'mcp',
-      mcpPluginDef.name,
-      mcpPluginDef.description,
-      mcpPluginDef.kind,
-      undefined,
-      (mcpPluginDef as any).configSchema,
-    ),
-    mapNameToPlugin(
-      uiPluginDef.id || 'ui',
-      uiPluginDef.name,
-      uiPluginDef.description,
-      uiPluginDef.kind,
-      undefined,
-      (uiPluginDef as any).configSchema,
-    ),
-  ];
+const listBuiltInAgentPackageDescriptors = async (): Promise<AgentPackageDescriptor[]> => {
+  return listBuiltInAgentPackages().map((pkg) => ({
+    id: pkg.id,
+    name: pkg.name,
+    description: pkg.description,
+    image: pkg.image,
+    defaultInstructions: pkg.defaultInstructions,
+    configSchema: pkg.configSchema,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }));
 };
 
-const listPluginsFromDisk = async (): Promise<Plugin[]> => {
-  const pluginsDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_PLUGINS_DIR);
+const listAgentPackagesFromDisk = async (): Promise<AgentPackageDescriptor[]> => {
+  const packagesDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_AGENT_PACKAGES_DIR);
   try {
-    await fs.access(pluginsDir);
+    await fs.access(packagesDir);
   } catch {
-    await fs.mkdir(pluginsDir, { recursive: true });
+    await fs.mkdir(packagesDir, { recursive: true });
   }
 
-  const plugins = (await fs.readdir(pluginsDir, { withFileTypes: true }))
-    .filter(
-      (entry) => !entry.name.startsWith('.') && (entry.isDirectory() || entry.isSymbolicLink()),
-    )
-    .map(async (entry) => {
-      // get dist/index module and find inside module.plugin.description
-      const module = await import(pathToFileURL(`${pluginsDir}/${entry.name}/dist/index.js`).href);
-      const pluginDir = path.join(pluginsDir, entry.name);
-      const image = await resolveEntityImageDataUrl(pluginDir);
-      return mapNameToPlugin(
-        module.plugin.id || entry.name,
-        module.plugin.name || entry.name,
-        module.plugin.description || '',
-        module.plugin.kind || 'tool',
-        image,
-        module.plugin.configSchema,
-      );
-    });
+  const entries = (await fs.readdir(packagesDir, { withFileTypes: true })).filter(
+    (entry) => !entry.name.startsWith('.') && (entry.isDirectory() || entry.isSymbolicLink()),
+  );
 
-  return Promise.all(plugins);
+  const descriptors = await Promise.all(
+    entries.map(async (entry): Promise<AgentPackageDescriptor | null> => {
+      try {
+        const distPath = `${packagesDir}/${entry.name}/dist/index.js`;
+        const module = await import(pathToFileURL(distPath).href);
+        const pkg = parseAgentPackageModule(module as Record<string, unknown>);
+        if (!pkg) return null;
+        const packageDir = path.join(packagesDir, entry.name);
+        const image = await resolveEntityImageDataUrl(packageDir);
+        return {
+          id: pkg.id || entry.name,
+          name: pkg.name || entry.name,
+          description: pkg.description || '',
+          image: pkg.image || image,
+          defaultInstructions: pkg.defaultInstructions,
+          configSchema: pkg.configSchema,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      } catch (error) {
+        console.warn(`[storage] Failed to load agent package ${entry.name}:`, error);
+        return null;
+      }
+    }),
+  );
+
+  return descriptors.filter((d): d is AgentPackageDescriptor => d !== null);
 };
 
 export const storageService = {
@@ -712,29 +678,30 @@ export const storageService = {
             name: details.name || id,
             description: details.description || '',
             image: details.image,
-            runtime: details.runtime,
+            packageId: details.packageId,
             createdAt: details.createdAt,
             updatedAt: details.updatedAt,
-          };
+          } satisfies Agent;
         } catch {
           return {
             id,
             name: id,
             description: '',
+            packageId: '',
             createdAt: new Date(),
             updatedAt: new Date(),
-          };
+          } satisfies Agent;
         }
       }),
     );
 
-    const system = await storageService.getAgentDetails({ agentId: 'system' });
+    const system = await storageService.getAgentDetails({ agentId: SYSTEM_AGENT_ID });
     const builtInSystemAgent: Agent = {
       id: system.id,
       name: system.name,
       description: system.description || '',
       image: system.image,
-      runtime: system.runtime,
+      packageId: system.packageId,
       createdAt: system.createdAt,
       updatedAt: system.updatedAt,
     };
@@ -747,20 +714,19 @@ export const storageService = {
 
     return Array.from(deduped.values());
   },
-  getPlugins: async (): Promise<Plugin[]> => {
-    const [builtInPlugins, diskPlugins] = await Promise.all([
-      listBuiltInPlugins(),
-      listPluginsFromDisk(),
+  getAgentPackages: async (): Promise<AgentPackageDescriptor[]> => {
+    const [builtIn, fromDisk] = await Promise.all([
+      listBuiltInAgentPackageDescriptors(),
+      listAgentPackagesFromDisk(),
     ]);
 
-    const merged = [...builtInPlugins, ...diskPlugins];
-    const deduped = new Map<string, Plugin>();
-    for (const plugin of merged) {
-      if (!deduped.has(plugin.id)) {
-        deduped.set(plugin.id, plugin);
+    const merged = [...builtIn, ...fromDisk];
+    const deduped = new Map<string, AgentPackageDescriptor>();
+    for (const pkg of merged) {
+      if (!deduped.has(pkg.id)) {
+        deduped.set(pkg.id, pkg);
       }
     }
-
     return Array.from(deduped.values());
   },
   getAgentDetails: async ({ agentId }: { agentId: string }): Promise<AgentDetails> => {
@@ -781,22 +747,22 @@ export const storageService = {
         id: agentId,
         name: data.name || agentId,
         instructions: instructions.trim(),
-        runtime: data.runtime,
-        plugins: data.plugins || [],
+        packageId: typeof data.packageId === 'string' ? data.packageId : 'openbot',
+        config: (data.config as Record<string, unknown> | undefined) || {},
         description: data.description || '',
         image: discoveredImage || undefined,
         createdAt: stats.birthtime,
         updatedAt: stats.mtime,
       };
     } catch (error) {
-      if (agentId !== 'system') {
+      if (agentId !== SYSTEM_AGENT_ID) {
         const err = new Error(`Agent "${agentId}" does not exist.`);
         (err as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
         throw err;
       }
     }
 
-    if (agentId === 'system') {
+    if (agentId === SYSTEM_AGENT_ID) {
       return getSystemAgentDetails(diskDetails);
     }
 
@@ -813,15 +779,15 @@ export const storageService = {
     name,
     description = '',
     instructions,
-    plugins,
-    runtime,
+    packageId,
+    config,
   }: {
     agentId: string;
     name: string;
     description?: string;
     instructions: string;
-    plugins?: AgentDetails['plugins'];
-    runtime?: AgentDetails['runtime'];
+    packageId: string;
+    config?: AgentDetails['config'];
   }): Promise<void> => {
     assertValidDiskAgentId(agentId);
     const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
@@ -843,9 +809,8 @@ export const storageService = {
 
     await fs.mkdir(agentDir, { recursive: true });
 
-    const data: Record<string, unknown> = { name, description };
-    if (plugins !== undefined) data.plugins = plugins;
-    if (runtime !== undefined) data.runtime = runtime;
+    const data: Record<string, unknown> = { name, description, packageId };
+    if (config !== undefined) data.config = config;
 
     const body = matter.stringify(`${instructions.trim()}\n`, data);
     await fs.writeFile(agentMdPath, body, 'utf-8');
@@ -855,15 +820,15 @@ export const storageService = {
     name,
     description,
     instructions,
-    plugins,
-    runtime,
+    packageId,
+    config,
   }: {
     agentId: string;
     name?: string;
     description?: string;
     instructions?: string;
-    plugins?: AgentDetails['plugins'];
-    runtime?: AgentDetails['runtime'];
+    packageId?: string;
+    config?: AgentDetails['config'];
   }): Promise<void> => {
     assertValidDiskAgentId(agentId);
     const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
@@ -885,8 +850,8 @@ export const storageService = {
     const nextData: Record<string, unknown> = { ...parsed.data };
     if (name !== undefined) nextData.name = name;
     if (description !== undefined) nextData.description = description;
-    if (plugins !== undefined) nextData.plugins = plugins;
-    if (runtime !== undefined) nextData.runtime = runtime;
+    if (packageId !== undefined) nextData.packageId = packageId;
+    if (config !== undefined) nextData.config = config;
 
     const nextContent = instructions !== undefined ? instructions : parsed.content;
     const body = matter.stringify(`${String(nextContent).trim()}\n`, nextData);
@@ -1237,10 +1202,13 @@ export const storageService = {
         id: agentDetails.id,
         name: agentDetails.name,
         description: agentDetails.description || '',
+        image: agentDetails.image,
         instructions: agentDetails.instructions || '',
-        runtime: agentDetails.runtime,
-        plugins: agentDetails.plugins,
-      } as AgentDetails,
+        packageId: agentDetails.packageId,
+        config: agentDetails.config,
+        createdAt: agentDetails.createdAt,
+        updatedAt: agentDetails.updatedAt,
+      } satisfies AgentDetails,
       channelDetails: channelDetails as ChannelDetails,
       threadDetails: threadDetails as ThreadDetails,
     };

@@ -8,7 +8,7 @@ Agents are specialized entities within the OpenBot platform, each designed to ha
 The central intelligence of the platform. It manages the conversation flow, handles long-term memory, and coordinates other agents.
 
 ### OS Agent (`os`)
-Specialized in low-level system interactions. It uses the `shell` and `file-system` plugins to execute commands and manage files. (Implementation: `src/agents/system.ts`)
+Specialized in low-level system interactions. It uses shell and file tooling via the orchestrator. (Default orchestrator behaviour lives in `src/agents/openbot/`; the built-in `system` agent defaults are merged in `src/services/storage.ts`.)
 
 ### Topic Agent (`topic`)
 A utility agent that observes completions and automatically generates concise titles for conversations to keep the workspace organized.

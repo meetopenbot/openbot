@@ -10,10 +10,7 @@ export interface OpenBotconfig {
   baseDir?: string;
   port?: number;
   mcpServers?: MCPServerConfig[];
-  globalPlugins?: PluginSpec[];
 }
-
-export type PluginSpec = string | { name: string; config?: Record<string, unknown> };
 
 export interface MCPServerConfig {
   id: string;
@@ -30,7 +27,7 @@ export interface StoredVariable {
 }
 
 export const DEFAULT_BASE_DIR = '~/.openbot';
-export const DEFAULT_PLUGINS_DIR = 'plugins';
+export const DEFAULT_AGENT_PACKAGES_DIR = 'agent-packages';
 export const DEFAULT_AGENTS_DIR = 'agents';
 export const DEFAULT_CHANNELS_DIR = 'channels';
 export const CONFIG_FILE = 'config.json';

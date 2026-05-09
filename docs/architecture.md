@@ -16,7 +16,7 @@ The orchestrator is the central dispatcher within the harness. It receives user 
 
 ### 2. Agent Registry
 A dynamic registry that manages all available agents. Agents can be:
-- **Built-in**: Core agents compiled into the platform (e.g., `src/agents/system.ts`).
+- **Built-in**: Core agent packages shipped with the repo (e.g. `src/agents/openbot/`).
 - **YAML-based**: Rapidly defined agents in `~/.openbot/agents/*/AGENT.md`.
 - **TS Packages**: Advanced agents with custom logic in `~/.openbot/agents/*/index.ts`.
 
