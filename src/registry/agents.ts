@@ -1,11 +1,12 @@
 import fs from 'node:fs';
-import fsPromises from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { MelonyPlugin } from 'melony';
 import type { AgentPackage, AgentPackageContext } from '../bus/agent-package.js';
 import type { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { openBotAgentPackage } from '../agents/openbot/index.js';
+import { claudeCodeAgentPackage } from '../agents/claude-code/index.js';
+import { geminiCliAgentPackage } from '../agents/gemini-cli/index.js';
 import { DEFAULT_AGENT_PACKAGES_DIR, DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
 
 let agentPackagesDir: string | null = null;
@@ -14,15 +15,27 @@ const cache = new Map<string, AgentPackage>();
 
 const BUILT_IN: Record<string, AgentPackage> = {
   [openBotAgentPackage.id]: openBotAgentPackage,
+  [claudeCodeAgentPackage.id]: claudeCodeAgentPackage,
+  [geminiCliAgentPackage.id]: geminiCliAgentPackage,
 };
+
+/**
+ * Parsed shape of a community agent package module. The `id` is intentionally
+ * omitted: the canonical id is the npm package name (== folder under
+ * `agent-packages/`), assigned by the caller. Modules only contribute behaviour
+ * (factory + optional metadata).
+ */
+export type ParsedAgentPackageModule = Omit<AgentPackage, 'id'>;
 
 /**
  * Normalize a dynamically imported agent package module. Supports:
  * - `agentPackage`, `default` (current AgentPackage layout)
- * - `plugin`: legacy/community bundles that used `{ kind: "runtime", factory: (opts) => ... }`
- *   where opts should come from agent config (merged at runtime via AgentPackageContext).
+ * - `plugin`: community bundles using `{ kind: "runtime", factory: (opts) => ... }`
+ *   where opts come from the agent's `config` via the AgentPackageContext.
  */
-export function parseAgentPackageModule(module: Record<string, unknown>): AgentPackage | null {
+export function parseAgentPackageModule(
+  module: Record<string, unknown>,
+): ParsedAgentPackageModule | null {
   const raw =
     (module.agentPackage as Record<string, unknown> | undefined) ??
     (module.default as Record<string, unknown> | undefined) ??
@@ -30,14 +43,15 @@ export function parseAgentPackageModule(module: Record<string, unknown>): AgentP
 
   if (!raw || typeof raw !== 'object') return null;
 
-  const id = raw.id;
-  const name = raw.name;
   const factory = raw.factory;
-  if (typeof id !== 'string' || typeof name !== 'string' || typeof factory !== 'function') {
-    return null;
-  }
+  if (typeof factory !== 'function') return null;
 
+  const name = typeof raw.name === 'string' ? raw.name : '';
   const description = typeof raw.description === 'string' ? raw.description : '';
+  const image = typeof raw.image === 'string' ? raw.image : undefined;
+  const defaultInstructions =
+    typeof raw.defaultInstructions === 'string' ? raw.defaultInstructions : undefined;
+  const configSchema = raw.configSchema as AgentPackage['configSchema'];
 
   if (raw.kind === 'runtime') {
     const legacyFactory = factory as (
@@ -45,13 +59,11 @@ export function parseAgentPackageModule(module: Record<string, unknown>): AgentP
     ) => MelonyPlugin<OpenBotState, OpenBotEvent>;
 
     return {
-      id,
       name,
       description,
-      image: typeof raw.image === 'string' ? raw.image : undefined,
-      defaultInstructions:
-        typeof raw.defaultInstructions === 'string' ? raw.defaultInstructions : undefined,
-      configSchema: raw.configSchema as AgentPackage['configSchema'],
+      image,
+      defaultInstructions,
+      configSchema,
       factory: (ctx: AgentPackageContext) => {
         const opts =
           ctx.config && typeof ctx.config === 'object' && !Array.isArray(ctx.config)
@@ -62,33 +74,14 @@ export function parseAgentPackageModule(module: Record<string, unknown>): AgentP
     };
   }
 
-  return raw as unknown as AgentPackage;
-}
-
-async function resolveCommunityDistPath(agentPackagesDir: string, id: string): Promise<string | null> {
-  const direct = path.join(agentPackagesDir, id, 'dist', 'index.js');
-  if (fs.existsSync(direct)) return direct;
-
-  try {
-    const entries = await fsPromises.readdir(agentPackagesDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue;
-      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-      const distPath = path.join(agentPackagesDir, entry.name, 'dist', 'index.js');
-      if (!fs.existsSync(distPath)) continue;
-      try {
-        const mod = await import(pathToFileURL(distPath).href);
-        const pkg = parseAgentPackageModule(mod as Record<string, unknown>);
-        if (pkg?.id === id) return distPath;
-      } catch {
-        continue;
-      }
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
+  return {
+    name,
+    description,
+    image,
+    defaultInstructions,
+    configSchema,
+    factory: factory as AgentPackage['factory'],
+  };
 }
 
 /** Initialize the on-disk agent packages directory (defaults to ~/.openbot/agent-packages). */
@@ -103,8 +96,10 @@ export function initAgentPackages(dir?: string) {
 }
 
 /**
- * Resolve an AgentPackage by id. Looks up built-in packages first, then any
- * community packages installed under the agent-packages directory.
+ * Resolve an AgentPackage by id. The id is either:
+ *   - a built-in id (e.g. "openbot"), or
+ *   - an npm package name (e.g. "openbot-plugin-codex" or "@scope/foo"),
+ *     in which case the folder layout is `agent-packages/<id>/dist/index.js`.
  */
 export async function resolveAgentPackage(id: string): Promise<AgentPackage | null> {
   if (cache.has(id)) return cache.get(id)!;
@@ -116,25 +111,25 @@ export async function resolveAgentPackage(id: string): Promise<AgentPackage | nu
   if (!agentPackagesDir) {
     initAgentPackages();
   }
-
   if (!agentPackagesDir) return null;
 
-  const distPath = await resolveCommunityDistPath(agentPackagesDir, id);
+  const distPath = path.join(agentPackagesDir, id, 'dist', 'index.js');
 
-  if (!distPath) {
+  if (!fs.existsSync(distPath)) {
     console.warn(
-      `[agents] AgentPackage "${id}" not found in registry or under ${agentPackagesDir}.`,
+      `[agents] AgentPackage "${id}" not found at ${distPath}.`,
     );
     return null;
   }
 
   try {
     const module = await import(pathToFileURL(distPath).href);
-    const pkg = parseAgentPackageModule(module as Record<string, unknown>);
-    if (!pkg) {
+    const parsed = parseAgentPackageModule(module as Record<string, unknown>);
+    if (!parsed) {
       console.warn(`[agents] AgentPackage "${id}" at ${distPath} has no recognizable export.`);
       return null;
     }
+    const pkg: AgentPackage = { id, ...parsed, name: parsed.name || id };
     cache.set(id, pkg);
     if (!loadedPackages.has(id)) {
       console.log(`[agents] Loaded community agent package "${id}" from ${distPath}`);
@@ -145,6 +140,12 @@ export async function resolveAgentPackage(id: string): Promise<AgentPackage | nu
     console.warn(`[agents] Failed to load agent package "${id}" from ${distPath}:`, e);
     return null;
   }
+}
+
+/** Drop a single id from the in-memory cache (e.g. after fresh install). */
+export function invalidateAgentPackage(id: string): void {
+  cache.delete(id);
+  loadedPackages.delete(id);
 }
 
 /** List built-in agent package descriptors (for marketplace/registry views). */

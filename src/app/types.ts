@@ -707,7 +707,7 @@ export type InstallAgentPackageResultEvent = BaseEvent & {
   type: 'action:agent-package:install:result';
   data: {
     success: boolean;
-    package?: { name: string; id: string; version: string };
+    package?: { name: string; version: string };
     error?: string;
   };
 };

@@ -3,14 +3,13 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { pathToFileURL } from 'node:url';
 import {
   DEFAULT_AGENT_PACKAGES_DIR,
   DEFAULT_BASE_DIR,
   loadConfig,
   resolvePath,
 } from '../app/config.js';
-import { parseAgentPackageModule } from '../registry/agents.js';
+import { invalidateAgentPackage } from '../registry/agents.js';
 
 const execAsync = promisify(exec);
 
@@ -20,82 +19,68 @@ export interface InstallOptions {
 }
 
 export interface InstalledPackage {
+  /** npm package name; doubles as the `packageId` used everywhere else. */
   name: string;
-  id: string;
   version: string;
 }
 
+const getPackagesDir = (): string => {
+  const config = loadConfig();
+  const baseDir = resolvePath(config.baseDir || DEFAULT_BASE_DIR);
+  return path.join(baseDir, DEFAULT_AGENT_PACKAGES_DIR);
+};
+
 /**
  * Lifecycle for community-built agent packages distributed via npm.
- * The package format mirrors a normal npm package whose `dist/index.js`
- * exports `agentPackage` (or `default`) that satisfies the `AgentPackage`
- * interface.
+ * Each package is installed to `<agent-packages>/<npm-name>/` and is identified
+ * everywhere (AGENT.md `packageId`, registry, runtime resolution) by its npm name.
+ * Scoped packages (`@scope/foo`) live under `<agent-packages>/@scope/foo/`.
  */
 export const agentPackageService = {
-  install: async ({ packageName, version }: InstallOptions): Promise<InstalledPackage> => {
-    const config = loadConfig();
-    const baseDir = resolvePath(config.baseDir || DEFAULT_BASE_DIR);
-    const packagesDir = path.join(baseDir, DEFAULT_AGENT_PACKAGES_DIR);
+  isInstalled: async (packageName: string): Promise<boolean> => {
+    const finalPath = path.join(getPackagesDir(), packageName);
+    return existsSync(path.join(finalPath, 'dist', 'index.js'));
+  },
 
+  install: async ({ packageName, version }: InstallOptions): Promise<InstalledPackage> => {
+    const packagesDir = getPackagesDir();
     await fs.mkdir(packagesDir, { recursive: true });
 
-    const target = version ? `${packageName}@${version}` : packageName;
+    const finalPath = path.join(packagesDir, packageName);
 
-    const entries = await fs.readdir(packagesDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory() || entry.isSymbolicLink()) {
-        const pkgPath = path.join(packagesDir, entry.name, 'package.json');
-        if (existsSync(pkgPath)) {
-          try {
-            const pkgJson = JSON.parse(await fs.readFile(pkgPath, 'utf-8'));
-            if (pkgJson.name === packageName && (!version || pkgJson.version === version)) {
-              console.log(
-                `[agent-packages] ${packageName}${version ? `@${version}` : ''} is already installed at ${entry.name}.`,
-              );
-              return {
-                name: pkgJson.name,
-                id: entry.name,
-                version: pkgJson.version,
-              };
-            }
-          } catch {
-            // ignore corrupted package.json
-          }
+    if (existsSync(path.join(finalPath, 'package.json'))) {
+      try {
+        const pkgJson = JSON.parse(
+          await fs.readFile(path.join(finalPath, 'package.json'), 'utf-8'),
+        );
+        if (!version || pkgJson.version === version) {
+          console.log(
+            `[agent-packages] ${packageName}${version ? `@${version}` : ''} is already installed.`,
+          );
+          return { name: pkgJson.name, version: pkgJson.version };
         }
+      } catch {
+        // corrupted; reinstall below
       }
     }
 
+    const target = version ? `${packageName}@${version}` : packageName;
     console.log(`[agent-packages] Installing ${target} to ${packagesDir}...`);
 
+    const tempDir = path.join(packagesDir, '.tmp_' + Date.now());
     try {
-      const tempDir = path.join(packagesDir, '.tmp_' + Date.now());
       await fs.mkdir(tempDir, { recursive: true });
-
       await execAsync(`npm install ${target} --no-save --prefix "${tempDir}"`);
 
-      const pkgNameOnly = packageName.includes('/') ? packageName.split('/').pop()! : packageName;
       const installedPath = path.join(tempDir, 'node_modules', packageName);
-
-      let finalId = pkgNameOnly;
-      try {
-        const distPath = path.join(installedPath, 'dist', 'index.js');
-        if (existsSync(distPath)) {
-          const module = await import(pathToFileURL(distPath).href);
-          const exported = parseAgentPackageModule(module as Record<string, unknown>);
-          if (exported?.id) finalId = exported.id;
-        }
-      } catch (e) {
-        console.warn(
-          `[agent-packages] Could not read package metadata for ${packageName}; using folder name as id.`,
-          e,
-        );
+      if (!existsSync(installedPath)) {
+        throw new Error(`npm did not produce ${installedPath}`);
       }
 
-      const finalPath = path.join(packagesDir, finalId);
-
+      // Ensure parent dir exists for scoped packages (e.g. @scope/foo).
+      await fs.mkdir(path.dirname(finalPath), { recursive: true });
       await fs.rm(finalPath, { recursive: true, force: true });
       await fs.rename(installedPath, finalPath);
-      await fs.rm(tempDir, { recursive: true, force: true });
 
       console.log(`[agent-packages] Running npm install in ${finalPath}...`);
       try {
@@ -105,34 +90,45 @@ export const agentPackageService = {
         console.warn(`[agent-packages] Failed to run npm install in ${finalPath}:`, e);
       }
 
-      const pkgJson = JSON.parse(await fs.readFile(path.join(finalPath, 'package.json'), 'utf-8'));
+      const pkgJson = JSON.parse(
+        await fs.readFile(path.join(finalPath, 'package.json'), 'utf-8'),
+      );
 
-      return {
-        name: pkgJson.name,
-        id: finalId,
-        version: pkgJson.version,
-      };
+      invalidateAgentPackage(packageName);
+      return { name: pkgJson.name, version: pkgJson.version };
     } catch (error) {
       console.error(`[agent-packages] Failed to install ${packageName}:`, error);
       throw new Error(
         `Failed to install agent package ${packageName}: ${(error as Error).message}`,
       );
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
     }
   },
 
-  uninstall: async (id: string): Promise<void> => {
-    const config = loadConfig();
-    const baseDir = resolvePath(config.baseDir || DEFAULT_BASE_DIR);
-    const packagesDir = path.join(baseDir, DEFAULT_AGENT_PACKAGES_DIR);
-    const packagePath = path.join(packagesDir, id);
+  uninstall: async (packageName: string): Promise<void> => {
+    const packagesDir = getPackagesDir();
+    const packagePath = path.join(packagesDir, packageName);
 
     try {
       await fs.rm(packagePath, { recursive: true, force: true });
-      console.log(`[agent-packages] Uninstalled agent package ${id}`);
+      invalidateAgentPackage(packageName);
+      console.log(`[agent-packages] Uninstalled agent package ${packageName}`);
+
+      // Best-effort cleanup of empty @scope/ parent.
+      if (packageName.startsWith('@')) {
+        const scopeDir = path.dirname(packagePath);
+        try {
+          const remaining = await fs.readdir(scopeDir);
+          if (remaining.length === 0) await fs.rmdir(scopeDir);
+        } catch {
+          // ignore
+        }
+      }
     } catch (error) {
-      console.error(`[agent-packages] Failed to uninstall ${id}:`, error);
+      console.error(`[agent-packages] Failed to uninstall ${packageName}:`, error);
       throw new Error(
-        `Failed to uninstall agent package ${id}: ${(error as Error).message}`,
+        `Failed to uninstall agent package ${packageName}: ${(error as Error).message}`,
       );
     }
   },

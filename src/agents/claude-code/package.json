@@ -1,0 +1,32 @@
+{
+  "name": "openbot-plugin-claude-code",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OpenBot agent package that wraps Anthropic's Claude Agent SDK (Claude Code).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "openbot",
+    "openbot-plugin",
+    "agent",
+    "claude",
+    "claude-code",
+    "anthropic"
+  ],
+  "peerDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.0",
+    "melony": "^0.3.0",
+    "openbot": "^0.2.0"
+  }
+}

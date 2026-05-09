@@ -517,7 +517,7 @@ export const busServicesPlugin =
             name: 'Coder',
             description: 'Expert in multiple programming languages and software architecture.',
             instructions: 'You are an expert software engineer. Help the user with coding tasks.',
-            packageId: 'openbot',
+            packageId: 'openbot-plugin-codex',
             config: { model: 'openai/gpt-4o' },
           },
         ];
@@ -530,6 +530,14 @@ export const busServicesPlugin =
       builder.on('action:agent:install', async function* (event) {
         try {
           const { agentId, name, description, instructions, packageId, config } = event.data;
+
+          // Ensure the agent's package is available locally. Built-in ids (e.g.
+          // "openbot") resolve immediately; npm-name ids are fetched on demand.
+          const installedPackage = await agentPackageService.isInstalled(packageId);
+          if (!installedPackage && packageId !== 'openbot') {
+            await agentPackageService.install({ packageName: packageId });
+          }
+
           await storage.createAgent({
             agentId,
             name,

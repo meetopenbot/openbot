@@ -206,6 +206,44 @@ const listBuiltInAgentPackageDescriptors = async (): Promise<AgentPackageDescrip
   }));
 };
 
+/**
+ * Walk `agent-packages/` and yield candidate package ids (npm names). Includes
+ * scoped packages by recursing one level into directories starting with `@`.
+ */
+const listInstalledPackageIds = async (packagesDir: string): Promise<string[]> => {
+  const out: string[] = [];
+  let topEntries;
+  try {
+    topEntries = await fs.readdir(packagesDir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+
+  for (const entry of topEntries) {
+    if (entry.name.startsWith('.')) continue;
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+
+    if (entry.name.startsWith('@')) {
+      try {
+        const inner = await fs.readdir(path.join(packagesDir, entry.name), { withFileTypes: true });
+        for (const sub of inner) {
+          if (sub.name.startsWith('.')) continue;
+          if (sub.isDirectory() || sub.isSymbolicLink()) {
+            out.push(`${entry.name}/${sub.name}`);
+          }
+        }
+      } catch {
+        // ignore
+      }
+      continue;
+    }
+
+    out.push(entry.name);
+  }
+
+  return out;
+};
+
 const listAgentPackagesFromDisk = async (): Promise<AgentPackageDescriptor[]> => {
   const packagesDir = resolvePath(resolveBaseDir() + '/' + DEFAULT_AGENT_PACKAGES_DIR);
   try {
@@ -214,31 +252,29 @@ const listAgentPackagesFromDisk = async (): Promise<AgentPackageDescriptor[]> =>
     await fs.mkdir(packagesDir, { recursive: true });
   }
 
-  const entries = (await fs.readdir(packagesDir, { withFileTypes: true })).filter(
-    (entry) => !entry.name.startsWith('.') && (entry.isDirectory() || entry.isSymbolicLink()),
-  );
+  const ids = await listInstalledPackageIds(packagesDir);
 
   const descriptors = await Promise.all(
-    entries.map(async (entry): Promise<AgentPackageDescriptor | null> => {
+    ids.map(async (id): Promise<AgentPackageDescriptor | null> => {
       try {
-        const distPath = `${packagesDir}/${entry.name}/dist/index.js`;
+        const packageDir = path.join(packagesDir, id);
+        const distPath = path.join(packageDir, 'dist', 'index.js');
         const module = await import(pathToFileURL(distPath).href);
-        const pkg = parseAgentPackageModule(module as Record<string, unknown>);
-        if (!pkg) return null;
-        const packageDir = path.join(packagesDir, entry.name);
+        const parsed = parseAgentPackageModule(module as Record<string, unknown>);
+        if (!parsed) return null;
         const image = await resolveEntityImageDataUrl(packageDir);
         return {
-          id: pkg.id || entry.name,
-          name: pkg.name || entry.name,
-          description: pkg.description || '',
-          image: pkg.image || image,
-          defaultInstructions: pkg.defaultInstructions,
-          configSchema: pkg.configSchema,
+          id,
+          name: parsed.name || id,
+          description: parsed.description || '',
+          image: parsed.image || image,
+          defaultInstructions: parsed.defaultInstructions,
+          configSchema: parsed.configSchema,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
       } catch (error) {
-        console.warn(`[storage] Failed to load agent package ${entry.name}:`, error);
+        console.warn(`[storage] Failed to load agent package ${id}:`, error);
         return null;
       }
     }),

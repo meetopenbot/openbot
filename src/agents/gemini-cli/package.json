@@ -1,0 +1,31 @@
+{
+  "name": "openbot-plugin-gemini-cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OpenBot agent package that wraps Google's `gemini` CLI in headless stream-json mode.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "openbot",
+    "openbot-plugin",
+    "agent",
+    "gemini",
+    "gemini-cli",
+    "google"
+  ],
+  "peerDependencies": {
+    "melony": "^0.3.0",
+    "openbot": "^0.2.0"
+  }
+}

@@ -10,7 +10,9 @@ description: One-line description shown in agent pickers and lists.
 
 # Which AgentPackage handles invocations for this agent.
 # Built-in: "openbot" (orchestrator / ai-sdk runtime + tools).
-# Community packages use the id from their package (after npm install into agent-packages/).
+# Community packages: use the npm package name (globally unique on npmjs.com),
+# e.g. "openbot-plugin-codex" or "@scope/openbot-plugin-foo". OpenBot will
+# auto-install the package on first use into ~/.openbot/agent-packages/<packageId>/.
 packageId: openbot
 
 # Package-specific options. Shape depends on packageId.
