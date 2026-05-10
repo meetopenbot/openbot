@@ -1,10 +1,42 @@
 import { MelonyPlugin } from 'melony';
 import { DEFAULT_MARKETPLACE_REGISTRY_URL, loadConfig } from '../app/config.js';
-import { OpenBotEvent, OpenBotState } from '../app/types.js';
+import { OpenBotEvent, OpenBotState, MemoryScopeAlias } from '../app/types.js';
 import type { PluginRef } from './plugin.js';
 import { Storage } from './types.js';
 import { storageService } from '../services/storage.js';
 import { pluginService } from '../services/plugins.js';
+
+/**
+ * Resolve a scope alias to a concrete scope string. Aliases let tools accept
+ * `agent`/`channel`/`global` without knowing the active ids; the bus rewrites
+ * them using `context.state`.
+ */
+function resolveMemoryScope(
+  alias: MemoryScopeAlias | undefined,
+  state: OpenBotState,
+): string {
+  switch (alias) {
+    case 'agent':
+      return `agent:${state.agentId}`;
+    case 'channel':
+      return `channel:${state.channelId}`;
+    case 'global':
+    case undefined:
+      return 'global';
+    default:
+      return 'global';
+  }
+}
+
+function resolveMemoryScopeFilter(
+  alias: MemoryScopeAlias | 'all' | undefined,
+  state: OpenBotState,
+): string[] | undefined {
+  if (alias === 'all' || alias === undefined) {
+    return ['global', `agent:${state.agentId}`, `channel:${state.channelId}`];
+  }
+  return [resolveMemoryScope(alias, state)];
+}
 
 /** One marketplace entry; matches `action:marketplace:list:result` agent shape. */
 export type MarketplaceAgentListing = {
@@ -156,7 +188,7 @@ export const busServicesPlugin =
         yield {
           type: 'action:create_thread:result',
           data: { success: true, threadId, threadTitle },
-          meta: { threadId },
+          meta: { ...(event.meta || {}), threadId, agentId: context.state.agentId },
         } as OpenBotEvent;
       });
 
@@ -165,10 +197,13 @@ export const busServicesPlugin =
         const rawChannelId = (channelId || '').trim();
         const channelSpec = typeof spec === 'string' ? spec : '';
 
+        const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+
         if (!rawChannelId) {
           yield {
             type: 'action:create_channel:result',
             data: { success: false, channelId: '', channelUrl: '' },
+            meta: resultMeta,
           } as OpenBotEvent;
           return;
         }
@@ -186,20 +221,19 @@ export const busServicesPlugin =
           yield {
             type: 'action:create_channel:result',
             data: { success: true, channelId: rawChannelId, channelUrl },
+            meta: resultMeta,
           } as OpenBotEvent;
 
           yield {
             type: 'agent:output',
             data: { content: `Created channel \`${rawChannelId}\`.` },
-            meta: {
-              ...(event.meta || {}),
-              agentId: context.state.agentId,
-            },
+            meta: resultMeta,
           } as OpenBotEvent;
         } catch {
           yield {
             type: 'action:create_channel:result',
             data: { success: false, channelId: rawChannelId, channelUrl },
+            meta: resultMeta,
           } as OpenBotEvent;
         }
       });
@@ -207,11 +241,13 @@ export const busServicesPlugin =
       builder.on('action:update_channel', async function* (event, context) {
         const data = (event.data || {}) as { channelId?: string; name?: string; cwd?: string };
         const targetChannelId = (data.channelId || context.state.channelId || '').trim();
+        const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
 
         if (!targetChannelId) {
           yield {
             type: 'action:update_channel:result',
             data: { success: false, channelId: '', updatedFields: [] as string[] },
+            meta: resultMeta,
           } as OpenBotEvent;
           return;
         }
@@ -242,17 +278,20 @@ export const busServicesPlugin =
           yield {
             type: 'action:update_channel:result',
             data: { success: true, channelId: targetChannelId, updatedFields },
+            meta: resultMeta,
           } as OpenBotEvent;
         } catch {
           yield {
             type: 'action:update_channel:result',
             data: { success: false, channelId: targetChannelId, updatedFields },
+            meta: resultMeta,
           } as OpenBotEvent;
         }
       });
 
       builder.on('action:patch_channel_details', async function* (event, context) {
         const updatedFields: ('state' | 'spec' | 'cwd')[] = [];
+        const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
         try {
           if ((event.data as any).state !== undefined) {
             await storage.patchChannelState({
@@ -283,17 +322,20 @@ export const busServicesPlugin =
           yield {
             type: 'action:patch_channel_details:result',
             data: { success: true, updatedFields },
+            meta: resultMeta,
           };
         } catch {
           yield {
             type: 'action:patch_channel_details:result',
             data: { success: false, updatedFields },
+            meta: resultMeta,
           };
         }
       });
 
       builder.on('action:patch_thread_details', async function* (event, context) {
         const updatedFields: ('state' | 'spec')[] = [];
+        const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
         try {
           if (!context.state.threadId) {
             throw new Error('Missing threadId in state for patch_thread_details');
@@ -323,11 +365,13 @@ export const busServicesPlugin =
           yield {
             type: 'action:patch_thread_details:result',
             data: { success: true, updatedFields },
+            meta: resultMeta,
           };
         } catch {
           yield {
             type: 'action:patch_thread_details:result',
             data: { success: false, updatedFields },
+            meta: resultMeta,
           };
         }
       });
@@ -613,6 +657,82 @@ export const busServicesPlugin =
           type: 'action:marketplace:list:result',
           data: { success: true, agents },
         } as OpenBotEvent;
+      });
+
+      builder.on('action:remember', async function* (event, context) {
+        const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+        try {
+          const { content, scope, tags } = event.data;
+          const record = await storage.appendMemory({
+            scope: resolveMemoryScope(scope, context.state),
+            content,
+            tags,
+          });
+          yield {
+            type: 'action:remember:result',
+            data: { success: true, record },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        } catch (error) {
+          yield {
+            type: 'action:remember:result',
+            data: {
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        }
+      });
+
+      builder.on('action:recall', async function* (event, context) {
+        const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+        try {
+          const { query, tag, scope, limit } = event.data;
+          const records = await storage.listMemories({
+            scopes: resolveMemoryScopeFilter(scope, context.state),
+            query,
+            tag,
+            limit,
+          });
+          yield {
+            type: 'action:recall:result',
+            data: { success: true, records },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        } catch (error) {
+          yield {
+            type: 'action:recall:result',
+            data: {
+              success: false,
+              records: [],
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        }
+      });
+
+      builder.on('action:forget', async function* (event, context) {
+        const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+        try {
+          const deleted = await storage.deleteMemory({ id: event.data.id });
+          yield {
+            type: 'action:forget:result',
+            data: { success: true, deleted },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        } catch (error) {
+          yield {
+            type: 'action:forget:result',
+            data: {
+              success: false,
+              deleted: false,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        }
       });
 
       builder.on('action:agent:install', async function* (event) {

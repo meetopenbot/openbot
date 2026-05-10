@@ -1,5 +1,6 @@
 import type { OpenBotEvent } from '../app/types.js';
 import type { PluginRef } from './plugin.js';
+import type { MemoryRecord, ListMemoriesArgs } from '../services/memory.js';
 
 /**
  * Public data types exposed by the OpenBot bus.
@@ -144,4 +145,16 @@ export interface Storage {
     path?: string;
   }) => Promise<Array<{ name: string; isDirectory: boolean }>>;
   readFile: (args: { channelId: string; path: string }) => Promise<string>;
+  /** Persist a memory record into the global memory log. */
+  appendMemory: (args: {
+    scope: string;
+    content: string;
+    tags?: string[];
+  }) => Promise<MemoryRecord>;
+  /** Read memories matching the given filter. */
+  listMemories: (args?: ListMemoriesArgs) => Promise<MemoryRecord[]>;
+  /** Soft-delete a memory by id. Returns true if a record was deleted. */
+  deleteMemory: (args: { id: string }) => Promise<boolean>;
+  /** Update a memory's content/tags by id. Returns true if a record was updated. */
+  updateMemory: (args: { id: string; content?: string; tags?: string[] }) => Promise<boolean>;
 }

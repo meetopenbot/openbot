@@ -27,6 +27,7 @@ import { AI_SDK_SYSTEM_PROMPT } from '../plugins/ai-sdk/system-prompt.js';
 import { listBuiltInPlugins, parsePluginModule } from '../registry/plugins.js';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { processService } from '../harness/process.js';
+import { memoryService } from './memory.js';
 import { pathToFileURL } from 'node:url';
 
 const resolveBaseDir = () => {
@@ -93,6 +94,7 @@ const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
   { id: 'delegation' },
   // { id: 'ui' },
   { id: 'approval' },
+  { id: 'memory' },
 ];
 
 function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails {
@@ -1219,6 +1221,11 @@ export const storageService = {
 
     return fs.readFile(targetFile, 'utf-8');
   },
+
+  appendMemory: memoryService.appendMemory,
+  listMemories: memoryService.listMemories,
+  deleteMemory: memoryService.deleteMemory,
+  updateMemory: memoryService.updateMemory,
 
   /**
    * Hydrates the full OpenBot state from disk/storage before a run.

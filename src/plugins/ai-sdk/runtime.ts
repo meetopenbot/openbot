@@ -42,6 +42,78 @@ const asRecord = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
+/** Per-message hard cap (in characters) on tool-result payloads we feed back
+ *  to the model. Prevents one huge tool output from eating the context window;
+ *  the original event remains intact in storage. */
+const TOOL_RESULT_MAX_CHARS = 8000;
+
+/** Sliding window: max number of messages we replay to the model on each
+ *  invocation. Older turns stay on disk but are not sent. Keeps both the
+ *  recent prompts and the prompt token budget bounded. */
+const MAX_WINDOW_MESSAGES = 80;
+
+const truncateToolPayload = (raw: unknown): string => {
+  const serialized = typeof raw === 'string' ? raw : JSON.stringify(raw);
+  if (serialized.length <= TOOL_RESULT_MAX_CHARS) return serialized;
+  const dropped = serialized.length - TOOL_RESULT_MAX_CHARS;
+  return `${serialized.slice(0, TOOL_RESULT_MAX_CHARS)}\n…[truncated ${dropped} chars]`;
+};
+
+/**
+ * Trim the message history to a sliding window while preserving tool-call
+ * integrity. Drops any leading orphan `tool` messages whose matching
+ * assistant call was sliced off, since most providers reject that.
+ */
+const buildMessageWindow = (messages: ShortTermMessage[]): ShortTermMessage[] => {
+  if (messages.length <= MAX_WINDOW_MESSAGES) return messages;
+  const tail = messages.slice(-MAX_WINDOW_MESSAGES);
+  const knownAssistantCallIds = new Set<string>();
+  for (const m of tail) {
+    if (m.role === 'assistant' && m.toolCalls) {
+      for (const tc of m.toolCalls) knownAssistantCallIds.add(tc.id);
+    }
+  }
+  return tail.filter((m) => m.role !== 'tool' || knownAssistantCallIds.has(m.toolCallId));
+};
+
+/**
+ * Self-healing pass: every assistant tool_call must have a matching tool
+ * result before the next user/assistant turn, or providers (OpenAI in
+ * particular) reject the request with "Tool result is missing for tool call".
+ *
+ * This can happen when a handler emits a `:result` event without `meta`
+ * (orphaning the call), the process restarts mid-run, or a tool handler
+ * crashes. Rather than refuse to continue, we inject synthetic tool messages
+ * with a clear error payload — the LLM can then explain the failure to the
+ * user and proceed.
+ */
+const repairOpenToolCalls = (messages: ShortTermMessage[]): ShortTermMessage[] => {
+  const fulfilled = new Set<string>();
+  for (const m of messages) {
+    if (m.role === 'tool') fulfilled.add(m.toolCallId);
+  }
+
+  const repaired: ShortTermMessage[] = [];
+  for (const m of messages) {
+    repaired.push(m);
+    if (m.role !== 'assistant' || !m.toolCalls) continue;
+    for (const tc of m.toolCalls) {
+      if (fulfilled.has(tc.id)) continue;
+      repaired.push({
+        role: 'tool',
+        toolCallId: tc.id,
+        toolName: tc.function.name,
+        content: JSON.stringify({
+          success: false,
+          error: 'Tool result was lost (handler did not emit a matching :result event).',
+        }),
+      });
+      fulfilled.add(tc.id);
+    }
+  }
+  return repaired;
+};
+
 const readPersistedShortTermMessages = (state: OpenBotState): ShortTermMessage[] => {
   const source = state.threadDetails?.state ?? state.channelDetails?.state;
   const record = asRecord(source);
@@ -161,7 +233,9 @@ export const aiSdkRuntime =
         contextEngine,
       );
 
-      const coreMessages = mapToCoreMessages(context.state.shortTermMessages || []);
+      const coreMessages = mapToCoreMessages(
+        buildMessageWindow(repairOpenToolCalls(context.state.shortTermMessages || [])),
+      );
 
       try {
         const result = await generateText({
@@ -311,7 +385,7 @@ export const aiSdkRuntime =
 
       const toolName = event.type.replace(/^action:/, '').replace(/:result$/, '');
       const resultData = (event as { data?: unknown }).data;
-      const content = typeof resultData === 'string' ? resultData : JSON.stringify(resultData);
+      const content = truncateToolPayload(resultData);
 
       context.state.shortTermMessages = [
         ...(context.state.shortTermMessages ?? []),

@@ -47,7 +47,21 @@ plugins like `shell` or `mcp` to them has no effect. Pair tool plugins with
 
 OpenBot ships a built-in `system` agent (the orchestrator) with the
 `ai-sdk` runtime plus the standard tool plugins (storage, shell, mcp,
-delegation, ui, approval). It cannot be deleted.
+delegation, ui, approval, memory). It cannot be deleted.
+
+## Memory
+
+The `memory` plugin gives every agent three tools — `remember`, `recall`,
+`forget` — backed by an append-only JSONL log at `~/.openbot/memory/log.jsonl`.
+Memories are scoped:
+
+- `global` (default) — visible to every agent everywhere.
+- `agent` — visible only to the agent that wrote it.
+- `channel` — visible only inside the active channel.
+
+On every LLM turn the runtime injects matching memories into the system prompt
+via the `MemoryProvider` in the context engine, so the model treats remembered
+facts as ground truth without needing to call `recall` first.
 
 ## Installing community agents
 

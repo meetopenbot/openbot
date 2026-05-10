@@ -9,6 +9,7 @@ import { delegationPlugin } from '../plugins/delegation/index.js';
 import { storageToolsPlugin } from '../plugins/storage-tools/index.js';
 import { uiPlugin } from '../plugins/ui/index.js';
 import { approvalPlugin } from '../plugins/approval/index.js';
+import { memoryPlugin } from '../plugins/memory/index.js';
 import { DEFAULT_PLUGINS_DIR, DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
 
 let pluginsDir: string | null = null;
@@ -23,6 +24,7 @@ const BUILT_IN: Record<string, Plugin> = {
   [storageToolsPlugin.id]: storageToolsPlugin,
   [uiPlugin.id]: uiPlugin,
   [approvalPlugin.id]: approvalPlugin,
+  [memoryPlugin.id]: memoryPlugin,
 };
 
 /**

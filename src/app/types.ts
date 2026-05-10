@@ -8,6 +8,7 @@ import {
   ThreadDetails,
 } from '../bus/types.js';
 import type { PluginRef } from '../bus/plugin.js';
+import type { MemoryRecord } from '../services/memory.js';
 
 export interface OpenBotState {
   agentId: string;
@@ -766,6 +767,59 @@ export type InstallAgentResultEvent = BaseEvent & {
   };
 };
 
+export type MemoryScopeAlias = 'global' | 'agent' | 'channel';
+
+export type RememberEvent = BaseEvent & {
+  type: 'action:remember';
+  data: {
+    content: string;
+    scope?: MemoryScopeAlias;
+    tags?: string[];
+  };
+};
+
+export type RememberResultEvent = BaseEvent & {
+  type: 'action:remember:result';
+  data: {
+    success: boolean;
+    record?: MemoryRecord;
+    error?: string;
+  };
+};
+
+export type RecallEvent = BaseEvent & {
+  type: 'action:recall';
+  data: {
+    query?: string;
+    tag?: string;
+    scope?: MemoryScopeAlias | 'all';
+    limit?: number;
+  };
+};
+
+export type RecallResultEvent = BaseEvent & {
+  type: 'action:recall:result';
+  data: {
+    success: boolean;
+    records: MemoryRecord[];
+    error?: string;
+  };
+};
+
+export type ForgetEvent = BaseEvent & {
+  type: 'action:forget';
+  data: { id: string };
+};
+
+export type ForgetResultEvent = BaseEvent & {
+  type: 'action:forget:result';
+  data: {
+    success: boolean;
+    deleted: boolean;
+    error?: string;
+  };
+};
+
 export type OpenBotEvent =
   | UserInputEvent
   | AgentInvokeEvent
@@ -842,4 +896,10 @@ export type OpenBotEvent =
   | ListMarketplaceAgentsEvent
   | ListMarketplaceAgentsResultEvent
   | InstallAgentEvent
-  | InstallAgentResultEvent;
+  | InstallAgentResultEvent
+  | RememberEvent
+  | RememberResultEvent
+  | RecallEvent
+  | RecallResultEvent
+  | ForgetEvent
+  | ForgetResultEvent;
