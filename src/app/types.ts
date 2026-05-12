@@ -781,6 +781,79 @@ export type ForgetResultEvent = BaseEvent & {
   };
 };
 
+export type TodoStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
+
+/**
+ * A single unit of work tracked in thread state. Todos are owned by the
+ * system (bus services); agents can only mutate them by calling the
+ * `todo_write` / `todo_update` tools so every change is observable on the
+ * event stream and audit-friendly.
+ */
+export interface TodoItem {
+  id: string;
+  content: string;
+  status: TodoStatus;
+  /** Optional agent id responsible for this item — drives autonomous handoffs. */
+  assignee?: string;
+  /** Agent id that created the todo (or "system"). */
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+  /**
+   * Captured final reply when this item reaches `done` (last `agent:output`
+   * from the assignee for that run). Lets downstream agents rely on thread
+   * state instead of merged short-term messages.
+   */
+  result?: string;
+}
+
+export type TodoWriteInput = {
+  id?: string;
+  content: string;
+  status?: TodoStatus;
+  assignee?: string;
+};
+
+export type TodoWriteEvent = BaseEvent & {
+  type: 'action:todo_write';
+  data: {
+    todos: TodoWriteInput[];
+  };
+  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
+};
+
+export type TodoWriteResultEvent = BaseEvent & {
+  type: 'action:todo_write:result';
+  data: {
+    success: boolean;
+    todos: TodoItem[];
+    error?: string;
+  };
+  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
+};
+
+export type TodoUpdateEvent = BaseEvent & {
+  type: 'action:todo_update';
+  data: {
+    id: string;
+    status?: TodoStatus;
+    content?: string;
+    assignee?: string;
+  };
+  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
+};
+
+export type TodoUpdateResultEvent = BaseEvent & {
+  type: 'action:todo_update:result';
+  data: {
+    success: boolean;
+    todo?: TodoItem;
+    todos: TodoItem[];
+    error?: string;
+  };
+  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
+};
+
 export type OpenBotEvent =
   | UserInputEvent
   | AgentInvokeEvent
@@ -860,4 +933,8 @@ export type OpenBotEvent =
   | RecallEvent
   | RecallResultEvent
   | ForgetEvent
-  | ForgetResultEvent;
+  | ForgetResultEvent
+  | TodoWriteEvent
+  | TodoWriteResultEvent
+  | TodoUpdateEvent
+  | TodoUpdateResultEvent;

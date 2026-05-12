@@ -6,6 +6,7 @@ import {
 } from '../app/types.js';
 import { ensureEventId } from '../app/utils.js';
 import { storageService } from '../services/storage.js';
+import { advanceAfterRun } from './todo-advance.js';
 
 export interface QueueItem {
   agentId: string;
@@ -66,11 +67,22 @@ export class QueueProcessor {
             // Track handoff requests queued in this step to avoid accidental duplicates.
             const queuedRequestKeys = new Set<string>();
             const queuedItems: QueueItem[] = [];
+            let lastAgentOutput: string | undefined;
 
             const runOnEvent = async (chunk: OpenBotEvent, state: OpenBotState) => {
               // 0. Filter out echoed input events to prevent duplication in the UI/storage
               if (chunk.type === currentEvent.type && chunk.id === currentEvent.id) {
                 return false;
+              }
+
+              if (chunk.type === 'agent:output') {
+                const outMeta = chunk.meta as { agentId?: string } | undefined;
+                if (outMeta?.agentId === agentId) {
+                  const content = chunk.data?.content;
+                  if (typeof content === 'string' && content.trim()) {
+                    lastAgentOutput = content.trim();
+                  }
+                }
               }
 
               // 1. Detect if a new thread was created and update the context for the rest of the loop
@@ -82,7 +94,7 @@ export class QueueProcessor {
               if (chunk.type === 'handoff:request') {
                 const request = chunk as HandoffRequestEvent;
                 const targetAgentId = request.data?.agentId;
-                const requestKey = `handoff:${targetAgentId}:${request.data?.content ?? ''}`;
+                const requestKey = `handoff:${targetAgentId}`;
 
                 if (
                   targetAgentId &&
@@ -162,6 +174,33 @@ export class QueueProcessor {
                 },
                 endState,
               );
+
+              // Autonomous todo advance: mark this agent's in_progress todo done
+              // and dispatch the next assignee, if any. Single trigger point,
+              // no reliance on the LLM remembering to call `todo_update`.
+              try {
+                const handoff = await advanceAfterRun({
+                  storage: storageService,
+                  channelId: this.options.channelId,
+                  threadId: this.currentThreadId,
+                  endedAgentId: agentId,
+                  lastAgentOutput,
+                });
+                if (handoff) {
+                  const requestKey = `handoff:${handoff.agentId}`;
+                  if (!queuedRequestKeys.has(requestKey)) {
+                    queuedRequestKeys.add(requestKey);
+                    const targetEvent = ensureEventId({
+                      type: 'agent:invoke',
+                      data: { role: 'user', content: handoff.content },
+                      meta: { threadId: this.currentThreadId },
+                    } satisfies AgentInvokeEvent) as AgentInvokeEvent;
+                    queuedItems.push({ agentId: handoff.agentId, event: targetEvent });
+                  }
+                }
+              } catch (error) {
+                console.warn('[queue] todo advance failed', error);
+              }
             }
 
             nextQueue.push(...queuedItems);

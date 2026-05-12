@@ -23,11 +23,16 @@ export async function enhanceInstructions(state: OpenBotState) {
       .map((a) => `- **${a.id}**${a.description ? `: ${a.description}` : ''}`)
       .join('\n');
 
-    const header = '### Available Agents for Handoff:';
+    const header = '### Available Agents:';
     if (!agentDetails.instructions.includes(header)) {
-      agentDetails.instructions +=
-        `\n\n${header}\n${agentsList}\n\n` +
-        'Use `handoff` to transfer control to another agent in this thread.';
+      const hasHandoff = (agentDetails.pluginRefs || []).some((r) => r.id === 'delegation');
+      const hasTodo = (agentDetails.pluginRefs || []).some((r) => r.id === 'todo');
+      const usage = hasTodo
+        ? 'Use these ids as `assignee` when calling `todo_write` to plan multi-agent work.'
+        : hasHandoff
+          ? 'Use `handoff` to transfer control to another agent in this thread.'
+          : '';
+      agentDetails.instructions += `\n\n${header}\n${agentsList}${usage ? `\n\n${usage}` : ''}`;
     }
   } catch (error) {
     console.warn('[agent] Failed to enhance instructions', error);

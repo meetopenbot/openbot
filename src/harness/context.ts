@@ -1,4 +1,4 @@
-import { OpenBotEvent, OpenBotState } from '../app/types.js';
+import { OpenBotEvent, OpenBotState, TodoItem } from '../app/types.js';
 import { Storage } from '../bus/types.js';
 
 /**
@@ -98,6 +98,7 @@ export function createDefaultContextEngine(): ContextEngine {
   engine.registerProvider(new AgentDetailsProvider());
   engine.registerProvider(new ChannelDetailsProvider());
   engine.registerProvider(new ThreadDetailsProvider());
+  engine.registerProvider(new TodoProvider());
   engine.registerProvider(new MemoryProvider());
   engine.registerProvider(new RecentEventsProvider());
 
@@ -151,6 +152,57 @@ class ThreadDetailsProvider implements ContextProvider {
         type: 'thread',
         priority: 90,
         content: `# Thread you are in: ${state.threadDetails.name}`,
+      },
+    ];
+  }
+}
+
+/**
+ * Surfaces the shared per-thread todo list. The list lives in
+ * `threadDetails.state.todos` and is owned by bus services — every agent in
+ * the thread reads from the same canonical source, which is how multi-agent
+ * autonomous flows stay coordinated.
+ */
+class TodoProvider implements ContextProvider {
+  name = 'todos';
+  async provide(state: OpenBotState): Promise<ContextItem[]> {
+    const raw = (state.threadDetails?.state as Record<string, unknown> | undefined)?.todos;
+    const todos: TodoItem[] = Array.isArray(raw) ? (raw as TodoItem[]) : [];
+    if (todos.length === 0) return [];
+
+    const DISPLAY_RESULT_CAP = 2500;
+
+    const marker: Record<TodoItem['status'], string> = {
+      pending: '[ ]',
+      in_progress: '[~]',
+      done: '[x]',
+      cancelled: '[-]',
+    };
+    const formatted = todos
+      .map((t) => {
+        const assignee = t.assignee ? ` @${t.assignee}` : '';
+        let line = `- ${marker[t.status]} (${t.id})${assignee} ${t.content}`;
+        if (t.status === 'done' && t.result?.trim()) {
+          let snippet = t.result.trim();
+          if (snippet.length > DISPLAY_RESULT_CAP) {
+            snippet = `${snippet.slice(0, DISPLAY_RESULT_CAP)}…[truncated]`;
+          }
+          line += `\n  Result: ${snippet}`;
+        }
+        return line;
+      })
+      .join('\n');
+
+    return [
+      {
+        id: 'todos',
+        type: 'todos',
+        priority: 92,
+        content:
+          `## Shared todo plan (thread state)\n` +
+          `Orchestrator authors with \`todo_write\`; assignees run one step at a time. ` +
+          `When an item is \`done\`, its captured output appears below so every agent can see prior steps without relying on merged chat history.\n\n` +
+          `${formatted}`,
       },
     ];
   }

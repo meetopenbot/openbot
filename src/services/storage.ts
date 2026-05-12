@@ -91,7 +91,7 @@ const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
   { id: 'storage-tools' },
   // { id: 'mcp' },
   { id: 'shell' },
-  { id: 'delegation' },
+  { id: 'todo' },
   // { id: 'ui' },
   { id: 'approval' },
   { id: 'memory' },

@@ -1,10 +1,44 @@
 import { MelonyPlugin } from 'melony';
 import { DEFAULT_MARKETPLACE_REGISTRY_URL, loadConfig } from '../app/config.js';
-import { OpenBotEvent, OpenBotState, MemoryScopeAlias } from '../app/types.js';
+import {
+  OpenBotEvent,
+  OpenBotState,
+  MemoryScopeAlias,
+  TodoItem,
+  TodoStatus,
+  TodoWriteInput,
+} from '../app/types.js';
 import type { PluginRef } from './plugin.js';
 import { Storage } from './types.js';
 import { storageService } from '../services/storage.js';
 import { pluginService } from '../services/plugins.js';
+
+const readTodos = (state: OpenBotState): TodoItem[] => {
+  const raw = (state.threadDetails?.state as Record<string, unknown> | undefined)?.todos;
+  return Array.isArray(raw) ? (raw as TodoItem[]) : [];
+};
+
+let todoCounter = 0;
+const newTodoId = (now: number, idx: number): string =>
+  `todo_${now.toString(36)}_${(todoCounter++).toString(36)}_${idx}`;
+
+async function persistTodos(
+  storage: Storage,
+  state: OpenBotState,
+  todos: TodoItem[],
+): Promise<void> {
+  if (!state.threadId) throw new Error('No active thread');
+  await storage.patchThreadState({
+    channelId: state.channelId,
+    threadId: state.threadId,
+    state: { todos },
+  });
+  state.threadDetails = await storage.getThreadDetails({
+    channelId: state.channelId,
+    threadId: state.threadId,
+  });
+}
+
 
 /**
  * Resolve a scope alias to a concrete scope string. Aliases let tools accept
@@ -364,6 +398,102 @@ export const busServicesPlugin =
             data: { success: false, updatedFields },
             meta: resultMeta,
           };
+        }
+      });
+
+      builder.on('action:todo_write', async function* (event, context) {
+        const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+        try {
+          if (!context.state.threadId) {
+            throw new Error('todo_write requires an active thread');
+          }
+          const existing = readTodos(context.state);
+          const byId = new Map(existing.map((t) => [t.id, t]));
+          const now = Date.now();
+          const author = context.state.agentId || 'system';
+
+          const inputs = (event.data as { todos: TodoWriteInput[] }).todos || [];
+          const next: TodoItem[] = inputs.map((raw, idx) => {
+            const prior = raw.id ? byId.get(raw.id) : undefined;
+            return {
+              id: prior?.id || raw.id || newTodoId(now, idx),
+              content: raw.content,
+              status: raw.status || prior?.status || 'pending',
+              assignee: raw.assignee ?? prior?.assignee,
+              createdBy: prior?.createdBy || author,
+              createdAt: prior?.createdAt || now,
+              updatedAt: now,
+              ...(prior?.result !== undefined ? { result: prior.result } : {}),
+            };
+          });
+
+          await persistTodos(storage, context.state, next);
+
+          yield {
+            type: 'action:todo_write:result',
+            data: { success: true, todos: next },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        } catch (error) {
+          yield {
+            type: 'action:todo_write:result',
+            data: {
+              success: false,
+              todos: readTodos(context.state),
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        }
+      });
+
+      builder.on('action:todo_update', async function* (event, context) {
+        const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+        const patch = event.data as {
+          id: string;
+          status?: TodoStatus;
+          content?: string;
+          assignee?: string;
+        };
+        try {
+          if (!context.state.threadId) {
+            throw new Error('todo_update requires an active thread');
+          }
+          const existing = readTodos(context.state);
+          const idx = existing.findIndex((t) => t.id === patch.id);
+          if (idx === -1) {
+            throw new Error(`Todo "${patch.id}" not found`);
+          }
+          const now = Date.now();
+          const updated: TodoItem = {
+            ...existing[idx],
+            ...(patch.content !== undefined ? { content: patch.content } : {}),
+            ...(patch.status !== undefined ? { status: patch.status } : {}),
+            ...(patch.assignee !== undefined
+              ? { assignee: patch.assignee === '' ? undefined : patch.assignee }
+              : {}),
+            updatedAt: now,
+          };
+          const next = [...existing];
+          next[idx] = updated;
+
+          await persistTodos(storage, context.state, next);
+
+          yield {
+            type: 'action:todo_update:result',
+            data: { success: true, todo: updated, todos: next },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        } catch (error) {
+          yield {
+            type: 'action:todo_update:result',
+            data: {
+              success: false,
+              todos: readTodos(context.state),
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+            meta: resultMeta,
+          } as OpenBotEvent;
         }
       });
 
