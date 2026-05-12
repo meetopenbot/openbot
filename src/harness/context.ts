@@ -110,11 +110,14 @@ class AgentDetailsProvider implements ContextProvider {
   name = 'agent-details';
   async provide(state: OpenBotState): Promise<ContextItem[]> {
     if (!state.agentDetails) return [];
+    const instructions = state.agentDetails.instructions?.trim();
+    if (!instructions) return [];
+
     return [{
       id: 'agent-details',
       type: 'agent',
       priority: 100,
-      content: `## AGENT NAME\n${state.agentDetails.name}\n\n## AGENT SPECIFICATION\n${state.agentDetails.instructions}`
+      content: `# ${state.agentDetails.name}\n\n${instructions}`,
     }];
   }
 }
@@ -123,11 +126,14 @@ class ChannelDetailsProvider implements ContextProvider {
   name = 'channel-details';
   async provide(state: OpenBotState): Promise<ContextItem[]> {
     if (!state.channelDetails) return [];
+    const spec = state.channelDetails.spec?.trim();
+    if (!spec) return [];
+
     return [{
       id: 'channel-details',
       type: 'channel',
       priority: 80,
-      content: `## CHANNEL NAME\n${state.channelDetails.name}\n\n## CHANNEL SPECIFICATION\n${state.channelDetails.spec}`
+      content: `# Channel you are in: ${state.channelDetails.name}\n\n Channel Specification: ${spec}`,
     }];
   }
 }
@@ -136,12 +142,17 @@ class ThreadDetailsProvider implements ContextProvider {
   name = 'thread-details';
   async provide(state: OpenBotState): Promise<ContextItem[]> {
     if (!state.threadDetails) return [];
-    return [{
-      id: 'thread-details',
-      type: 'thread',
-      priority: 90,
-      content: `## THREAD NAME\n${state.threadDetails.name}\n\n## THREAD SPECIFICATION\n${state.threadDetails.spec}`
-    }];
+
+    // For now, this provider is a placeholder for future state-based assembly.
+    // It currently only surfaces the thread name to provide basic context.
+    return [
+      {
+        id: 'thread-details',
+        type: 'thread',
+        priority: 90,
+        content: `# Thread you are in: ${state.threadDetails.name}`,
+      },
+    ];
   }
 }
 
@@ -175,7 +186,7 @@ class MemoryProvider implements ContextProvider {
           id: 'memory',
           type: 'memory',
           priority: 95,
-          content: `## REMEMBERED FACTS\nThese are durable facts you previously stored with the \`remember\` tool. Trust them unless contradicted by the user. Use \`forget\` to remove ones that are stale.\n\n${formatted}`,
+          content: `## Remembered facts\nTrust these unless the user contradicts them. Use \`forget\` to remove stale ones.\n\n${formatted}`,
         },
       ];
     } catch (error) {

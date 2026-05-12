@@ -78,7 +78,6 @@ export type ThreadDetails = {
   id: string;
   name: string;
   channelId: string;
-  spec: string;
   state: unknown;
 };
 
@@ -103,7 +102,6 @@ export interface Storage {
     channelId: string;
     threadId: string;
     threadTitle?: string;
-    spec?: string;
     initialState?: Record<string, unknown>;
   }) => Promise<void>;
   getThreads: (args: { channelId: string }) => Promise<Thread[]>;
@@ -135,7 +133,6 @@ export interface Storage {
     state: unknown;
   }) => Promise<void>;
   patchChannelSpec: (args: { channelId: string; spec: string }) => Promise<void>;
-  patchThreadSpec: (args: { channelId: string; threadId: string; spec: string }) => Promise<void>;
   getVariables: () => Promise<Record<string, string | { value: string; secret: boolean }>>;
   createVariable: (args: { key: string; value: string; secret?: boolean }) => Promise<void>;
   deleteVariable: (args: { key: string }) => Promise<void>;

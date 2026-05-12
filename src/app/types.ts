@@ -290,7 +290,6 @@ export type PatchThreadDetailsEvent = BaseEvent & {
   type: 'action:patch_thread_details';
   data: {
     state?: Record<string, unknown>;
-    spec?: string;
   };
 };
 
@@ -298,7 +297,7 @@ export type PatchThreadDetailsResultEvent = BaseEvent & {
   type: 'action:patch_thread_details:result';
   data: {
     success: boolean;
-    updatedFields: ('state' | 'spec')[];
+    updatedFields: ('state')[];
   };
 };
 
@@ -381,7 +380,6 @@ export type CreateThreadEvent = BaseEvent & {
   type: 'action:create_thread';
   data: {
     threadTitle: string;
-    spec?: string;
     initialState?: Record<string, unknown>;
   };
   meta: {

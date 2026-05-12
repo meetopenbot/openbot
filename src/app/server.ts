@@ -289,9 +289,8 @@ export async function startServer(options: ServerOptions = {}) {
 
   app.listen(PORT, () => {
     console.log(`\x1b[32mOpenBot server listening at http://localhost:${PORT}\x1b[0m`);
-    console.log(`  - Health endpoint: GET /health`);
-    console.log(`  - Events endpoint: GET /api/events (SSE)`);
-    console.log(`  - Publish endpoint: POST /api/publish`);
-    console.log(`  - State endpoint: GET /api/state`);
+    console.log(
+      `🌐 Visit \x1b[96m\x1b[1mhttps://openbot.one\x1b[0m to connect to this runtime and manage everything from there. ✨`,
+    );
   });
 }

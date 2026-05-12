@@ -448,13 +448,11 @@ export const storageService = {
     channelId,
     threadId,
     threadTitle,
-    spec,
     initialState,
   }: {
     channelId: string;
     threadId: string;
     threadTitle?: string;
-    spec?: string;
     initialState?: Record<string, unknown>;
   }): Promise<void> => {
     const normalizedChannelId = channelId.trim();
@@ -464,7 +462,6 @@ export const storageService = {
     if (!normalizedThreadId) throw new Error('threadId is required');
 
     const threadDir = getConversationDir(normalizedChannelId, normalizedThreadId);
-    const specPath = `${threadDir}/SPEC.md`;
     const statePath = `${threadDir}/state.json`;
 
     try {
@@ -485,11 +482,6 @@ export const storageService = {
     }
 
     await fs.mkdir(threadDir, { recursive: true });
-    await fs.writeFile(
-      specPath,
-      spec?.trim() ||
-        `# ${normalizedThreadId}\n\nDefine the goals and plan for this thread here.\n`,
-    );
     await fs.writeFile(statePath, JSON.stringify(baseState, null, 2));
   },
   getThreads: async ({ channelId }: { channelId: string }): Promise<Thread[]> => {
@@ -548,20 +540,7 @@ export const storageService = {
     threadId: string;
   }): Promise<ThreadDetails> => {
     const threadDir = getConversationDir(channelId, threadId);
-    const specPath = `${threadDir}/SPEC.md`;
     const statePath = `${threadDir}/state.json`;
-
-    let spec = '';
-    try {
-      spec = await fs.readFile(specPath, 'utf-8');
-    } catch (error: unknown) {
-      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
-        console.error(
-          `Failed to read thread spec for channel ${channelId} thread ${threadId}`,
-          error,
-        );
-      }
-    }
 
     let state: unknown = {};
     try {
@@ -585,7 +564,6 @@ export const storageService = {
       id: threadId,
       name: generatedName || threadId,
       channelId,
-      spec,
       state,
     };
   },
@@ -699,29 +677,6 @@ export const storageService = {
       await fs.writeFile(specPath, spec);
     } catch (error) {
       console.error(`Failed to patch channel spec for channel ${channelId}`, error);
-      throw error;
-    }
-  },
-  patchThreadSpec: async ({
-    channelId,
-    threadId,
-    spec,
-  }: {
-    channelId: string;
-    threadId: string;
-    spec: string;
-  }): Promise<void> => {
-    const threadDir = getConversationDir(channelId, threadId);
-    const specPath = `${threadDir}/SPEC.md`;
-
-    try {
-      await fs.mkdir(threadDir, { recursive: true });
-      await fs.writeFile(specPath, spec);
-    } catch (error) {
-      console.error(
-        `Failed to patch thread spec for channel ${channelId} thread ${threadId}`,
-        error,
-      );
       throw error;
     }
   },

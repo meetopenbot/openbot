@@ -1,6 +1,5 @@
 import type { Plugin } from '../../bus/plugin.js';
 import { aiSdkRuntime } from './runtime.js';
-import { AI_SDK_SYSTEM_PROMPT } from './system-prompt.js';
 
 /**
  * `ai-sdk` — generic LLM runtime plugin built on the Vercel AI SDK.
@@ -33,7 +32,6 @@ export const aiSdkPlugin: Plugin = {
 
     return aiSdkRuntime({
       model,
-      system: agentDetails.instructions || AI_SDK_SYSTEM_PROMPT,
       storage,
       toolDefinitions: tools,
     });

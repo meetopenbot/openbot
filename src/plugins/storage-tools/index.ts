@@ -52,25 +52,14 @@ const storageToolDefinitions = {
       ),
   },
   patch_thread_details: {
-    description: 'Patch current thread details (state and/or spec).',
-    inputSchema: z
-      .object({
-        state: z
-          .record(z.string(), z.unknown())
-          .optional()
-          .describe(
-            'JSON state object for the thread. Use for structured data like `todos` or progress.',
-          ),
-        spec: z
-          .string()
-          .optional()
-          .describe(
-            'Markdown content for the thread specification (SPEC.md). Use for plans and goals.',
-          ),
-      })
-      .refine((value) => value.state !== undefined || value.spec !== undefined, {
-        message: 'Provide at least one of state or spec.',
-      }),
+    description: 'Patch current thread details (state).',
+    inputSchema: z.object({
+      state: z
+        .record(z.string(), z.unknown())
+        .describe(
+          'JSON state object for the thread. Use for structured data like `todos` or progress.',
+        ),
+    }),
   },
   create_variable: {
     description: 'Create or update a variable in the workspace storage.',

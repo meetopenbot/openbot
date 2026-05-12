@@ -154,7 +154,7 @@ export const busServicesPlugin =
       builder.on('action:create_thread', async function* (event, context) {
         const threadId = event.meta?.threadId;
         const channelId = context.state.channelId;
-        const { threadTitle, spec, initialState } = (event as any).data;
+        const { threadTitle, initialState } = (event as any).data;
 
         if (!threadId) {
           console.warn('[bus] Cannot create thread: meta.threadId is missing');
@@ -169,7 +169,6 @@ export const busServicesPlugin =
               channelId,
               threadId,
               threadTitle,
-              spec,
               initialState: (initialState as Record<string, unknown>) || {},
             });
 
@@ -334,7 +333,7 @@ export const busServicesPlugin =
       });
 
       builder.on('action:patch_thread_details', async function* (event, context) {
-        const updatedFields: ('state' | 'spec')[] = [];
+        const updatedFields: ('state')[] = [];
         const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
         try {
           if (!context.state.threadId) {
@@ -347,14 +346,6 @@ export const busServicesPlugin =
               state: (event.data as any).state,
             });
             updatedFields.push('state');
-          }
-          if (typeof (event.data as any).spec === 'string') {
-            await storage.patchThreadSpec({
-              channelId: context.state.channelId,
-              threadId: context.state.threadId,
-              spec: (event.data as any).spec,
-            });
-            updatedFields.push('spec');
           }
 
           context.state.threadDetails = await storage.getThreadDetails({
