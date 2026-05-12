@@ -56,8 +56,6 @@ export interface Plugin {
   name: string;
   description: string;
   image?: string;
-  /** Optional system-prompt body suggested when this plugin is used as the runtime. */
-  defaultInstructions?: string;
   /** JSON-schema-like description of `config` accepted in AGENT.md `plugins[].config`. */
   configSchema?: ConfigSchema;
   /** Tool definitions contributed to any runtime plugin attached to the same agent. */

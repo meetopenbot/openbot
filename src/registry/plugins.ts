@@ -50,8 +50,6 @@ export function parsePluginModule(
   const name = typeof raw.name === 'string' ? raw.name : '';
   const description = typeof raw.description === 'string' ? raw.description : '';
   const image = typeof raw.image === 'string' ? raw.image : undefined;
-  const defaultInstructions =
-    typeof raw.defaultInstructions === 'string' ? raw.defaultInstructions : undefined;
   const configSchema = raw.configSchema as Plugin['configSchema'];
   const toolDefinitions = raw.toolDefinitions as Plugin['toolDefinitions'];
 
@@ -59,7 +57,6 @@ export function parsePluginModule(
     name,
     description,
     image,
-    defaultInstructions,
     configSchema,
     toolDefinitions,
     factory: factory as Plugin['factory'],

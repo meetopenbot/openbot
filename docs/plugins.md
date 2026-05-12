@@ -20,7 +20,6 @@ export interface Plugin {
   name: string;
   description: string;
   image?: string;
-  defaultInstructions?: string;
   configSchema?: ConfigSchema;
   toolDefinitions?: Record<string, ToolDefinition>;
   factory: (context: PluginContext) => MelonyPlugin;

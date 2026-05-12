@@ -34,7 +34,6 @@ export type PluginDescriptor = {
   /** True when bundled with the core server (`src/registry/plugins`); false for ~/.openbot/plugins installs. */
   builtIn: boolean;
   image?: string;
-  defaultInstructions?: string;
   configSchema?: ConfigSchema;
   createdAt: Date;
   updatedAt: Date;

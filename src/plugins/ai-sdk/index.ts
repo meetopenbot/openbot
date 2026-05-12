@@ -14,7 +14,6 @@ export const aiSdkPlugin: Plugin = {
   name: 'AI SDK Runtime',
   description:
     'Generic LLM runtime built on the Vercel AI SDK. Consumes tools contributed by other plugins.',
-  defaultInstructions: AI_SDK_SYSTEM_PROMPT,
   configSchema: {
     type: 'object',
     properties: {
