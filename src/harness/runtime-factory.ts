@@ -7,8 +7,8 @@ import { busServicesPlugin } from '../bus/services.js';
 
 /**
  * Enhances the agent's instructions with a list of other available agents the
- * orchestrator can hand off / delegate to. Agents that include the
- * `delegation` plugin will surface peers; agents without it can ignore this.
+ * orchestrator can hand off to. Agents that include the `delegation` plugin
+ * will surface peers; agents without it can ignore this.
  */
 export async function enhanceInstructions(state: OpenBotState) {
   const { agentId, agentDetails } = state;
@@ -23,12 +23,11 @@ export async function enhanceInstructions(state: OpenBotState) {
       .map((a) => `- **${a.id}**${a.description ? `: ${a.description}` : ''}`)
       .join('\n');
 
-    const header = '### Available Agents for Handoff/Delegation:';
+    const header = '### Available Agents for Handoff:';
     if (!agentDetails.instructions.includes(header)) {
       agentDetails.instructions +=
         `\n\n${header}\n${agentsList}\n\n` +
-        'Use `handoff` to transfer control to another agent. ' +
-        'Use `delegate` when you need a sub-result from another agent and want to continue after it returns.';
+        'Use `handoff` to transfer control to another agent in this thread.';
     }
   } catch (error) {
     console.warn('[agent] Failed to enhance instructions', error);

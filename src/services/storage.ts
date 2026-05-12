@@ -103,7 +103,7 @@ function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails 
     name: 'OpenBot',
     image: undefined,
     description:
-      'First-party orchestration agent for OpenBot. Coordinates other agents via handoff and delegation.',
+      'First-party orchestration agent for OpenBot. Coordinates other agents via handoff.',
     instructions: AI_SDK_SYSTEM_PROMPT,
     plugins: SYSTEM_DEFAULT_PLUGINS.map((ref) => ref.id),
     pluginRefs: SYSTEM_DEFAULT_PLUGINS,

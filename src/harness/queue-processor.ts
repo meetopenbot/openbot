@@ -1,7 +1,5 @@
 import {
   AgentInvokeEvent,
-  DelegateResultEvent,
-  DelegationRequestEvent,
   HandoffRequestEvent,
   OpenBotEvent,
   OpenBotState,
@@ -12,11 +10,6 @@ import { storageService } from '../services/storage.js';
 export interface QueueItem {
   agentId: string;
   event: OpenBotEvent;
-  delegationContext?: {
-    parentAgentId: string;
-    toolCallId: string;
-    delegationWidgetId?: string;
-  };
 }
 
 export interface QueueProcessorOptions {
@@ -68,12 +61,11 @@ export class QueueProcessor {
         Array.from(groups.entries()).map(async ([agentId, items]) => {
           // Run items for the SAME agent sequentially to preserve event order and state consistency.
           for (const item of items) {
-            const { event: currentEvent, delegationContext } = item;
+            const { event: currentEvent } = item;
 
-            // Track delegation/handoff requests queued in this step to avoid accidental duplicates.
+            // Track handoff requests queued in this step to avoid accidental duplicates.
             const queuedRequestKeys = new Set<string>();
             const queuedItems: QueueItem[] = [];
-            const runOutputs: string[] = [];
 
             const runOnEvent = async (chunk: OpenBotEvent, state: OpenBotState) => {
               // 0. Filter out echoed input events to prevent duplication in the UI/storage
@@ -86,21 +78,12 @@ export class QueueProcessor {
                 this.currentThreadId = chunk.data.threadId || this.currentThreadId;
               }
 
-              // 2. Internal routing (handoff/delegation requests are internal — not forwarded)
-              if (chunk.type === 'handoff:request' || chunk.type === 'delegation:request') {
-                const isHandoff = chunk.type === 'handoff:request';
-                const request = isHandoff
-                  ? (chunk as HandoffRequestEvent)
-                  : (chunk as DelegationRequestEvent);
+              // 2. Internal routing (handoff requests are internal — not forwarded)
+              if (chunk.type === 'handoff:request') {
+                const request = chunk as HandoffRequestEvent;
                 const targetAgentId = request.data?.agentId;
-                const toolCallId =
-                  typeof request.meta?.toolCallId === 'string'
-                    ? request.meta.toolCallId
-                    : undefined;
-                const requestKey = isHandoff
-                  ? `handoff:${targetAgentId}:${request.data?.content ?? ''}`
-                  : `delegate:${toolCallId ?? 'missing'}:${targetAgentId}:${request.data?.content ?? ''}`;
-                
+                const requestKey = `handoff:${targetAgentId}:${request.data?.content ?? ''}`;
+
                 if (
                   targetAgentId &&
                   targetAgentId !== agentId &&
@@ -119,59 +102,8 @@ export class QueueProcessor {
                     },
                   } satisfies AgentInvokeEvent) as AgentInvokeEvent;
 
-                  if (isHandoff) {
-                    queuedItems.push({ agentId: targetAgentId, event: targetEvent });
-                  } else {
-                    if (!toolCallId) {
-                      // Emit error output (this triggers run start if not already started)
-                      await runOnEvent(
-                        ensureEventId({
-                          type: 'agent:output',
-                          data: {
-                            content:
-                              'Delegation request ignored: missing toolCallId. Please retry delegation.',
-                          },
-                          meta: {
-                            agentId,
-                            threadId: this.currentThreadId,
-                          },
-                        } as OpenBotEvent),
-                        state,
-                      );
-                      return true;
-                    }
-                    const parentAgentId =
-                      typeof request.meta?.parentAgentId === 'string'
-                        ? request.meta.parentAgentId
-                        : agentId;
-                    const delegationWidgetId =
-                      typeof request.meta?.delegationWidgetId === 'string'
-                        ? request.meta.delegationWidgetId
-                        : undefined;
-                    queuedItems.push({
-                      agentId: targetAgentId,
-                      event: targetEvent,
-                      delegationContext: {
-                        parentAgentId,
-                        toolCallId,
-                        delegationWidgetId,
-                      },
-                    });
-                  }
+                  queuedItems.push({ agentId: targetAgentId, event: targetEvent });
                 }
-                return false;
-              }
-
-              if (chunk.type === 'agent:output') {
-                const content = chunk.data?.content;
-                if (typeof content === 'string' && content.trim().length > 0) {
-                  runOutputs.push(content.trim());
-                }
-              }
-
-              // For delegate mode, child agent execution is internal:
-              // capture outputs for parent tool result, but don't stream child events to clients/storage.
-              if (delegationContext) {
                 return false;
               }
 
@@ -191,11 +123,11 @@ export class QueueProcessor {
             await this.options.onEvent(
               {
                 type: 'agent:run:start',
-                data: { 
-                  runId: this.options.runId, 
-                  agentId, 
-                  channelId: this.options.channelId, 
-                  threadId: this.currentThreadId 
+                data: {
+                  runId: this.options.runId,
+                  agentId,
+                  channelId: this.options.channelId,
+                  threadId: this.currentThreadId,
                 },
               },
               startState,
@@ -221,75 +153,15 @@ export class QueueProcessor {
               await this.options.onEvent(
                 {
                   type: 'agent:run:end',
-                  data: { 
-                    runId: this.options.runId, 
-                    agentId, 
-                    channelId: this.options.channelId, 
-                    threadId: this.currentThreadId 
+                  data: {
+                    runId: this.options.runId,
+                    agentId,
+                    channelId: this.options.channelId,
+                    threadId: this.currentThreadId,
                   },
                 },
                 endState,
               );
-            }
-
-            if (delegationContext) {
-              const summary =
-                runOutputs.length > 0
-                  ? runOutputs.join('\n\n').slice(0, 4000)
-                  : `Delegated agent "${agentId}" completed with no textual output.`;
-              
-              const delegateResultEvent: DelegateResultEvent = ensureEventId({
-                type: 'action:delegate:result',
-                data: {
-                  success: true,
-                  agentId,
-                  summary,
-                },
-                meta: {
-                  toolCallId: delegationContext.toolCallId,
-                  agentId: delegationContext.parentAgentId,
-                  threadId: this.currentThreadId,
-                },
-              } satisfies DelegateResultEvent) as DelegateResultEvent;
-
-              if (delegationContext.delegationWidgetId) {
-                await this.options.onEvent(
-                  ensureEventId({
-                    type: 'client:ui:widget',
-                    data: {
-                      kind: 'message',
-                      widgetId: delegationContext.delegationWidgetId,
-                      title: `Delegation complete: ${agentId}`,
-                      body:
-                        runOutputs.length > 0
-                          ? 'Delegated task finished. Parent agent is preparing final response.'
-                          : 'Delegated task finished with no textual output. Parent agent will continue.',
-                      state: 'submitted',
-                      metadata: {
-                        type: 'delegation:status',
-                        phase: 'completed',
-                        delegatedAgentId: agentId,
-                      },
-                    },
-                    meta: {
-                      agentId: delegationContext.parentAgentId,
-                      threadId: this.currentThreadId,
-                    },
-                  } as OpenBotEvent),
-                  await storageService.getOpenBotState({
-                    runId: this.options.runId,
-                    agentId: delegationContext.parentAgentId,
-                    channelId: this.options.channelId,
-                    threadId: this.currentThreadId,
-                    event: delegateResultEvent,
-                  }),
-                );
-              }
-
-              nextQueue.push({
-                agentId: delegationContext.parentAgentId,
-                event: delegateResultEvent,
-              });
             }
 
             nextQueue.push(...queuedItems);

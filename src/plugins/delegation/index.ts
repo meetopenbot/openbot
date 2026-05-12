@@ -3,26 +3,18 @@ import z from 'zod';
 import type { Plugin } from '../../bus/plugin.js';
 import { OpenBotEvent, OpenBotState } from '../../app/types.js';
 
-const delegationToolDefinitions = {
+const handoffToolDefinitions = {
   handoff: {
     description:
-      'Transfer control to another agent. The target agent continues the task and you do not wait for a tool result.',
+      'Transfer control to another agent. The target agent continues the task in this thread.',
     inputSchema: z.object({
       agentId: z.string().describe('The ID of the target agent.'),
       content: z.string().describe('The message or task to hand off.'),
     }),
   },
-  delegate: {
-    description:
-      'Delegate a subtask to another agent and wait for its result so you can continue.',
-    inputSchema: z.object({
-      agentId: z.string().describe('The ID of the target agent.'),
-      content: z.string().describe('The subtask you want the target agent to execute.'),
-    }),
-  },
 };
 
-const delegationPluginRuntime = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
+const handoffPluginRuntime = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
   builder.on('action:handoff', async function* (event, context) {
     const { agentId, content } = event.data;
 
@@ -46,49 +38,14 @@ const delegationPluginRuntime = (): MelonyPlugin<OpenBotState, OpenBotEvent> => 
       };
     }
   });
-
-  builder.on('action:delegate', async function* (event, context) {
-    const { agentId, content } = event.data;
-    const widgetId = event.meta?.toolCallId
-      ? `delegate_${event.meta.toolCallId}`
-      : `delegate_${Date.now()}`;
-
-    yield {
-      type: 'client:ui:widget',
-      data: {
-        kind: 'message',
-        widgetId,
-        title: `Delegation started: ${agentId}`,
-        body: `Running delegated task in background.\n\n${content}`,
-        state: 'open',
-        metadata: {
-          type: 'delegation:status',
-          phase: 'started',
-          delegatedAgentId: agentId,
-        },
-      },
-      meta: { ...(event.meta || {}), agentId: context.state.agentId },
-    };
-
-    yield {
-      type: 'delegation:request',
-      data: { agentId, content },
-      meta: {
-        ...(event.meta || {}),
-        parentAgentId: context.state.agentId,
-        delegationWidgetId: widgetId,
-        agentId: context.state.agentId,
-      },
-    };
-  });
 };
 
 export const delegationPlugin: Plugin = {
   id: 'delegation',
-  name: 'Delegation',
-  description: 'Hand off or delegate sub-tasks to other agents on the bus.',
-  toolDefinitions: delegationToolDefinitions,
-  factory: () => delegationPluginRuntime(),
+  name: 'Handoff',
+  description: 'Hand off tasks to other agents on the bus.',
+  toolDefinitions: handoffToolDefinitions,
+  factory: () => handoffPluginRuntime(),
 };
 
 export default delegationPlugin;

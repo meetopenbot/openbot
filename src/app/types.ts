@@ -568,46 +568,9 @@ export type HandoffResultEvent = BaseEvent & {
   };
 };
 
-export type DelegateEvent = BaseEvent & {
-  type: 'action:delegate';
-  data: {
-    agentId: string;
-    content: string;
-  };
-  meta?: {
-    toolCallId?: string;
-    [key: string]: any;
-  };
-};
-
-export type DelegateResultEvent = BaseEvent & {
-  type: 'action:delegate:result';
-  data: {
-    success: boolean;
-    agentId: string;
-    summary: string;
-  };
-  meta: {
-    toolCallId: string;
-    agentId: string;
-    threadId?: string;
-    [key: string]: any;
-  };
-};
-
-/** Internal routing: delegation plugin → orchestrator only (not stored or broadcast). */
+/** Internal routing: handoff plugin → orchestrator only (not stored or broadcast). */
 export type HandoffRequestEvent = BaseEvent & {
   type: 'handoff:request';
-  data: {
-    agentId: string;
-    content: string;
-  };
-  meta?: Record<string, unknown>;
-};
-
-/** Internal routing: delegation plugin → orchestrator only (not stored or broadcast). */
-export type DelegationRequestEvent = BaseEvent & {
-  type: 'delegation:request';
   data: {
     agentId: string;
     content: string;
@@ -877,10 +840,7 @@ export type OpenBotEvent =
   | UIWidgetResponseEvent
   | HandoffEvent
   | HandoffResultEvent
-  | DelegateEvent
-  | DelegateResultEvent
   | HandoffRequestEvent
-  | DelegationRequestEvent
   | MCPListToolsEvent
   | MCPListToolsResultEvent
   | MCPCallEvent

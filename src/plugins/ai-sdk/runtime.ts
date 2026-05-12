@@ -222,10 +222,6 @@ export const aiSdkRuntime =
           buildMessageWindow(repairOpenToolCalls(context.state.shortTermMessages || [])),
         );
 
-        console.log('systemPrompt', systemPrompt);
-
-        console.log('coreMessages', JSON.stringify(coreMessages, null, 2));
-
         try {
           const result = await generateText({
             model,
