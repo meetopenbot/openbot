@@ -365,14 +365,45 @@ export type AgentRunEndEvent = BaseEvent & {
   };
 };
 
+export type AgentRunStoppedEvent = BaseEvent & {
+  type: 'agent:run:stopped';
+  data: {
+    runId: string;
+    agentId: string;
+    channelId: string;
+    threadId?: string;
+    reason?: string;
+  };
+};
+
 export type ActiveRunsSnapshotEvent = BaseEvent & {
   type: 'agent:active-runs:snapshot';
   data: {
     channels: Array<{
       channelId: string;
+      threadId?: string;
       activeCount: number;
       agentIds: string[];
     }>;
+  };
+};
+
+export type StopAgentRunEvent = BaseEvent & {
+  type: 'action:agent_run_stop';
+  data: {
+    runId: string;
+    agentId?: string;
+    channelId?: string;
+    threadId?: string;
+    reason?: string;
+  };
+};
+
+export type StopAgentRunResultEvent = BaseEvent & {
+  type: 'action:agent_run_stop:result';
+  data: {
+    success: boolean;
+    message?: string;
   };
 };
 
@@ -860,7 +891,10 @@ export type OpenBotEvent =
   | AgentOutputEvent
   | AgentRunStartEvent
   | AgentRunEndEvent
+  | AgentRunStoppedEvent
   | ActiveRunsSnapshotEvent
+  | StopAgentRunEvent
+  | StopAgentRunResultEvent
   | GetChannelsEvent
   | GetChannelsResultEvent
   | GetThreadsEvent

@@ -12,9 +12,11 @@ import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
 import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
 import { processService } from '../harness/process.js';
 import { storageService } from '../services/storage.js';
-import { AgentHarness } from '../harness/agent-harness.js';
+import { orchestratorService } from '../harness/orchestrator.js';
 import { initPlugins } from '../registry/plugins.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
+
+type Bucket = { channelId: string; threadId?: string; activeCount: number; agentIds: Set<string> };
 
 export interface ServerOptions {
   port?: number;
@@ -94,25 +96,38 @@ export async function startServer(options: ServerOptions = {}) {
   };
 
   const buildActiveRunsSnapshot = (): ActiveRunsSnapshotEvent => {
-    const byChannel = new Map<string, { activeCount: number; agentIds: Set<string> }>();
+    const byBucket = new Map<string, Bucket>();
     for (const run of activeRuns.values()) {
-      const existing = byChannel.get(run.channelId) ?? {
-        activeCount: 0,
-        agentIds: new Set<string>(),
-      };
-      existing.activeCount += 1;
-      existing.agentIds.add(run.agentId);
-      byChannel.set(run.channelId, existing);
+      const threadId = run.threadId || undefined;
+      const key = JSON.stringify([run.channelId, threadId ?? null]);
+      let bucket = byBucket.get(key);
+      if (!bucket) {
+        bucket = { channelId: run.channelId, threadId, activeCount: 0, agentIds: new Set<string>() };
+        byBucket.set(key, bucket);
+      }
+      bucket.activeCount += 1;
+      bucket.agentIds.add(run.agentId);
     }
+    const channels = Array.from(byBucket.values())
+      .sort((a, b) => {
+        const c = a.channelId.localeCompare(b.channelId);
+        if (c !== 0) return c;
+        return (a.threadId ?? '').localeCompare(b.threadId ?? '');
+      })
+      .map(({ channelId, threadId, activeCount, agentIds }) => {
+        const row: ActiveRunsSnapshotEvent['data']['channels'][number] = {
+          channelId,
+          activeCount,
+          agentIds: Array.from(agentIds),
+        };
+        if (threadId !== undefined) {
+          row.threadId = threadId;
+        }
+        return row;
+      });
     return {
       type: 'agent:active-runs:snapshot',
-      data: {
-        channels: Array.from(byChannel.entries()).map(([channelId, value]) => ({
-          channelId,
-          activeCount: value.activeCount,
-          agentIds: Array.from(value.agentIds),
-        })),
-      },
+      data: { channels },
     };
   };
 
@@ -149,6 +164,7 @@ export async function startServer(options: ServerOptions = {}) {
 
     if (channelId === GLOBAL_CHANNEL_ID) {
       const snapshot = buildActiveRunsSnapshot();
+
       ensureEventId(snapshot);
       res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
     }
@@ -206,10 +222,10 @@ export async function startServer(options: ServerOptions = {}) {
         activeRuns.set(
           getRunKey(chunk.data.runId, chunk.data.agentId, chunk.data.channelId, chunk.data.threadId),
           {
-          runId: chunk.data.runId,
-          channelId: chunk.data.channelId,
-          threadId: chunk.data.threadId,
-          agentId: chunk.data.agentId,
+            runId: chunk.data.runId,
+            channelId: chunk.data.channelId,
+            threadId: chunk.data.threadId,
+            agentId: chunk.data.agentId,
           },
         );
       } else if (chunk.type === 'agent:run:end') {
@@ -226,21 +242,26 @@ export async function startServer(options: ServerOptions = {}) {
 
       sendToClientKey(targetClientKey, chunk);
 
-      if (chunk.type === 'agent:run:start' || chunk.type === 'agent:run:end') {
+      if (
+        chunk.type === 'agent:run:start' ||
+        chunk.type === 'agent:run:end' ||
+        chunk.type === 'agent:run:stopped'
+      ) {
         sendToClientKey(GLOBAL_CHANNEL_ID, chunk);
       }
     };
 
     try {
-      const harness = new AgentHarness({
+      ensureEventId(event);
+
+      await orchestratorService.dispatch({
         runId,
         agentId: agentId || 'system',
+        event,
         channelId,
         threadId,
         onEvent,
       });
-
-      await harness.dispatch(event);
       res.sendStatus(200);
     } catch (error) {
       console.error('[publish] Failed to dispatch event', {
@@ -272,15 +293,16 @@ export async function startServer(options: ServerOptions = {}) {
     };
 
     try {
-      const harness = new AgentHarness({
+      ensureEventId(event);
+
+      await orchestratorService.dispatch({
         runId,
         agentId: agentId || 'system',
+        event,
         channelId,
         threadId,
-        onEvent,
+        onEvent
       });
-
-      await harness.dispatch(event);
       res.json({ events });
     } catch (error) {
       res.status(500).json({ error: 'Failed to process state request' });

@@ -22,6 +22,43 @@ export interface DispatchOptions {
   onEvent: (chunk: OpenBotEvent, state: OpenBotState) => Promise<boolean | void>;
 }
 
+type StopRequest = {
+  runId: string;
+  agentId?: string;
+  channelId?: string;
+  threadId?: string;
+  reason?: string;
+  requestedAt: number;
+};
+
+const stopRequests: StopRequest[] = [];
+const STOP_REQUEST_TTL_MS = 30 * 60 * 1000;
+
+const pruneStopRequests = () => {
+  const now = Date.now();
+  for (let i = stopRequests.length - 1; i >= 0; i -= 1) {
+    if (now - stopRequests[i].requestedAt > STOP_REQUEST_TTL_MS) {
+      stopRequests.splice(i, 1);
+    }
+  }
+};
+
+const findStopRequest = (options: {
+  runId: string;
+  agentId: string;
+  channelId: string;
+  threadId?: string;
+}): StopRequest | undefined => {
+  pruneStopRequests();
+  return stopRequests.find((request) => {
+    if (request.runId !== options.runId) return false;
+    if (request.agentId && request.agentId !== options.agentId) return false;
+    if (request.channelId && request.channelId !== options.channelId) return false;
+    if (request.threadId && request.threadId !== options.threadId) return false;
+    return true;
+  });
+};
+
 export const orchestratorService = {
   /**
    * The primary entry point for all events coming into the system (e.g. from the API).
@@ -29,6 +66,36 @@ export const orchestratorService = {
    */
   dispatch: async (options: DispatchOptions): Promise<void> => {
     const { runId, channelId, threadId, onEvent } = options;
+    if (options.event.type === 'action:agent_run_stop') {
+      const stopEvent = options.event;
+      stopRequests.push({
+        runId: stopEvent.data.runId,
+        agentId: stopEvent.data.agentId,
+        channelId: stopEvent.data.channelId || channelId,
+        threadId: stopEvent.data.threadId || threadId,
+        reason: stopEvent.data.reason,
+        requestedAt: Date.now(),
+      });
+      const state = await storageService.getOpenBotState({
+        runId,
+        agentId: options.agentId || 'system',
+        channelId,
+        threadId,
+        event: options.event,
+      });
+      await onEvent(
+        {
+          type: 'action:agent_run_stop:result',
+          data: {
+            success: true,
+            message: `Stop requested for run ${stopEvent.data.runId}.`,
+          },
+          meta: options.event.meta,
+        },
+        state,
+      );
+      return;
+    }
 
     // 1. Normalize incoming event
     const { finalEvent, finalAgentId } = await EventNormalizer.normalize(options.event, {
@@ -46,6 +113,7 @@ export const orchestratorService = {
       threadId,
       onEvent,
       executeAgent: orchestratorService.executeAgent,
+      shouldStopRun: orchestratorService.shouldStopRun,
     });
 
     // 3. Enqueue initial event
@@ -90,15 +158,47 @@ export const orchestratorService = {
     }
 
     const agentRuntime = await createAgentRuntime(agentState);
+    const stopInfo = {
+      runId,
+      agentId,
+      channelId,
+      threadId,
+    };
 
     try {
       // RUN the agent runtime
       for await (const chunk of agentRuntime.run(event, { state: agentState, runId })) {
+        const stopRequest = findStopRequest(stopInfo);
+        if (stopRequest) {
+          await onEvent(
+            {
+              type: 'agent:run:stopped',
+              data: {
+                runId,
+                agentId,
+                channelId,
+                threadId,
+                reason: stopRequest.reason,
+              },
+            },
+            agentState,
+          );
+          break;
+        }
         chunk.meta = { ...chunk.meta, agentId };
         await onEvent(chunk, agentState);
       }
     } catch (error) {
       console.error(`[orchestrator] Agent run failed: ${agentId}`, error);
     }
+  },
+  shouldStopRun: (options: {
+    runId: string;
+    agentId: string;
+    channelId: string;
+    threadId?: string;
+  }): { shouldStop: boolean; reason?: string } => {
+    const request = findStopRequest(options);
+    return request ? { shouldStop: true, reason: request.reason } : { shouldStop: false };
   },
 };

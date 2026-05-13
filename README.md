@@ -120,7 +120,7 @@ Shared plugins can be placed in `~/.openbot/plugins` and referenced by agents.
 ## Project Layout
 
 - `src/app`: CLI, server, event types, and app config.
-- `src/harness`: agent harness, orchestration, process, and MCP runtime helpers.
+- `src/harness`: orchestration, process, and MCP runtime helpers.
 - `src/plugins`: built-in plugin implementations.
 - `src/services`: local storage service.
 - `src/registry`: plugin registry.

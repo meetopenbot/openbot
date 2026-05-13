@@ -440,7 +440,7 @@ export const storageService = {
     await fs.writeFile(
       specPath,
       spec?.trim() ||
-        `# ${normalizedChannelId}\n\nDefine the goals and rules for this channel here.\n`,
+      `# ${normalizedChannelId}\n\nDefine the goals and rules for this channel here.\n`,
     );
     await fs.writeFile(statePath, JSON.stringify(finalState, null, 2));
   },

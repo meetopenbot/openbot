@@ -17,6 +17,12 @@ export interface QueueProcessorOptions {
   runId: string;
   channelId: string;
   threadId?: string;
+  shouldStopRun?: (options: {
+    runId: string;
+    agentId: string;
+    channelId: string;
+    threadId?: string;
+  }) => { shouldStop: boolean; reason?: string };
   onEvent: (chunk: OpenBotEvent, state: OpenBotState) => Promise<boolean | void>;
   executeAgent: (options: {
     runId: string;
@@ -63,6 +69,35 @@ export class QueueProcessor {
           // Run items for the SAME agent sequentially to preserve event order and state consistency.
           for (const item of items) {
             const { event: currentEvent } = item;
+            const stopCheck = this.options.shouldStopRun?.({
+              runId: this.options.runId,
+              agentId,
+              channelId: this.options.channelId,
+              threadId: this.currentThreadId,
+            });
+            if (stopCheck?.shouldStop) {
+              const stoppedState = await storageService.getOpenBotState({
+                runId: this.options.runId,
+                agentId,
+                channelId: this.options.channelId,
+                threadId: this.currentThreadId,
+                event: currentEvent,
+              });
+              await this.options.onEvent(
+                {
+                  type: 'agent:run:stopped',
+                  data: {
+                    runId: this.options.runId,
+                    agentId,
+                    channelId: this.options.channelId,
+                    threadId: this.currentThreadId,
+                    reason: stopCheck.reason,
+                  },
+                },
+                stoppedState,
+              );
+              continue;
+            }
 
             // Track handoff requests queued in this step to avoid accidental duplicates.
             const queuedRequestKeys = new Set<string>();

@@ -1,14 +1,11 @@
 # Architecture
 
-OpenBot is an orchestration platform built on a modular, event-driven architecture. It leverages the `melony` framework to coordinate interactions between multiple specialized agents via a standardized **Agent Harness**.
+OpenBot is an orchestration platform built on a modular, event-driven architecture. It leverages the `melony` framework to coordinate interactions between multiple specialized agents through a central **orchestrator** (HTTP handlers call it directly).
 
 ## Core Components
 
-### 1. Agent Harness
-The Harness is the execution environment for agents. It provides the necessary "plumbing" (storage, communication, tools) so the agent can focus on reasoning. It handles event routing and state management.
-
-### 2. Agent Orchestration & Routing
-The orchestrator is the central dispatcher within the harness. It receives user input and determines how to delegate tasks across the agent network using the following logic:
+### 1. Orchestrator & routing
+The orchestrator is the execution entry point for agent work: it normalizes incoming events, runs the queue processor (handoffs and todo-driven assignees), builds per-agent Melony runtimes, and streams emitted events back to callers (for example storage and SSE). Routing across the agent network uses:
 
 1. **Command Prefix** — Explicit delegation to a specific agent (e.g., `/os list files`).
 2. **DM context** — Direct communication with a specific agent.
@@ -20,10 +17,10 @@ A dynamic registry that manages all available agents. Agents can be:
 - **YAML-based**: Rapidly defined agents in `~/.openbot/agents/*/AGENT.md`.
 - **TS Packages**: Advanced agents with custom logic in `~/.openbot/agents/*/index.ts`.
 
-### 3. Plugin Registry
+### 3. Plugin registry
 The "capability layer" that provides tools and logic shared across the platform. Plugins (like `shell`, `file-system`, or `mcp`) define the actions agents can perform.
 
-### 4. Orchestration Layer (Melony)
+### 4. Orchestration layer (Melony)
 The underlying event bus that handles all communication. It ensures that agents can collaborate asynchronously, share context, and emit real-time updates to the UI.
 
 ## Multi-Agent Workflow
