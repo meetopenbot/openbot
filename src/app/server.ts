@@ -12,7 +12,7 @@ import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
 import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
 import { processService } from '../harness/process.js';
 import { storageService } from '../services/storage.js';
-import { orchestratorService } from '../harness/orchestrator.js';
+import { dispatch } from '../harness/dispatcher.js';
 import { initPlugins } from '../registry/plugins.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
 
@@ -254,7 +254,7 @@ export async function startServer(options: ServerOptions = {}) {
     try {
       ensureEventId(event);
 
-      await orchestratorService.dispatch({
+      await dispatch({
         runId,
         agentId: agentId || 'system',
         event,
@@ -295,13 +295,13 @@ export async function startServer(options: ServerOptions = {}) {
     try {
       ensureEventId(event);
 
-      await orchestratorService.dispatch({
+      await dispatch({
         runId,
         agentId: agentId || 'system',
         event,
         channelId,
         threadId,
-        onEvent
+        onEvent,
       });
       res.json({ events });
     } catch (error) {
