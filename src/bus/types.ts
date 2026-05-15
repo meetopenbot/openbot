@@ -113,6 +113,8 @@ export interface Storage {
     agentId: string;
     name: string;
     description?: string;
+    /** Avatar/logo URL or data URI; persisted in AGENT.md frontmatter. */
+    image?: string;
     instructions: string;
     plugins: PluginRef[];
   }) => Promise<void>;
@@ -120,6 +122,8 @@ export interface Storage {
     agentId: string;
     name?: string;
     description?: string;
+    /** Omit to leave unchanged; empty string removes stored image. */
+    image?: string;
     instructions?: string;
     plugins?: PluginRef[];
   }) => Promise<void>;

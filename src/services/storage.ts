@@ -9,7 +9,9 @@ import {
   VARIABLES_FILE,
 } from '../app/config.js';
 import fs from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import crypto from 'node:crypto';
 import matter from 'gray-matter';
 import {
@@ -28,7 +30,6 @@ import { listBuiltInPlugins, parsePluginModule } from '../registry/plugins.js';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { processService } from '../harness/process.js';
 import { memoryService } from './memory.js';
-import { pathToFileURL } from 'node:url';
 
 const resolveBaseDir = () => {
   const config = loadConfig();
@@ -39,6 +40,24 @@ const ENTITY_SVG_CANDIDATE_NAMES = ['avatar.svg', 'icon.svg', 'image.svg', 'logo
 
 const toSvgDataUrl = (svg: string) =>
   `data:image/svg+xml;base64,${Buffer.from(svg, 'utf-8').toString('base64')}`;
+
+let bundledSystemAgentImage: string | undefined;
+let bundledSystemAgentImageLoaded = false;
+
+/** OpenBot mark from `src/assets/icon.svg` (also copied to `dist/assets` at build). */
+function getBundledSystemAgentImage(): string | undefined {
+  if (bundledSystemAgentImageLoaded) return bundledSystemAgentImage;
+  bundledSystemAgentImageLoaded = true;
+  try {
+    const iconPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '../assets/icon.svg');
+    const trimmed = readFileSync(iconPath, 'utf-8').trim();
+    if (!trimmed.startsWith('<svg')) return undefined;
+    bundledSystemAgentImage = toSvgDataUrl(trimmed);
+  } catch {
+    bundledSystemAgentImage = undefined;
+  }
+  return bundledSystemAgentImage;
+}
 
 const tryReadSvgDataUrl = async (filePath: string): Promise<string | null> => {
   try {
@@ -101,7 +120,7 @@ function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails 
   const defaults: AgentDetails = {
     id: SYSTEM_AGENT_ID,
     name: 'OpenBot',
-    image: undefined,
+    image: getBundledSystemAgentImage(),
     description:
       'First-party orchestration agent for OpenBot. Coordinates other agents via handoff.',
     instructions: AI_SDK_SYSTEM_PROMPT,
@@ -764,6 +783,10 @@ export const storageService = {
       const stats = await fs.stat(agentMdPath);
 
       const pluginRefs = parsePluginRefs(data.plugins);
+      const frontmatterImage =
+        typeof data.image === 'string' && data.image.trim() !== ''
+          ? data.image.trim()
+          : undefined;
 
       diskDetails = {
         id: agentId,
@@ -772,7 +795,7 @@ export const storageService = {
         plugins: pluginRefs.map((ref) => ref.id),
         pluginRefs,
         description: typeof data.description === 'string' ? data.description : '',
-        image: discoveredImage || undefined,
+        image: frontmatterImage || discoveredImage || undefined,
         createdAt: stats.birthtime,
         updatedAt: stats.mtime,
       };
@@ -802,12 +825,14 @@ export const storageService = {
     agentId,
     name,
     description = '',
+    image,
     instructions,
     plugins,
   }: {
     agentId: string;
     name: string;
     description?: string;
+    image?: string;
     instructions: string;
     plugins: PluginRef[];
   }): Promise<void> => {
@@ -836,6 +861,9 @@ export const storageService = {
       description,
       plugins: serializePluginRefs(plugins),
     };
+    if (typeof image === 'string' && image.trim() !== '') {
+      data.image = image.trim();
+    }
 
     const body = matter.stringify(`${instructions.trim()}\n`, data);
     await fs.writeFile(agentMdPath, body, 'utf-8');
@@ -844,12 +872,14 @@ export const storageService = {
     agentId,
     name,
     description,
+    image,
     instructions,
     plugins,
   }: {
     agentId: string;
     name?: string;
     description?: string;
+    image?: string;
     instructions?: string;
     plugins?: PluginRef[];
   }): Promise<void> => {
@@ -874,6 +904,13 @@ export const storageService = {
     if (name !== undefined) nextData.name = name;
     if (description !== undefined) nextData.description = description;
     if (plugins !== undefined) nextData.plugins = serializePluginRefs(plugins);
+    if (image !== undefined) {
+      if (typeof image === 'string' && image.trim() !== '') {
+        nextData.image = image.trim();
+      } else {
+        delete nextData.image;
+      }
+    }
 
     const nextContent = instructions !== undefined ? instructions : parsed.content;
     const body = matter.stringify(`${String(nextContent).trim()}\n`, nextData);

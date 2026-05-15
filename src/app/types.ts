@@ -143,6 +143,7 @@ export type CreateAgentEvent = BaseEvent & {
     agentId: string;
     name: string;
     description?: string;
+    image?: string;
     instructions: string;
     plugins: PluginRef[];
   };
@@ -162,6 +163,7 @@ export type UpdateAgentEvent = BaseEvent & {
     agentId: string;
     name?: string;
     description?: string;
+    image?: string;
     instructions?: string;
     plugins?: PluginRef[];
   };
@@ -745,6 +747,7 @@ export type InstallAgentEvent = BaseEvent & {
     agentId: string;
     name: string;
     description?: string;
+    image?: string;
     instructions: string;
     plugins: PluginRef[];
   };
