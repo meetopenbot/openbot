@@ -18,7 +18,7 @@ OpenBot is a local-first harness for running AI agents. It is built around a sma
 
 - Runs a local agent server.
 - Stores channels, threads, agents, plugins, config, and variables under `~/.openbot`.
-- Ships with a built-in `system` agent named Lolly.
+- Ships with a built-in `system` agent named OpenBot.
 - Loads custom agents from `~/.openbot/agents/<agent-id>/AGENT.md`.
 - Loads shared plugins from `~/.openbot/plugins`.
 - Streams events to clients with Server-Sent Events.

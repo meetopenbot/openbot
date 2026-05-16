@@ -226,7 +226,7 @@ export const busServicesPlugin =
       });
 
       builder.on('action:create_channel', async function* (event, context) {
-        const { channelId, spec, initialState, cwd } = (event as any).data;
+        const { channelId, spec, initialState, cwd, participants } = (event as any).data;
         const rawChannelId = (channelId || '').trim();
         const channelSpec = typeof spec === 'string' ? spec : '';
 
@@ -243,11 +243,22 @@ export const busServicesPlugin =
 
         const channelUrl = `/channels/${rawChannelId}`;
 
+        const mergedInitial: Record<string, unknown> = { ...(initialState || {}) };
+        if (participants !== undefined) {
+          const normalized = Array.isArray(participants)
+            ? participants
+                .filter((x: unknown): x is string => typeof x === 'string')
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+            : [];
+          mergedInitial.participants = normalized;
+        }
+
         try {
           await storage.createChannel({
             channelId: rawChannelId,
             spec: channelSpec,
-            initialState: initialState as Record<string, unknown>,
+            initialState: mergedInitial,
             cwd,
           });
 
@@ -272,7 +283,12 @@ export const busServicesPlugin =
       });
 
       builder.on('action:update_channel', async function* (event, context) {
-        const data = (event.data || {}) as { channelId?: string; name?: string; cwd?: string };
+        const data = (event.data || {}) as {
+          channelId?: string;
+          name?: string;
+          cwd?: string;
+          participants?: string[];
+        };
         const targetChannelId = (data.channelId || context.state.channelId || '').trim();
         const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
 
@@ -295,6 +311,17 @@ export const busServicesPlugin =
         if (typeof data.cwd === 'string' && data.cwd.trim()) {
           patch.cwd = data.cwd.trim();
           updatedFields.push('cwd');
+        }
+        if (data.participants !== undefined) {
+          if (Array.isArray(data.participants)) {
+            patch.participants = data.participants
+              .filter((x): x is string => typeof x === 'string')
+              .map((s) => s.trim())
+              .filter(Boolean);
+          } else {
+            patch.participants = [];
+          }
+          updatedFields.push('participants');
         }
 
         try {
@@ -323,29 +350,48 @@ export const busServicesPlugin =
       });
 
       builder.on('action:patch_channel_details', async function* (event, context) {
-        const updatedFields: ('state' | 'spec' | 'cwd')[] = [];
+        const updatedFields: ('state' | 'spec' | 'cwd' | 'participants')[] = [];
         const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+        const data = (event.data || {}) as {
+          state?: Record<string, unknown>;
+          spec?: string;
+          cwd?: string;
+          participants?: string[];
+        };
         try {
-          if ((event.data as any).state !== undefined) {
+          if (data.state !== undefined) {
             await storage.patchChannelState({
               channelId: context.state.channelId,
-              state: (event.data as any).state,
+              state: data.state,
             });
             updatedFields.push('state');
           }
-          if (typeof (event.data as any).spec === 'string') {
+          if (typeof data.spec === 'string') {
             await storage.patchChannelSpec({
               channelId: context.state.channelId,
-              spec: (event.data as any).spec,
+              spec: data.spec,
             });
             updatedFields.push('spec');
           }
-          if (typeof (event.data as any).cwd === 'string') {
+          if (typeof data.cwd === 'string') {
             await storage.patchChannelState({
               channelId: context.state.channelId,
-              state: { cwd: (event.data as any).cwd },
+              state: { cwd: data.cwd },
             });
             updatedFields.push('cwd');
+          }
+          if (data.participants !== undefined) {
+            const normalized = Array.isArray(data.participants)
+              ? data.participants
+                  .filter((x): x is string => typeof x === 'string')
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+              : [];
+            await storage.patchChannelState({
+              channelId: context.state.channelId,
+              state: { participants: normalized },
+            });
+            updatedFields.push('participants');
           }
 
           context.state.channelDetails = await storage.getChannelDetails({

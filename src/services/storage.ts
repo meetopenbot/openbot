@@ -316,6 +316,25 @@ const listPluginsFromDisk = async (): Promise<PluginDescriptor[]> => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
+/** Display-oriented fields persisted in a channel's `state.json`. */
+const readChannelStateFileFields = (
+  parsed: unknown,
+): { name?: string; cwd?: string; participants: string[] } => {
+  if (!isRecord(parsed)) {
+    return { participants: [] };
+  }
+  const name =
+    typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : undefined;
+  const cwd = typeof parsed.cwd === 'string' ? parsed.cwd : undefined;
+  const participants: string[] = [];
+  if (Array.isArray(parsed.participants)) {
+    for (const x of parsed.participants) {
+      if (typeof x === 'string' && x.trim()) participants.push(x.trim());
+    }
+  }
+  return { name, cwd, participants };
+};
+
 /**
  * Parse the `plugins:` array from AGENT.md frontmatter. Each entry must have an
  * `id`; `config` is optional. Strings are accepted as a shorthand for `{ id }`.
@@ -376,20 +395,26 @@ export const storageService = {
         const channelDir = getConversationDir(name);
         const statePath = path.join(channelDir, 'state.json');
         let cwd: string | undefined;
+        let displayName = name;
+        let participants: string[] = [];
 
         try {
           const stateContent = await fs.readFile(statePath, 'utf-8');
-          const state = JSON.parse(stateContent);
-          cwd = typeof state.cwd === 'string' ? state.cwd : undefined;
+          const parsed = JSON.parse(stateContent);
+          const fields = readChannelStateFileFields(parsed);
+          cwd = fields.cwd;
+          displayName = fields.name ?? name;
+          participants = fields.participants;
         } catch {
           // ignore
         }
 
         const channel: Channel = {
           id: name,
-          name: name,
+          name: displayName,
           description: '',
           cwd,
+          participants,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -610,14 +635,17 @@ export const storageService = {
       }
     }
 
-    const cwd = isRecord(state) && typeof state.cwd === 'string' ? state.cwd : undefined;
+    const diskFields = readChannelStateFileFields(state);
+    const cwd = diskFields.cwd;
+    const displayName = diskFields.name ?? channelId;
 
     const details: ChannelDetails = {
       id: channelId,
-      name: channelId,
+      name: displayName,
       spec,
       state,
       cwd,
+      participants: diskFields.participants,
     };
 
     details.threads = await storageService.getThreads({ channelId });

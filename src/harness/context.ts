@@ -127,15 +127,24 @@ class ChannelDetailsProvider implements ContextProvider {
   name = 'channel-details';
   async provide(state: OpenBotState): Promise<ContextItem[]> {
     if (!state.channelDetails) return [];
-    const spec = state.channelDetails.spec?.trim();
-    if (!spec) return [];
 
-    return [{
-      id: 'channel-details',
-      type: 'channel',
-      priority: 80,
-      content: `# Channel you are in: ${state.channelDetails.name}\n\n Channel Specification: ${spec}`,
-    }];
+    const participants = state.channelDetails.participants;
+    if (!participants?.length) return [];
+
+    const channelLabel =
+      state.channelDetails.name?.trim() || state.channelDetails.id;
+    const lines = participants.map((id) => `- \`${id}\``).join('\n');
+
+    return [
+      {
+        id: 'channel-details',
+        type: 'channel',
+        priority: 80,
+        content:
+          `## Channel participants (${channelLabel})\n` +
+          `Agent ids collaborating in this channel:\n${lines}`,
+      },
+    ];
   }
 }
 
