@@ -82,27 +82,7 @@ export type MarketplaceAgentListing = {
   plugins: PluginRef[];
 };
 
-const DEFAULT_MARKETPLACE_AGENTS: MarketplaceAgentListing[] = [
-  {
-    id: 'researcher',
-    name: 'Researcher',
-    description: 'Specialized in web research and information synthesis.',
-    instructions:
-      'You are a research assistant. Use available tools to find information.',
-    plugins: [
-      { id: 'openbot', config: { model: 'openai/gpt-4o' } },
-      { id: 'mcp' },
-      { id: 'shell' },
-    ],
-  },
-  {
-    id: 'coder',
-    name: 'Coder',
-    description: 'Expert in multiple programming languages and software architecture.',
-    instructions: 'You are an expert software engineer. Help the user with coding tasks.',
-    plugins: [{ id: 'claude-code' }],
-  },
-];
+const DEFAULT_MARKETPLACE_AGENTS: MarketplaceAgentListing[] = [];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -247,9 +227,9 @@ export const busServicesPlugin =
         if (participants !== undefined) {
           const normalized = Array.isArray(participants)
             ? participants
-                .filter((x: unknown): x is string => typeof x === 'string')
-                .map((s: string) => s.trim())
-                .filter(Boolean)
+              .filter((x: unknown): x is string => typeof x === 'string')
+              .map((s: string) => s.trim())
+              .filter(Boolean)
             : [];
           mergedInitial.participants = normalized;
         }
@@ -383,9 +363,9 @@ export const busServicesPlugin =
           if (data.participants !== undefined) {
             const normalized = Array.isArray(data.participants)
               ? data.participants
-                  .filter((x): x is string => typeof x === 'string')
-                  .map((s) => s.trim())
-                  .filter(Boolean)
+                .filter((x): x is string => typeof x === 'string')
+                .map((s) => s.trim())
+                .filter(Boolean)
               : [];
             await storage.patchChannelState({
               channelId: context.state.channelId,
