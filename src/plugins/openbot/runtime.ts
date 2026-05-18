@@ -2,11 +2,52 @@ import { MelonyPlugin, RuntimeContext } from 'melony';
 import { generateText, type LanguageModel, type ModelMessage } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
-import { OpenBotEvent, OpenBotState, ShortTermMessage } from '../../app/types.js';
+import { OpenBotEvent, OpenBotMessage, OpenBotState } from '../../app/types.js';
+import { reconstructHistory } from '../../harness/history.js';
 import { Storage } from '../../bus/types.js';
 import type { ToolDefinition } from '../../bus/plugin.js';
 import { createDefaultContextEngine } from '../../harness/context.js';
 import { saveConfig } from '../../app/config.js';
+
+/**
+ * Maps OpenBot internal messages to Vercel AI SDK ModelMessages.
+ */
+function toModelMessages(messages: OpenBotMessage[]): ModelMessage[] {
+  return messages.map((m): ModelMessage => {
+    if (typeof m.content === 'string') {
+      return m as ModelMessage;
+    }
+
+    return {
+      role: m.role,
+      content: m.content.map((part) => {
+        if (part.type === 'text') {
+          return { type: 'text', text: part.text };
+        }
+        if (part.type === 'tool-call') {
+          return {
+            type: 'tool-call',
+            toolCallId: part.toolCallId,
+            toolName: part.toolName,
+            input: part.input,
+          };
+        }
+        if (part.type === 'tool-result') {
+          return {
+            type: 'tool-result',
+            toolCallId: part.toolCallId,
+            toolName: part.toolName,
+            output: {
+              type: 'json',
+              value: part.output,
+            },
+          };
+        }
+        throw new Error(`Unsupported message part type: ${(part as any).type}`);
+      }),
+    } as ModelMessage;
+  });
+}
 
 export interface OpenBotRuntimeOptions {
   /** Provider model string (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20240620`). */
@@ -57,88 +98,6 @@ const truncateToolPayload = (raw: unknown): string => {
   return `${serialized.slice(0, TOOL_RESULT_MAX_CHARS)}\n…[truncated ${dropped} chars]`;
 };
 
-/**
- * Trim the message history to a sliding window while preserving tool-call
- * integrity. Drops any leading orphan `tool` messages whose matching
- * assistant call was sliced off, since most providers reject that.
- */
-const buildMessageWindow = (messages: ShortTermMessage[]): ShortTermMessage[] => {
-  if (messages.length <= MAX_WINDOW_MESSAGES) return messages;
-  const tail = messages.slice(-MAX_WINDOW_MESSAGES);
-  const knownAssistantCallIds = new Set<string>();
-  for (const m of tail) {
-    if (m.role === 'assistant' && m.toolCalls) {
-      for (const tc of m.toolCalls) knownAssistantCallIds.add(tc.id);
-    }
-  }
-  return tail.filter((m) => m.role !== 'tool' || knownAssistantCallIds.has(m.toolCallId));
-};
-
-/**
- * Self-healing pass: every assistant tool_call must have a matching tool
- * result before the next user/assistant turn, or providers (OpenAI in
- * particular) reject the request with "Tool result is missing for tool call".
- *
- * This can happen when a handler emits a `:result` event without `meta`
- * (orphaning the call), the process restarts mid-run, or a tool handler
- * crashes. Rather than refuse to continue, we inject synthetic tool messages
- * with a clear error payload — the LLM can then explain the failure to the
- * user and proceed.
- */
-const repairOpenToolCalls = (messages: ShortTermMessage[]): ShortTermMessage[] => {
-  const fulfilled = new Set<string>();
-  for (const m of messages) {
-    if (m.role === 'tool') fulfilled.add(m.toolCallId);
-  }
-
-  const repaired: ShortTermMessage[] = [];
-  for (const m of messages) {
-    repaired.push(m);
-    if (m.role !== 'assistant' || !m.toolCalls) continue;
-    for (const tc of m.toolCalls) {
-      if (fulfilled.has(tc.id)) continue;
-      repaired.push({
-        role: 'tool',
-        toolCallId: tc.id,
-        toolName: tc.function.name,
-        content: JSON.stringify({
-          success: false,
-          error: 'Tool result was lost (handler did not emit a matching :result event).',
-        }),
-      });
-      fulfilled.add(tc.id);
-    }
-  }
-  return repaired;
-};
-
-const readPersistedShortTermMessages = (state: OpenBotState): ShortTermMessage[] => {
-  const source = state.threadDetails?.state ?? state.channelDetails?.state;
-  const record = asRecord(source);
-  const raw = record.shortTermMessages;
-  return Array.isArray(raw) ? (raw as ShortTermMessage[]) : [];
-};
-
-const persistShortTermMessages = async (
-  state: OpenBotState,
-  storage: Storage | undefined,
-): Promise<void> => {
-  if (!storage) return;
-  const shortTermMessages = state.shortTermMessages ?? [];
-  if (state.threadId) {
-    await storage.patchThreadState({
-      channelId: state.channelId,
-      threadId: state.threadId,
-      state: { shortTermMessages },
-    });
-    return;
-  }
-  await storage.patchChannelState({
-    channelId: state.channelId,
-    state: { shortTermMessages },
-  });
-};
-
 async function buildSystemPrompt(
   state: OpenBotState,
   storage: Storage | undefined,
@@ -170,87 +129,33 @@ export const openbotRuntime =
       let currentModelString = modelString;
       let model = resolveModel(currentModelString);
 
-      const ensureShortTermMessages = (state: OpenBotState) => {
-        if (!state.shortTermMessages || state.shortTermMessages.length === 0) {
-          state.shortTermMessages = readPersistedShortTermMessages(state);
-        }
-      };
-
-      const mapToCoreMessages = (messages: ShortTermMessage[]): ModelMessage[] => {
-        return messages.map((m): ModelMessage => {
-          if (m.role === 'assistant' && m.toolCalls) {
-            return {
-              role: 'assistant',
-              content: [
-                { type: 'text', text: m.content || '' },
-                ...m.toolCalls.map((tc) => ({
-                  type: 'tool-call' as const,
-                  toolCallId: tc.id,
-                  toolName: tc.function.name,
-                  input: JSON.parse(tc.function.arguments),
-                })),
-              ],
-            };
-          }
-          if (m.role === 'assistant') {
-            return { role: 'assistant', content: m.content || '' };
-          }
-          if (m.role === 'tool') {
-            return {
-              role: 'tool',
-              content: [
-                {
-                  type: 'tool-result',
-                  toolCallId: m.toolCallId,
-                  toolName: m.toolName,
-                  output: { type: 'text', value: JSON.stringify(m.content) },
-                },
-              ],
-            };
-          }
-          return m;
-        });
-      };
-
       const runLLM = async function* (
         context: RuntimeContext<OpenBotState, OpenBotEvent>,
         threadId?: string,
       ): AsyncGenerator<OpenBotEvent> {
-        ensureShortTermMessages(context.state);
-        const systemPrompt = await buildSystemPrompt(context.state, storage, contextEngine);
+        if (!storage) return;
 
-        const coreMessages = mapToCoreMessages(
-          buildMessageWindow(repairOpenToolCalls(context.state.shortTermMessages || [])),
-        );
+        const systemPrompt = await buildSystemPrompt(context.state, storage, contextEngine);
+        const events = await storage.getEvents({
+          channelId: context.state.channelId,
+          threadId: context.state.threadId,
+        });
+
+        console.log('system prompt', systemPrompt);
+
+        const messages = reconstructHistory(events);
 
         try {
           const result = await generateText({
             model,
             system: systemPrompt,
-            messages: coreMessages,
+            messages: toModelMessages(messages),
             tools: toolDefinitions as Record<string, { description: string; inputSchema: any }>,
           });
 
           const toolCalls = result.toolCalls ?? [];
 
           if (toolCalls.length > 0) {
-            context.state.shortTermMessages = [
-              ...(context.state.shortTermMessages ?? []),
-              {
-                role: 'assistant',
-                content: result.text || '',
-                toolCalls: toolCalls.map((tc) => ({
-                  id: tc.toolCallId,
-                  type: 'function',
-                  function: {
-                    name: tc.toolName,
-                    arguments: JSON.stringify(tc.input),
-                  },
-                })),
-              },
-            ];
-            await persistShortTermMessages(context.state, storage);
-
             for (const toolCall of toolCalls) {
               yield {
                 type: `action:${toolCall.toolName}` as OpenBotEvent['type'],
@@ -265,14 +170,6 @@ export const openbotRuntime =
           }
 
           if (result.text) {
-            if (toolCalls.length === 0) {
-              context.state.shortTermMessages = [
-                ...(context.state.shortTermMessages ?? []),
-                { role: 'assistant', content: result.text },
-              ];
-              await persistShortTermMessages(context.state, storage);
-            }
-
             yield {
               type: 'agent:output',
               data: { content: result.text },
@@ -348,17 +245,6 @@ export const openbotRuntime =
         }
 
         const threadId = event.meta?.threadId || context.state.threadId;
-
-        ensureShortTermMessages(context.state);
-        context.state.shortTermMessages = [
-          ...(context.state.shortTermMessages ?? []),
-          {
-            role: event.data?.role || 'user',
-            content: event?.data?.content || '',
-          },
-        ];
-        await persistShortTermMessages(context.state, storage);
-
         yield* runLLM(context, threadId);
       });
 
@@ -367,34 +253,34 @@ export const openbotRuntime =
         if (event.meta?.agentId !== context.state.agentId) return;
         const toolCallId = event.meta?.toolCallId;
         if (!toolCallId) return;
-        ensureShortTermMessages(context.state);
+
+        if (!storage) return;
 
         const toolName = event.type.replace(/^action:/, '').replace(/:result$/, '');
-        const resultData = (event as { data?: unknown }).data;
-        const content = truncateToolPayload(resultData);
 
-        context.state.shortTermMessages = [
-          ...(context.state.shortTermMessages ?? []),
-          { role: 'tool', content, toolCallId, toolName },
-        ];
-        await persistShortTermMessages(context.state, storage);
+        const events = await storage.getEvents({
+          channelId: context.state.channelId,
+          threadId: context.state.threadId,
+        });
 
-        const lastAssistant = [...(context.state.shortTermMessages ?? [])]
+        // Find the assistant message that made this tool call
+        const messages = reconstructHistory(events);
+        const lastAssistant = [...messages]
           .reverse()
           .find(
-            (m): m is Extract<ShortTermMessage, { role: 'assistant' }> =>
-              m.role === 'assistant' && Array.isArray(m.toolCalls) && m.toolCalls.length > 0,
+            (m): m is Extract<OpenBotMessage, { role: 'assistant' }> =>
+              m.role === 'assistant' && Array.isArray(m.content) && m.content.some((p: any) => p.type === 'tool-call'),
           );
 
-        if (lastAssistant && lastAssistant.toolCalls) {
-          const allFulfilled = lastAssistant.toolCalls.every((tc) =>
-            context.state.shortTermMessages?.some(
-              (m) => m.role === 'tool' && m.toolCallId === tc.id,
+        if (lastAssistant && Array.isArray(lastAssistant.content)) {
+          const toolCalls = lastAssistant.content.filter((p: any) => p.type === 'tool-call');
+          const allFulfilled = toolCalls.every((tc: any) =>
+            messages.some(
+              (m) => m.role === 'tool' && Array.isArray(m.content) && m.content.some((p) => p.type === 'tool-result' && p.toolCallId === tc.toolCallId),
             ),
           );
 
           if (allFulfilled) {
-            if (toolName === 'handoff') return;
             const threadId = event.meta?.threadId || context.state.threadId;
             yield* runLLM(context, threadId);
           }

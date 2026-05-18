@@ -1,6 +1,5 @@
 import {
   AgentInvokeEvent,
-  HandoffRequestEvent,
   OpenBotEvent,
   OpenBotState,
   StopAgentRunEvent,
@@ -9,6 +8,7 @@ import { ensureEventId } from '../app/utils.js';
 import { storageService } from '../services/storage.js';
 import { createAgentRuntime } from './runtime-factory.js';
 import { advanceAfterRun } from './todo-advance.js';
+import { isParticipantDispatchAllowed } from './channel-participants.js';
 
 /**
  * Single entry point for every event arriving at the bus.
@@ -18,11 +18,11 @@ import { advanceAfterRun } from './todo-advance.js';
  *   1. `action:agent_run_stop` — record a stop signal, ack, done.
  *   2. `user:input` / `agent:invoke` — *agent step*: normalize, emit user-facing
  *      copy, then run the target agent with `run:start`/`run:end` bracketing,
- *      handoff routing, and a single `advanceAfterRun` pass that can chain the
+ *      and a single `advanceAfterRun` pass that can chain the
  *      next assignee. Recursive, depth-bounded.
  *   3. Everything else — *bus pass-through*: run the event through the targeted
  *      agent's runtime once and forward emitted chunks. No `run:start`/`run:end`,
- *      no todo advance, no handoff. This is what backs `/api/state` queries and
+ *      no todo advance. This is what backs `/api/state` queries and
  *      out-of-band action events posted to `/api/publish`.
  */
 
@@ -177,6 +177,8 @@ async function runStep(step: FollowUp, ctx: StepContext, depth: number): Promise
   const followUps: FollowUp[] = [];
   const queuedAgentIds = new Set<string>();
   let lastAgentOutput: string | undefined;
+  /** Refreshed after the run for `agent:run:end` and participant-scoped follow-ups. */
+  let stateAfterRun: OpenBotState = state;
 
   try {
     const runtime = await createAgentRuntime(state);
@@ -205,28 +207,14 @@ async function runStep(step: FollowUp, ctx: StepContext, depth: number): Promise
         if (typeof content === 'string' && content.trim()) lastAgentOutput = content.trim();
       }
 
-      // Handoff requests are internal: queue a follow-up step instead of forwarding.
-      if (chunk.type === 'handoff:request') {
-        const req = chunk as HandoffRequestEvent;
-        const targetAgent = req.data?.agentId;
-        if (targetAgent && targetAgent !== step.agentId && !queuedAgentIds.has(targetAgent)) {
-          queuedAgentIds.add(targetAgent);
-          followUps.push({
-            agentId: targetAgent,
-            event: makeInvoke(req.data.content, ctx.threadId, req.meta),
-          });
-        }
-        continue;
-      }
-
       chunk.meta = { ...chunk.meta, agentId: step.agentId };
       await ctx.onEvent(chunk, state);
     }
   } catch (error) {
     console.error(`[dispatcher] Agent run failed: ${step.agentId}`, error);
   } finally {
-    const endState = await storageService.getOpenBotState({ ...target, event: step.event });
-    await ctx.onEvent({ type: 'agent:run:end', data: { ...target } }, endState);
+    stateAfterRun = await storageService.getOpenBotState({ ...target, event: step.event });
+    await ctx.onEvent({ type: 'agent:run:end', data: { ...target } }, stateAfterRun);
   }
 
   // Autonomous todo advance: single trigger point, runs once per `agent:run:end`.
@@ -238,7 +226,12 @@ async function runStep(step: FollowUp, ctx: StepContext, depth: number): Promise
       endedAgentId: step.agentId,
       lastAgentOutput,
     });
-    if (handoff && !queuedAgentIds.has(handoff.agentId)) {
+    const participants = stateAfterRun.channelDetails?.participants ?? [];
+    if (
+      handoff &&
+      !queuedAgentIds.has(handoff.agentId) &&
+      isParticipantDispatchAllowed(participants, step.agentId, handoff.agentId)
+    ) {
       queuedAgentIds.add(handoff.agentId);
       followUps.push({
         agentId: handoff.agentId,

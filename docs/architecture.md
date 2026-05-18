@@ -5,7 +5,7 @@ OpenBot is an orchestration platform built on a modular, event-driven architectu
 ## Core Components
 
 ### 1. Orchestrator & routing
-The orchestrator is the execution entry point for agent work: it normalizes incoming events, runs the queue processor (handoffs and todo-driven assignees), builds per-agent Melony runtimes, and streams emitted events back to callers (for example storage and SSE). Routing across the agent network uses:
+The orchestrator is the execution entry point for agent work: it normalizes incoming events, runs the queue processor (todo-driven assignees), builds per-agent Melony runtimes, and streams emitted events back to callers (for example storage and SSE). Routing across the agent network uses:
 
 1. **Command Prefix** — Explicit delegation to a specific agent (e.g., `/os list files`).
 2. **DM context** — Direct communication with a specific agent.

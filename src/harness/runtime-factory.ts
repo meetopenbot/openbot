@@ -4,36 +4,76 @@ import type { Plugin, PluginContext, ToolDefinition } from '../bus/plugin.js';
 import { resolvePlugin } from '../registry/plugins.js';
 import { storageService } from '../services/storage.js';
 import { busServicesPlugin } from '../bus/services.js';
+import { isDmSoloChannel } from './channel-participants.js';
+
+const AVAILABLE_AGENTS_HEADER = '### Available agents (this channel)';
+const DM_CHANNEL_HEADER = '### Direct message channel';
 
 /**
- * Enhances the agent's instructions with a list of other available agents the
- * orchestrator can hand off to. Agents that include the `delegation` plugin
- * will surface peers; agents without it can ignore this.
+ * Enhances instructions using channel `participants`:
+ *
+ * - **DM (single participant = this agent)**: no peer list; todos are
+ *   scoped to solo use.
+ * - **Participants set**: lists only those agents (excluding self) that may
+ *   collaborate in this channel.
+ * - **No participants**: omit the peer list (legacy channels are not assumed to
+ *   be open to every registered agent).
+ *
+ * Agents with `todo` get matching usage hints.
  */
 export async function enhanceInstructions(state: OpenBotState) {
-  const { agentId, agentDetails } = state;
+  const { agentId, agentDetails, channelDetails } = state;
   if (!agentDetails) return;
 
   try {
-    const agents = await storageService.getAgents();
-    const otherAgents = agents.filter((a) => a.id !== agentId);
-    if (otherAgents.length === 0) return;
+    const participants = (channelDetails?.participants ?? []).filter(
+      (id): id is string => typeof id === 'string' && id.trim() !== '',
+    );
+    const participantSet = new Set(participants.map((p) => p.trim()));
 
-    const agentsList = otherAgents
-      .map((a) => `- **${a.id}**${a.description ? `: ${a.description}` : ''}`)
+    const allAgents = await storageService.getAgents();
+    const hasTodo = (agentDetails.pluginRefs || []).some((r) => r.id === 'todo');
+
+    const isDmSolo = isDmSoloChannel(participants, agentId);
+
+    if (isDmSolo) {
+      if (!agentDetails.instructions.includes(DM_CHANNEL_HEADER)) {
+        const dmLines = [
+          DM_CHANNEL_HEADER,
+          'You are the only agent in this direct-message channel. There are no peer agents and no multi-agent workflows.',
+        ];
+        if (hasTodo) {
+          dmLines.push(
+            `Use \`todo_write\` only for your own step-by-step planning when helpful; omit \`assignee\` on items or set it to \`${agentId}\`. The todo list is yours alone — ignore generic instructions elsewhere about coordinating other agents in this thread.`,
+          );
+        }
+        agentDetails.instructions += `\n\n${dmLines.join('\n')}`;
+      }
+      return;
+    }
+
+    if (participantSet.size === 0) return;
+    if (agentDetails.instructions.includes(AVAILABLE_AGENTS_HEADER)) return;
+
+    const peerIds = [...participantSet].filter((id) => id !== agentId);
+    if (peerIds.length === 0) return;
+
+    const agentsList = peerIds
+      .map((id) => {
+        const a = allAgents.find((x) => x.id === id);
+        return a
+          ? `- **${a.id}**${a.description ? `: ${a.description}` : ''}`
+          : `- **${id}**`;
+      })
       .join('\n');
 
-    const header = '### Available Agents:';
-    if (!agentDetails.instructions.includes(header)) {
-      const hasHandoff = (agentDetails.pluginRefs || []).some((r) => r.id === 'delegation');
-      const hasTodo = (agentDetails.pluginRefs || []).some((r) => r.id === 'todo');
-      const usage = hasTodo
-        ? 'Use these ids as `assignee` when calling `todo_write` to plan multi-agent work.'
-        : hasHandoff
-          ? 'Use `handoff` to transfer control to another agent in this thread.'
-          : '';
-      agentDetails.instructions += `\n\n${header}\n${agentsList}${usage ? `\n\n${usage}` : ''}`;
+    let usage = '';
+    if (hasTodo) {
+      usage =
+        'Use these ids as `assignee` when calling \`todo_write\`; only agents listed here participate in this channel.';
     }
+
+    agentDetails.instructions += `\n\n${AVAILABLE_AGENTS_HEADER}\n${agentsList}${usage ? `\n\n${usage}` : ''}`;
   } catch (error) {
     console.warn('[agent] Failed to enhance instructions', error);
   }

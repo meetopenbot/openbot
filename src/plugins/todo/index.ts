@@ -7,7 +7,7 @@ import type { Plugin } from '../../bus/plugin.js';
  * Todos live in `threadDetails.state.todos` and are owned by the system
  * (handlers in `bus/services.ts`). Any agent in the thread can read the
  * list via context, and propose mutations through these tools. Each item
- * may carry an `assignee` agent id; combine with `handoff` to drive an
+ * may carry an `assignee` agent id to drive an
  * autonomous, multi-step plan across agents.
  *
  * Keep the surface minimal: two tools (replace-all, patch-one) cover plan
@@ -32,7 +32,7 @@ const todoToolDefinitions = {
             assignee: z
               .string()
               .optional()
-              .describe('Agent id responsible for this step. Pair with `handoff` to delegate.'),
+              .describe('Agent id responsible for this step.'),
           }),
         )
         .describe('The complete, ordered plan.'),

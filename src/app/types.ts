@@ -19,14 +19,7 @@ export interface OpenBotState {
   channelDetails?: ChannelDetails;
   threadDetails?: ThreadDetails;
   triggerEvent?: OpenBotEvent;
-  shortTermMessages?: ShortTermMessage[];
 }
-
-export type ShortTermMessage =
-  | { role: 'system'; content: string }
-  | { role: 'user'; content: string }
-  | { role: 'assistant'; content: string; toolCalls?: any[] }
-  | { role: 'tool'; content: string; toolCallId: string; toolName: string };
 
 export type BaseEvent = {
   id?: string;
@@ -580,43 +573,6 @@ export type UIWidgetResponseEvent = BaseEvent & {
   };
 };
 
-export type HandoffEvent = BaseEvent & {
-  type: 'action:handoff';
-  data: {
-    agentId: string;
-    content: string;
-  };
-  meta?: {
-    toolCallId?: string;
-    [key: string]: any;
-  };
-};
-
-export type HandoffResultEvent = BaseEvent & {
-  type: 'action:handoff:result';
-  data: {
-    success: boolean;
-    agentId: string;
-    accepted: boolean;
-  };
-  meta: {
-    toolCallId: string;
-    agentId: string;
-    threadId?: string;
-    [key: string]: any;
-  };
-};
-
-/** Internal routing: handoff plugin → orchestrator only (not stored or broadcast). */
-export type HandoffRequestEvent = BaseEvent & {
-  type: 'handoff:request';
-  data: {
-    agentId: string;
-    content: string;
-  };
-  meta?: Record<string, unknown>;
-};
-
 export type MCPListToolsEvent = BaseEvent & {
   type: 'action:mcp_list_tools';
   data: {
@@ -833,7 +789,7 @@ export interface TodoItem {
   id: string;
   content: string;
   status: TodoStatus;
-  /** Optional agent id responsible for this item — drives autonomous handoffs. */
+  /** Optional agent id responsible for this item — drives autonomous coordination. */
   assignee?: string;
   /** Agent id that created the todo (or "system"). */
   createdBy: string;
@@ -893,6 +849,20 @@ export type TodoUpdateResultEvent = BaseEvent & {
   };
   meta?: { toolCallId?: string; agentId?: string; threadId?: string };
 };
+
+/**
+ * Internal message representation to decouple harness history from specific AI SDKs.
+ */
+export type OpenBotMessage =
+  | { role: 'user'; content: string | OpenBotMessagePart[] }
+  | { role: 'assistant'; content: string | OpenBotMessagePart[] }
+  | { role: 'system'; content: string }
+  | { role: 'tool'; content: OpenBotMessagePart[] };
+
+export type OpenBotMessagePart =
+  | { type: 'text'; text: string }
+  | { type: 'tool-call'; toolCallId: string; toolName: string; input: any }
+  | { type: 'tool-result'; toolCallId: string; toolName: string; output: any };
 
 export type OpenBotEvent =
   | UserInputEvent
@@ -954,9 +924,6 @@ export type OpenBotEvent =
   | UIWidgetEvent
   | RenderUIWidgetEvent
   | UIWidgetResponseEvent
-  | HandoffEvent
-  | HandoffResultEvent
-  | HandoffRequestEvent
   | MCPListToolsEvent
   | MCPListToolsResultEvent
   | MCPCallEvent

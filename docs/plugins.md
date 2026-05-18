@@ -48,7 +48,6 @@ name collisions.
 | `gemini-cli`    | Runtime    | Google `gemini` CLI in headless mode                      |
 | `shell`         | Tool       | `shell_exec`                                              |
 | `mcp`           | Tool       | `mcp_list_tools`, `mcp_call`                              |
-| `delegation`    | Tool       | `handoff`, `delegate`                                     |
 | `storage-tools` | Tool       | `create_channel`, `patch_*`, `create_variable`, ...       |
 | `ui`            | Tool       | `render_ui_widget`                                        |
 | `approval`      | Middleware | Gates protected actions behind a UI confirmation widget   |

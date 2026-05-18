@@ -5,7 +5,6 @@ import type { Plugin } from '../bus/plugin.js';
 import { openbotPlugin } from '../plugins/openbot/index.js';
 import { shellPlugin } from '../plugins/shell/index.js';
 import { mcpPlugin } from '../plugins/mcp/index.js';
-import { delegationPlugin } from '../plugins/delegation/index.js';
 import { storageToolsPlugin } from '../plugins/storage-tools/index.js';
 import { uiPlugin } from '../plugins/ui/index.js';
 import { approvalPlugin } from '../plugins/approval/index.js';
@@ -21,7 +20,6 @@ const BUILT_IN: Record<string, Plugin> = {
   [openbotPlugin.id]: openbotPlugin,
   [shellPlugin.id]: shellPlugin,
   [mcpPlugin.id]: mcpPlugin,
-  [delegationPlugin.id]: delegationPlugin,
   [storageToolsPlugin.id]: storageToolsPlugin,
   [uiPlugin.id]: uiPlugin,
   [approvalPlugin.id]: approvalPlugin,
