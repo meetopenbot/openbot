@@ -7,8 +7,6 @@ import {
 import { ensureEventId } from '../app/utils.js';
 import { storageService } from '../services/storage.js';
 import { createAgentRuntime } from './runtime-factory.js';
-import { advanceAfterRun } from './todo-advance.js';
-import { isParticipantDispatchAllowed } from './channel-participants.js';
 
 /**
  * Single entry point for every event arriving at the bus.
@@ -17,13 +15,11 @@ import { isParticipantDispatchAllowed } from './channel-participants.js';
  *
  *   1. `action:agent_run_stop` — record a stop signal, ack, done.
  *   2. `user:input` / `agent:invoke` — *agent step*: normalize, emit user-facing
- *      copy, then run the target agent with `run:start`/`run:end` bracketing,
- *      and a single `advanceAfterRun` pass that can chain the
- *      next assignee. Recursive, depth-bounded.
+ *      copy, then run the target agent with `run:start`/`run:end` bracketing.
  *   3. Everything else — *bus pass-through*: run the event through the targeted
- *      agent's runtime once and forward emitted chunks. No `run:start`/`run:end`,
- *      no todo advance. This is what backs `/api/state` queries and
- *      out-of-band action events posted to `/api/publish`.
+ *      agent's runtime once and forward emitted chunks. No `run:start`/`run:end`.
+ *      This is what backs `/api/state` queries and out-of-band action events
+ *      posted to `/api/publish`.
  */
 
 export interface DispatchOptions {
@@ -38,17 +34,10 @@ export interface DispatchOptions {
 interface StepContext {
   runId: string;
   channelId: string;
-  /** Mutable: a `create_thread:result` mid-chain rebinds the rest of the chain. */
+  /** Mutable: a `create_thread:result` mid-run can rebind the active thread. */
   threadId?: string;
   onEvent: DispatchOptions['onEvent'];
 }
-
-interface FollowUp {
-  agentId: string;
-  event: AgentInvokeEvent;
-}
-
-const MAX_CHAIN_DEPTH = 20;
 
 // ---------------------------------------------------------------------------
 // Stop requests
@@ -113,35 +102,34 @@ export async function dispatch(options: DispatchOptions): Promise<void> {
 
   if (event.type === 'user:input' || event.type === 'agent:invoke') {
     const invoke = await normalizeUserInput(event, ctx);
-    await runStep({ agentId: options.agentId || 'system', event: invoke }, ctx, 0);
+    await runStep(options.agentId || 'system', invoke, ctx);
     return;
   }
 
-  // Bus pass-through: route to the targeted agent's runtime once. No agent step,
-  // no advance, no follow-ups. Keeps queries (`/api/state`) cheap and idempotent.
+  // Bus pass-through: route to the targeted agent's runtime once. No agent step.
+  // Keeps queries (`/api/state`) cheap and idempotent.
   await runBusEvent(event, options.agentId || 'system', ctx);
 }
 
 // ---------------------------------------------------------------------------
-// Agent step: run:start -> runtime -> run:end -> advance -> chain
+// Agent step: run:start -> runtime -> run:end
 // ---------------------------------------------------------------------------
 
-async function runStep(step: FollowUp, ctx: StepContext, depth: number): Promise<void> {
-  if (depth >= MAX_CHAIN_DEPTH) {
-    console.warn(`[dispatcher] Reached MAX_CHAIN_DEPTH (${MAX_CHAIN_DEPTH}); stopping chain.`);
-    return;
-  }
-
+async function runStep(
+  agentId: string,
+  event: AgentInvokeEvent,
+  ctx: StepContext,
+): Promise<void> {
   const target = {
     runId: ctx.runId,
-    agentId: step.agentId,
+    agentId,
     channelId: ctx.channelId,
     threadId: ctx.threadId,
   };
 
   const preStop = findStopRequest(target);
   if (preStop) {
-    const state = await storageService.getOpenBotState({ ...target, event: step.event });
+    const state = await storageService.getOpenBotState({ ...target, event });
     await ctx.onEvent(
       { type: 'agent:run:stopped', data: { ...target, reason: preStop.reason } },
       state,
@@ -151,18 +139,18 @@ async function runStep(step: FollowUp, ctx: StepContext, depth: number): Promise
 
   let state: OpenBotState;
   try {
-    state = await storageService.getOpenBotState({ ...target, event: step.event });
+    state = await storageService.getOpenBotState({ ...target, event });
   } catch (error) {
     if ((error as Error & { code?: string }).code === 'AGENT_NOT_FOUND') {
       const fallback = await storageService.getOpenBotState({
         ...target,
         agentId: 'system',
-        event: step.event,
+        event,
       });
       await ctx.onEvent(
         {
           type: 'agent:output',
-          data: { content: `⚠️ Agent **${step.agentId}** does not exist. Please check the agent ID and try again.` },
+          data: { content: `⚠️ Agent **${agentId}** does not exist. Please check the agent ID and try again.` },
           meta: { agentId: 'system', threadId: ctx.threadId },
         },
         fallback,
@@ -174,16 +162,10 @@ async function runStep(step: FollowUp, ctx: StepContext, depth: number): Promise
 
   await ctx.onEvent({ type: 'agent:run:start', data: { ...target } }, state);
 
-  const followUps: FollowUp[] = [];
-  const queuedAgentIds = new Set<string>();
-  let lastAgentOutput: string | undefined;
-  /** Refreshed after the run for `agent:run:end` and participant-scoped follow-ups. */
-  let stateAfterRun: OpenBotState = state;
-
   try {
     const runtime = await createAgentRuntime(state);
 
-    for await (const chunk of runtime.run(step.event, { state, runId: ctx.runId })) {
+    for await (const chunk of runtime.run(event, { state, runId: ctx.runId })) {
       const stop = findStopRequest(target);
       if (stop) {
         await ctx.onEvent(
@@ -193,63 +175,26 @@ async function runStep(step: FollowUp, ctx: StepContext, depth: number): Promise
         break;
       }
 
-      if (chunk.id === step.event.id && chunk.type === step.event.type) continue;
+      if (chunk.id === event.id && chunk.type === event.type) continue;
 
       if (chunk.type === 'action:create_thread:result' && chunk.data.success) {
         ctx.threadId = chunk.data.threadId || ctx.threadId;
       }
 
-      if (
-        chunk.type === 'agent:output' &&
-        (chunk.meta as { agentId?: string } | undefined)?.agentId === step.agentId
-      ) {
-        const content = chunk.data?.content;
-        if (typeof content === 'string' && content.trim()) lastAgentOutput = content.trim();
-      }
-
-      chunk.meta = { ...chunk.meta, agentId: step.agentId };
+      chunk.meta = { ...chunk.meta, agentId };
       await ctx.onEvent(chunk, state);
     }
   } catch (error) {
-    console.error(`[dispatcher] Agent run failed: ${step.agentId}`, error);
+    console.error(`[dispatcher] Agent run failed: ${agentId}`, error);
   } finally {
-    stateAfterRun = await storageService.getOpenBotState({ ...target, event: step.event });
+    const stateAfterRun = await storageService.getOpenBotState({ ...target, event });
     await ctx.onEvent({ type: 'agent:run:end', data: { ...target } }, stateAfterRun);
-  }
-
-  // Autonomous todo advance: single trigger point, runs once per `agent:run:end`.
-  try {
-    const handoff = await advanceAfterRun({
-      storage: storageService,
-      channelId: ctx.channelId,
-      threadId: ctx.threadId,
-      endedAgentId: step.agentId,
-      lastAgentOutput,
-    });
-    const participants = stateAfterRun.channelDetails?.participants ?? [];
-    if (
-      handoff &&
-      !queuedAgentIds.has(handoff.agentId) &&
-      isParticipantDispatchAllowed(participants, step.agentId, handoff.agentId)
-    ) {
-      queuedAgentIds.add(handoff.agentId);
-      followUps.push({
-        agentId: handoff.agentId,
-        event: makeInvoke(handoff.content, ctx.threadId),
-      });
-    }
-  } catch (error) {
-    console.warn('[dispatcher] todo advance failed', error);
-  }
-
-  for (const next of followUps) {
-    await runStep(next, ctx, depth + 1);
   }
 }
 
 // ---------------------------------------------------------------------------
 // Bus pass-through: run an event through the targeted agent's runtime, forward
-// chunks. No run:start/end, no advance, no follow-ups.
+// chunks. No run:start/end.
 // ---------------------------------------------------------------------------
 
 async function runBusEvent(
@@ -329,18 +274,6 @@ async function normalizeUserInput(
       threadId: ctx.threadId || event.id,
     },
   };
-}
-
-function makeInvoke(
-  content: string,
-  threadId?: string,
-  baseMeta?: Record<string, unknown>,
-): AgentInvokeEvent {
-  return ensureEventId({
-    type: 'agent:invoke',
-    data: { role: 'user', content },
-    meta: { ...(baseMeta || {}), threadId },
-  } satisfies AgentInvokeEvent) as AgentInvokeEvent;
 }
 
 async function handleStop(stopEvent: StopAgentRunEvent, options: DispatchOptions): Promise<void> {
