@@ -24,8 +24,8 @@ import {
   ThreadDetails,
 } from '../bus/types.js';
 import type { PluginRef } from '../bus/plugin.js';
-import { aiSdkPlugin } from '../plugins/ai-sdk/index.js';
-import { AI_SDK_SYSTEM_PROMPT } from '../plugins/ai-sdk/system-prompt.js';
+import { openbotPlugin } from '../plugins/openbot/index.js';
+import { OPENBOT_SYSTEM_PROMPT } from '../plugins/openbot/system-prompt.js';
 import { listBuiltInPlugins, parsePluginModule } from '../registry/plugins.js';
 import { OpenBotEvent, OpenBotState } from '../app/types.js';
 import { processService } from '../harness/process.js';
@@ -106,7 +106,7 @@ const getConversationDir = (channelId: string, threadId?: string) => {
 const SYSTEM_AGENT_ID = 'system';
 
 const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
-  { id: 'ai-sdk', config: { model: 'openai/gpt-5.4-nano' } },
+  { id: 'openbot', config: { model: 'openai/gpt-5.4-nano' } },
   { id: 'storage-tools' },
   // { id: 'mcp' },
   { id: 'shell' },
@@ -123,7 +123,7 @@ function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails 
     image: getBundledSystemAgentImage(),
     description:
       'First-party orchestration agent for OpenBot. Coordinates other agents via handoff.',
-    instructions: AI_SDK_SYSTEM_PROMPT,
+    instructions: OPENBOT_SYSTEM_PROMPT,
     plugins: SYSTEM_DEFAULT_PLUGINS.map((ref) => ref.id),
     pluginRefs: SYSTEM_DEFAULT_PLUGINS,
     createdAt: new Date(),
@@ -147,8 +147,8 @@ function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails 
   };
 }
 
-// Suppress unused warning until system agent customization re-uses aiSdkPlugin metadata.
-void aiSdkPlugin;
+// Suppress unused warning until system agent customization re-uses openbotPlugin metadata.
+void openbotPlugin;
 
 const RESERVED_DISK_AGENT_IDS = new Set([SYSTEM_AGENT_ID]);
 

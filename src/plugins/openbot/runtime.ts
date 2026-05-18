@@ -8,7 +8,7 @@ import type { ToolDefinition } from '../../bus/plugin.js';
 import { createDefaultContextEngine } from '../../harness/context.js';
 import { saveConfig } from '../../app/config.js';
 
-export interface AiSdkRuntimeOptions {
+export interface OpenBotRuntimeOptions {
   /** Provider model string (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20240620`). */
   model?: string;
   storage?: Storage;
@@ -150,14 +150,15 @@ async function buildSystemPrompt(
 }
 
 /**
- * Generic ai-sdk runtime plugin.
+ * The standard OpenBot agent runtime.
  *
- * Owns `agent:invoke`, runs the LLM, emits tool-call events, and stitches tool
- * results back into the conversation. Tools are supplied externally by the
- * loader (merged from every tool plugin attached to the same agent).
+ * This is the opinionated execution loop for OpenBot. It owns `agent:invoke`,
+ * runs the LLM, emits tool-call events, and stitches tool results back into
+ * the conversation. Tools are supplied externally by the loader (merged from
+ * every tool plugin attached to the same agent).
  */
-export const aiSdkRuntime =
-  (options: AiSdkRuntimeOptions): MelonyPlugin<OpenBotState, OpenBotEvent> =>
+export const openbotRuntime =
+  (options: OpenBotRuntimeOptions): MelonyPlugin<OpenBotState, OpenBotEvent> =>
     (builder) => {
       const {
         model: modelString = 'openai/gpt-4o-mini',

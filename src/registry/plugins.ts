@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Plugin } from '../bus/plugin.js';
-import { aiSdkPlugin } from '../plugins/ai-sdk/index.js';
+import { openbotPlugin } from '../plugins/openbot/index.js';
 import { shellPlugin } from '../plugins/shell/index.js';
 import { mcpPlugin } from '../plugins/mcp/index.js';
 import { delegationPlugin } from '../plugins/delegation/index.js';
@@ -18,7 +18,7 @@ const loadedPlugins = new Set<string>();
 const cache = new Map<string, Plugin>();
 
 const BUILT_IN: Record<string, Plugin> = {
-  [aiSdkPlugin.id]: aiSdkPlugin,
+  [openbotPlugin.id]: openbotPlugin,
   [shellPlugin.id]: shellPlugin,
   [mcpPlugin.id]: mcpPlugin,
   [delegationPlugin.id]: delegationPlugin,
@@ -78,7 +78,7 @@ export function initPlugins(dir?: string) {
 
 /**
  * Resolve a Plugin by id. The id is either:
- *   - a built-in id (e.g. "ai-sdk", "shell"), or
+ *   - a built-in id (e.g. "openbot", "shell"), or
  *   - an npm package name (e.g. "openbot-plugin-foo" or "@scope/foo"),
  *     in which case the folder layout is `plugins/<id>/dist/index.js`.
  */

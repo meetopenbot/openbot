@@ -1,18 +1,18 @@
 import type { Plugin } from '../../bus/plugin.js';
-import { aiSdkRuntime } from './runtime.js';
+import { openbotRuntime } from './runtime.js';
 
 /**
- * `ai-sdk` — generic LLM runtime plugin built on the Vercel AI SDK.
+ * `openbot` — the standard, opinionated OpenBot agent runtime.
  *
- * Owns `agent:invoke` and consumes the merged `tools` map provided by the
- * agent loader (collected from every tool plugin attached to the same agent).
- * Pair with tool plugins like `shell`, `mcp`, `delegation`, etc.
+ * This is the canonical execution loop for OpenBot agents. It handles
+ * `agent:invoke`, manages short-term memory, assembles context, and
+ * orchestrates tool calls.
  */
-export const aiSdkPlugin: Plugin = {
-  id: 'ai-sdk',
-  name: 'AI SDK Runtime',
+export const openbotPlugin: Plugin = {
+  id: 'openbot',
+  name: 'OpenBot Agent',
   description:
-    'Generic LLM runtime built on the Vercel AI SDK. Consumes tools contributed by other plugins.',
+    'The standard, opinionated OpenBot agent runtime. Handles the core execution loop and tool orchestration.',
   configSchema: {
     type: 'object',
     properties: {
@@ -30,7 +30,7 @@ export const aiSdkPlugin: Plugin = {
         ? config.model
         : 'openai/gpt-4o-mini';
 
-    return aiSdkRuntime({
+    return openbotRuntime({
       model,
       storage,
       toolDefinitions: tools,
@@ -38,4 +38,4 @@ export const aiSdkPlugin: Plugin = {
   },
 };
 
-export default aiSdkPlugin;
+export default openbotPlugin;

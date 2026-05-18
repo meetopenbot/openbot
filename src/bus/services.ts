@@ -90,7 +90,7 @@ const DEFAULT_MARKETPLACE_AGENTS: MarketplaceAgentListing[] = [
     instructions:
       'You are a research assistant. Use available tools to find information.',
     plugins: [
-      { id: 'ai-sdk', config: { model: 'openai/gpt-4o' } },
+      { id: 'openbot', config: { model: 'openai/gpt-4o' } },
       { id: 'mcp' },
       { id: 'shell' },
     ],

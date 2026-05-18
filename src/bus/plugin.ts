@@ -5,7 +5,7 @@ import { AgentDetails, ConfigSchema, Storage } from './types.js';
 /**
  * Reference to a plugin from an agent's AGENT.md frontmatter.
  *
- * The `id` is either a built-in plugin id (e.g. `ai-sdk`, `shell`) or an npm
+ * The `id` is either a built-in plugin id (e.g. `openbot`, `shell`) or an npm
  * package name (e.g. `openbot-plugin-codex`, `@scope/openbot-plugin-foo`).
  * Each entry may carry plugin-specific `config`.
  */

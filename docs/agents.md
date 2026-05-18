@@ -14,7 +14,7 @@ You define an agent with a YAML-fronted markdown file at
 name: Researcher
 description: Web research and synthesis specialist.
 plugins:
-  - id: ai-sdk
+  - id: openbot
     config:
       model: anthropic/claude-3-5-sonnet-20240620
   - id: mcp
@@ -34,19 +34,19 @@ plugin as `agentDetails.instructions`.
 A runtime plugin is one that handles `agent:invoke` (the LLM loop). Without
 one, the agent will not respond to user input. Built-in runtime plugins:
 
-- `ai-sdk` — generic LLM runtime (Vercel AI SDK). Consumes tools from other
-  plugins listed alongside it.
+- `openbot` — the standard, opinionated OpenBot agent runtime. Consumes tools
+  from other plugins listed alongside it.
 - `claude-code` — runs Claude inside the Claude Agent SDK with its own tools.
 - `gemini-cli` — spawns Google's `gemini` CLI in headless mode.
 
 `claude-code` and `gemini-cli` own their own tool loops, so attaching tool
 plugins like `shell` or `mcp` to them has no effect. Pair tool plugins with
-`ai-sdk`.
+`openbot`.
 
 ## Built-in agent
 
 OpenBot ships a built-in `system` agent (the orchestrator) with the
-`ai-sdk` runtime plus the standard tool plugins (storage, shell, mcp,
+`openbot` runtime plus the standard tool plugins (storage, shell, mcp,
 delegation, ui, approval, memory). It cannot be deleted.
 
 ## Memory

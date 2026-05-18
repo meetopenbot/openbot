@@ -43,7 +43,7 @@ name collisions.
 
 | Id              | Role       | Notes                                                     |
 | --------------- | ---------- | --------------------------------------------------------- |
-| `ai-sdk`        | Runtime    | Generic LLM loop on Vercel AI SDK; consumes external tools |
+| `openbot`       | Runtime    | The standard, opinionated OpenBot agent runtime.          |
 | `claude-code`   | Runtime    | Claude Agent SDK; owns its own tool loop                  |
 | `gemini-cli`    | Runtime    | Google `gemini` CLI in headless mode                      |
 | `shell`         | Tool       | `shell_exec`                                              |

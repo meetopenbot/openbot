@@ -6,7 +6,7 @@ import type { Plugin } from '../../bus/plugin.js';
  *
  * The actual handlers live in `bus/services.ts` because memory is platform
  * infrastructure (shared across every agent on the bus); this plugin only
- * contributes the tool definitions so a runtime plugin (e.g. `ai-sdk`) can
+ * contributes the tool definitions so a runtime plugin (e.g. `openbot`) can
  * surface them to the LLM.
  *
  * Scopes

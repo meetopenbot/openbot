@@ -91,12 +91,11 @@ The built-in `system` agent is always available. Add a custom agent by creating 
 ---
 name: Researcher
 description: Helps collect and summarize information.
-runtime:
-  name: ai-sdk
-  config:
-    model: openai/gpt-4o-mini
 plugins:
-  - name: storage
+  - id: openbot
+    config:
+      model: openai/gpt-4o-mini
+  - id: storage-tools
 ---
 
 You are a careful research assistant.
@@ -109,11 +108,11 @@ Agents are discovered from disk when the server starts.
 
 Built-in plugins include:
 
-- `storage`
+- `storage-tools`
 - `delegation`
 - `mcp`
 - `ui`
-- `ai-sdk`
+- `openbot`
 
 Shared plugins can be placed in `~/.openbot/plugins` and referenced by agents.
 
