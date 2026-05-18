@@ -9,20 +9,11 @@ export interface OpenBotconfig {
   image?: string;
   baseDir?: string;
   port?: number;
-  mcpServers?: MCPServerConfig[];
   /**
    * Overrides the default public marketplace registry URL. If omitted or blank,
    * {@link DEFAULT_MARKETPLACE_REGISTRY_URL} is used.
    */
   marketplaceRegistryUrl?: string;
-}
-
-export interface MCPServerConfig {
-  id: string;
-  command: string;
-  args?: string[];
-  env?: Record<string, string>;
-  cwd?: string;
 }
 
 export interface StoredVariable {

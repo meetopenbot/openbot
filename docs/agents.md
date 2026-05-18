@@ -17,7 +17,6 @@ plugins:
   - id: openbot
     config:
       model: anthropic/claude-3-5-sonnet-20240620
-  - id: mcp
   - id: shell
   - id: delegation
 ---
@@ -40,13 +39,13 @@ one, the agent will not respond to user input. Built-in runtime plugins:
 - `gemini-cli` — spawns Google's `gemini` CLI in headless mode.
 
 `claude-code` and `gemini-cli` own their own tool loops, so attaching tool
-plugins like `shell` or `mcp` to them has no effect. Pair tool plugins with
+plugins like `shell` to them has no effect. Pair tool plugins with
 `openbot`.
 
 ## Built-in agent
 
 OpenBot ships a built-in `system` agent (the orchestrator) with the
-`openbot` runtime plus the standard tool plugins (storage, shell, mcp,
+`openbot` runtime plus the standard tool plugins (storage, shell,
 delegation, ui, approval, memory). It cannot be deleted.
 
 ## Memory

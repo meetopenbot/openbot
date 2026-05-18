@@ -18,7 +18,7 @@ A dynamic registry that manages all available agents. Agents can be:
 - **TS Packages**: Advanced agents with custom logic in `~/.openbot/agents/*/index.ts`.
 
 ### 3. Plugin registry
-The "capability layer" that provides tools and logic shared across the platform. Plugins (like `shell`, `file-system`, or `mcp`) define the actions agents can perform.
+The "capability layer" that provides tools and logic shared across the platform. Plugins (like `shell` or `file-system`) define the actions agents can perform.
 
 ### 4. Orchestration layer (Melony)
 The underlying event bus that handles all communication. It ensures that agents can collaborate asynchronously, share context, and emit real-time updates to the UI.

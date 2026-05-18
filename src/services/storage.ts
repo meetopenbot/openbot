@@ -108,7 +108,6 @@ const SYSTEM_AGENT_ID = 'system';
 const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
   { id: 'openbot', config: { model: 'openai/gpt-5.4-nano' } },
   { id: 'storage-tools' },
-  // { id: 'mcp' },
   { id: 'shell' },
   { id: 'todo' },
   // { id: 'ui' },

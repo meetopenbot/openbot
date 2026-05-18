@@ -45,7 +45,6 @@ This document is a structured reverse-engineering and analysis of the OpenBot re
 | HTTP        | Express 4, `cors`, JSON body up to 20mb |
 | Orchestration | `melony` |
 | LLM         | Vercel `ai` + `@ai-sdk/openai` + `@ai-sdk/anthropic` |
-| MCP         | `@modelcontextprotocol/sdk` (stdio clients) |
 | Config      | `dotenv`, `gray-matter` (`AGENT.md`), `zod` v4 |
 | CLI         | `commander` |
 | Build       | `tsc` → `dist/`, `tsx` for dev |
@@ -110,17 +109,16 @@ CLI (commander) ──► startServer (Express)
 11. Bus services: channels, threads, storage wrappers, todos, marketplace, agent install, plugin install/uninstall, memory
 12. OpenBot runtime: tool loop, short-term messages, API key widget flow
 13. Shell: `shell_exec`
-14. MCP: list/call tools
-15. Delegation: `handoff` → `handoff:request` → chained steps
-16. Approval middleware for protected actions
-17. UI widgets: `render_ui_widget` → `client:ui:widget`
-18. Memory: remember / recall / forget + context injection
-19. Todos: shared thread list + `advanceAfterRun`
-20. Built-in + community plugins from disk
-21. Marketplace fetch + `action:agent:install`
-22. Variables + sync to `process.env`
-23. Channel filesystem list/read (sandboxed to channel `cwd`)
-24. Last-read / unread hints (`_meta/last-read.json`)
+14. Delegation: `handoff` → `handoff:request` → chained steps
+15. Approval middleware for protected actions
+16. UI widgets: `render_ui_widget` → `client:ui:widget`
+17. Memory: remember / recall / forget + context injection
+18. Todos: shared thread list + `advanceAfterRun`
+19. Built-in + community plugins from disk
+20. Marketplace fetch + `action:agent:install`
+21. Variables + sync to `process.env`
+22. Channel filesystem list/read (sandboxed to channel `cwd`)
+23. Last-read / unread hints (`_meta/last-read.json`)
 
 ### Feature table (repo status)
 
@@ -138,7 +136,6 @@ CLI (commander) ──► startServer (Express)
 | AI turns | `agent:invoke` | `plugins/openbot/runtime.ts` | thread/channel state | Complete |
 | API key UX | widget response | `runtime.ts` | `variables.json`, `config.json` | Complete |
 | Shell | `action:shell_exec` | `plugins/shell` | — | Complete |
-| MCP | `mcp_*` | `harness/mcp.ts` | `config.mcpServers` | Complete |
 | Handoff | `action:handoff` | `plugins/delegation`, `dispatcher.ts` | — | Complete |
 | Stop | `action:agent_run_stop` | `dispatcher.ts` | in-memory | Complete |
 | Approval | `approval` plugin | `plugins/approval` | `state.approvals` | Complete |
@@ -157,7 +154,7 @@ CLI (commander) ──► startServer (Express)
 | Docs: `claude-code`, `gemini-cli` | Not in `registry/plugins.ts` built-ins |
 | Marketplace default “Coder” uses `claude-code` | `bus/services.ts` — may fail without community plugin |
 | “Command prefix routing” in `docs/architecture.md` | No slash parser in `src/`; routing = HTTP `agentId` + handoff/todos |
-| System agent: `mcp` / `ui` commented | `storage.ts` vs README claims |
+| System agent: `ui` commented | `storage.ts` vs README claims |
 | System default model `openai/gpt-5.4-nano` | `storage.ts` — verify against provider |
 
 ### Feature hierarchy
@@ -250,7 +247,7 @@ approval ─► suspend until client:ui:widget:response
 
 ### Major modules
 
-- `server.ts`, `dispatcher.ts`, `runtime-factory.ts`, `bus/services.ts`, `services/storage.ts`, `services/plugins.ts`, `services/memory.ts`, `harness/mcp.ts`, `harness/process.ts`.
+- `server.ts`, `dispatcher.ts`, `runtime-factory.ts`, `bus/services.ts`, `services/storage.ts`, `services/plugins.ts`, `services/memory.ts`, `harness/process.ts`.
 
 ---
 
@@ -272,7 +269,7 @@ approval ─► suspend until client:ui:widget:response
 ## Phase 7 — Security
 
 - **No authentication** — local trust model; exposing the port widens blast radius.
-- **Shell, MCP, npm install** are high-impact capabilities.
+- **Shell and npm install** are high-impact capabilities.
 - **Filesystem tools** sandbox list/read to channel `cwd` (path check).
 - **Secrets** in `variables.json` (plaintext file).
 - **SSRF** risk: configurable marketplace URL uses `fetch`.
@@ -339,7 +336,7 @@ approval ─► suspend until client:ui:widget:response
     - Add tests (dispatcher, todos, approval)
     - Safer secrets; bind localhost by default; optional auth token
     - Reconcile README “three endpoints” with `/api/health`
-18. **Risks** — exposed port, shell/MCP, npm supply chain, doc drift.
+18. **Risks** — exposed port, shell, npm supply chain, doc drift.
 19. **Missing in repo** — SPA, auth, billing, cloud sync implementation, slash-command router, documented alternate runtimes.
 20. **Overall evaluation** — Strong event/plugin architecture for local use; not enterprise/public-internet hardened without additional controls.
 
