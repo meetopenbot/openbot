@@ -136,10 +136,15 @@ function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails 
     ? overrides.pluginRefs
     : defaults.pluginRefs;
 
+  const diskInstructions = overrides.instructions?.trim();
+  const instructions =
+    diskInstructions && diskInstructions.length > 0 ? diskInstructions : defaults.instructions;
+
   return {
     ...defaults,
     ...overrides,
     id: SYSTEM_AGENT_ID,
+    instructions,
     image: overrides.image || defaults.image,
     plugins: refs.map((ref) => ref.id),
     pluginRefs: refs,

@@ -1,5 +1,9 @@
 import { OpenBotEvent, OpenBotState, TodoItem } from '../app/types.js';
 import { Storage } from '../bus/types.js';
+import { isDmSoloChannel } from './channel-participants.js';
+
+/** Built-in orchestrator agent id (`~/.openbot/agents/system/AGENT.md` overrides instructions). */
+export const ORCHESTRATOR_AGENT_ID = 'system';
 
 /**
  * Represents a piece of context that can be used in a prompt.
@@ -95,72 +99,96 @@ export class ContextEngine {
 export function createDefaultContextEngine(): ContextEngine {
   const engine = new ContextEngine();
 
+  engine.registerProvider(new EnvironmentProvider());
+  engine.registerProvider(new ChannelSpecProvider());
   engine.registerProvider(new AgentDetailsProvider());
-  engine.registerProvider(new ChannelDetailsProvider());
-  engine.registerProvider(new ThreadDetailsProvider());
   engine.registerProvider(new TodoProvider());
   engine.registerProvider(new MemoryProvider());
-  engine.registerProvider(new RecentEventsProvider());
+  // engine.registerProvider(new RecentEventsProvider());
 
   engine.registerProcessor(new TokenBudgetProcessor());
 
   return engine;
 }
 
-class AgentDetailsProvider implements ContextProvider {
-  name = 'agent-details';
+class EnvironmentProvider implements ContextProvider {
+  name = 'environment';
   async provide(state: OpenBotState): Promise<ContextItem[]> {
-    if (!state.agentDetails) return [];
-    const instructions = state.agentDetails.instructions?.trim();
-    if (!instructions) return [];
+    const { channelId, threadId, channelDetails, agentId, threadDetails } = state;
+    const participants = channelDetails?.participants || [];
+    const isDm = isDmSoloChannel(participants, agentId);
 
-    return [{
-      id: 'agent-details',
-      type: 'agent',
-      priority: 100,
-      content: `# ${state.agentDetails.name}\n\n${instructions}`,
-    }];
-  }
-}
+    let content = '## ENVIRONMENT\n';
+    if (isDm) {
+      content += '- Mode: Direct Message (Solo)\n';
+      content += '- Context: You are in a private conversation. No other agents are present.\n';
+    } else {
+      const channelName = channelDetails?.name || channelId;
+      content += `- Mode: Channel (#${channelName})\n`;
+      if (threadId) {
+        content += `- Thread: ${threadDetails?.name || threadId}\n`;
+      }
 
-class ChannelDetailsProvider implements ContextProvider {
-  name = 'channel-details';
-  async provide(state: OpenBotState): Promise<ContextItem[]> {
-    if (!state.channelDetails) return [];
-
-    const participants = state.channelDetails.participants;
-    if (!participants?.length) return [];
-
-    const channelLabel =
-      state.channelDetails.name?.trim() || state.channelDetails.id;
-    const lines = participants.map((id) => `- \`${id}\``).join('\n');
+      const peerIds = participants.filter((id) => id !== agentId);
+      if (peerIds.length > 0) {
+        content += `- Participants: ${peerIds.map((id) => `@${id}`).join(', ')}\n`;
+        content += `  (Use these IDs as \`assignee\` when calling \`todo_write\` to delegate tasks.)\n`;
+      }
+    }
 
     return [
       {
-        id: 'channel-details',
-        type: 'channel',
-        priority: 80,
-        content:
-          `## Channel participants (${channelLabel})\n` +
-          `Agent ids collaborating in this channel:\n${lines}`,
+        id: 'environment',
+        type: 'environment',
+        priority: 110,
+        content,
       },
     ];
   }
 }
 
-class ThreadDetailsProvider implements ContextProvider {
-  name = 'thread-details';
-  async provide(state: OpenBotState): Promise<ContextItem[]> {
-    if (!state.threadDetails) return [];
+/**
+ * Injects SPEC.md (`channelDetails.spec`). Kept distinct from EnvironmentProvider
+ * so each block gets its own truncate budget and channel rules survive long
+ * participant lists under {@link ITEM_HARD_CHAR_CAP}.
+ */
+class ChannelSpecProvider implements ContextProvider {
+  name = 'channel-spec';
 
-    // For now, this provider is a placeholder for future state-based assembly.
-    // It currently only surfaces the thread name to provide basic context.
+  async provide(state: OpenBotState): Promise<ContextItem[]> {
+    const raw = state.channelDetails?.spec;
+    const spec = typeof raw === 'string' ? raw.trim() : '';
+    if (!spec) return [];
+
     return [
       {
-        id: 'thread-details',
-        type: 'thread',
-        priority: 90,
-        content: `# Thread you are in: ${state.threadDetails.name}`,
+        id: 'channel-spec',
+        type: 'channel-spec',
+        /** Below environment (110), above agent / {@link TokenBudgetProcessor.KEEP_FLOOR}. */
+        priority: 108,
+        content:
+          `## CHANNEL SPECIFICATION (SPEC.md)\n` +
+          `Channel-level goals and constraints. Prefer these unless the user contradicts them.\n\n` +
+          `${spec}`,
+      },
+    ];
+  }
+}
+
+class AgentDetailsProvider implements ContextProvider {
+  name = 'agent-details';
+  async provide(state: OpenBotState): Promise<ContextItem[]> {
+    if (!state.agentDetails) return [];
+    if (state.agentId === ORCHESTRATOR_AGENT_ID) return [];
+    const instructions = state.agentDetails.instructions?.trim();
+    if (!instructions) return [];
+
+    return [
+      {
+        id: 'agent-details',
+        type: 'agent',
+        priority: 100,
+        content: `## AGENT: ${state.agentDetails.name}\n\n${instructions}`,
       },
     ];
   }
@@ -208,9 +236,7 @@ class TodoProvider implements ContextProvider {
         type: 'todos',
         priority: 92,
         content:
-          `## Shared todo plan (thread state)\n` +
-          `Orchestrator authors with \`todo_write\`; assignees run one step at a time. ` +
-          `When an item is \`done\`, its captured output appears below so every agent can see prior steps without relying on merged chat history.\n\n` +
+          `## SHARED TODO PLAN (thread state)\n` +
           `${formatted}`,
       },
     ];
@@ -247,7 +273,7 @@ class MemoryProvider implements ContextProvider {
           id: 'memory',
           type: 'memory',
           priority: 95,
-          content: `## Remembered facts\nTrust these unless the user contradicts them. Use \`forget\` to remove stale ones.\n\n${formatted}`,
+          content: `## Remembered global facts\nTrust these unless the user contradicts them. Use \`forget\` to remove stale ones.\n\n${formatted}`,
         },
       ];
     } catch (error) {
@@ -326,7 +352,7 @@ class RecentEventsProvider implements ContextProvider {
 
 /**
  * Drops the lowest-priority items until the assembled prompt fits within the
- * token budget. The first item with priority >= `keepFloor` is always kept,
+ * token budget. The first item with priority >= \`keepFloor\` is always kept,
  * so the agent's own instructions can never be evicted. Stable on ties:
  * later-emitted items go first.
  */

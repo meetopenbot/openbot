@@ -6,8 +6,13 @@ import { OpenBotEvent, OpenBotMessage, OpenBotState } from '../../app/types.js';
 import { reconstructHistory } from '../../harness/history.js';
 import { Storage } from '../../bus/types.js';
 import type { ToolDefinition } from '../../bus/plugin.js';
-import { createDefaultContextEngine } from '../../harness/context.js';
+import {
+  createDefaultContextEngine,
+  ContextEngine,
+  ORCHESTRATOR_AGENT_ID,
+} from '../../harness/context.js';
 import { saveConfig } from '../../app/config.js';
+import { OPENBOT_SYSTEM_PROMPT } from './system-prompt.js';
 
 /**
  * Maps OpenBot internal messages to Vercel AI SDK ModelMessages.
@@ -53,9 +58,7 @@ export interface OpenBotRuntimeOptions {
   /** Provider model string (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20240620`). */
   model?: string;
   storage?: Storage;
-  contextEngine?: {
-    buildContext: (state: OpenBotState, storage?: Storage) => Promise<string>;
-  };
+  contextEngine?: ContextEngine;
   /** Tool definitions merged from all tool plugins attached to this agent. */
   toolDefinitions?: Record<string, ToolDefinition>;
 }
@@ -101,11 +104,20 @@ const truncateToolPayload = (raw: unknown): string => {
 async function buildSystemPrompt(
   state: OpenBotState,
   storage: Storage | undefined,
-  contextEngine: {
-    buildContext: (state: OpenBotState, storage?: Storage) => Promise<string>;
-  },
+  contextEngine: ContextEngine,
 ): Promise<string> {
-  return contextEngine.buildContext(state, storage);
+  const context = await contextEngine.buildContext(state, storage);
+
+  const instructions =
+    state.agentId === ORCHESTRATOR_AGENT_ID
+      ? (state.agentDetails?.instructions?.trim() || OPENBOT_SYSTEM_PROMPT)
+      : OPENBOT_SYSTEM_PROMPT;
+
+  return [
+    instructions,
+    '',
+    context,
+  ].join('\n');
 }
 
 /**

@@ -503,7 +503,7 @@ export type UIWidgetListItem = {
 };
 
 export type UIWidgetBase = {
-  widgetId: string;
+  widgetId?: string;
   title?: string;
   description?: string;
   body?: string;
@@ -782,7 +782,7 @@ export type TodoStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
 /**
  * A single unit of work tracked in thread state. Todos are owned by the
  * system (bus services); agents can only mutate them by calling the
- * `todo_write` / `todo_update` tools so every change is observable on the
+ * `todo_write` tool so every change is observable on the
  * event stream and audit-friendly.
  */
 export interface TodoItem {
@@ -805,15 +805,17 @@ export interface TodoItem {
 
 export type TodoWriteInput = {
   id?: string;
-  content: string;
+  content?: string;
   status?: TodoStatus;
   assignee?: string;
+  deleted?: boolean;
 };
 
 export type TodoWriteEvent = BaseEvent & {
   type: 'action:todo_write';
   data: {
     todos: TodoWriteInput[];
+    merge?: boolean;
   };
   meta?: { toolCallId?: string; agentId?: string; threadId?: string };
 };
@@ -822,28 +824,6 @@ export type TodoWriteResultEvent = BaseEvent & {
   type: 'action:todo_write:result';
   data: {
     success: boolean;
-    todos: TodoItem[];
-    error?: string;
-  };
-  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
-};
-
-export type TodoUpdateEvent = BaseEvent & {
-  type: 'action:todo_update';
-  data: {
-    id: string;
-    status?: TodoStatus;
-    content?: string;
-    assignee?: string;
-  };
-  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
-};
-
-export type TodoUpdateResultEvent = BaseEvent & {
-  type: 'action:todo_update:result';
-  data: {
-    success: boolean;
-    todo?: TodoItem;
     todos: TodoItem[];
     error?: string;
   };
@@ -945,6 +925,4 @@ export type OpenBotEvent =
   | ForgetEvent
   | ForgetResultEvent
   | TodoWriteEvent
-  | TodoWriteResultEvent
-  | TodoUpdateEvent
-  | TodoUpdateResultEvent;
+  | TodoWriteResultEvent;

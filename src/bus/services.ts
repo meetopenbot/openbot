@@ -379,6 +379,16 @@ export const busServicesPlugin =
           });
 
           yield {
+            type: "client:ui:widget",
+            data: {
+              kind: "message",
+              title: "Channel details updated.",
+              body: "The channel details have been updated.",
+            },
+            meta: resultMeta,
+          }
+
+          yield {
             type: 'action:patch_channel_details:result',
             data: { success: true, updatedFields },
             meta: resultMeta,
@@ -438,20 +448,68 @@ export const busServicesPlugin =
           const now = Date.now();
           const author = context.state.agentId || 'system';
 
-          const inputs = (event.data as { todos: TodoWriteInput[] }).todos || [];
-          const next: TodoItem[] = inputs.map((raw, idx) => {
-            const prior = raw.id ? byId.get(raw.id) : undefined;
-            return {
-              id: prior?.id || raw.id || newTodoId(now, idx),
-              content: raw.content,
-              status: raw.status || prior?.status || 'pending',
-              assignee: raw.assignee ?? prior?.assignee,
-              createdBy: prior?.createdBy || author,
-              createdAt: prior?.createdAt || now,
-              updatedAt: now,
-              ...(prior?.result !== undefined ? { result: prior.result } : {}),
-            };
-          });
+          const { todos: inputs, merge = true } = event.data as {
+            todos: TodoWriteInput[];
+            merge?: boolean;
+          };
+
+          let next: TodoItem[];
+
+          if (merge) {
+            // Patch existing and append new
+            const updatedIds = new Set<string>();
+            const deletions = new Set<string>();
+
+            const patched = existing.map((t) => {
+              const patch = inputs.find((i) => i.id === t.id);
+              if (!patch) return t;
+              if (patch.deleted) {
+                deletions.add(t.id);
+                return t;
+              }
+              updatedIds.add(t.id);
+              return {
+                ...t,
+                ...(patch.content !== undefined ? { content: patch.content } : {}),
+                ...(patch.status !== undefined ? { status: patch.status } : {}),
+                ...(patch.assignee !== undefined
+                  ? { assignee: patch.assignee === '' ? undefined : patch.assignee }
+                  : {}),
+                updatedAt: now,
+              };
+            });
+
+            const additions = inputs
+              .filter((i) => !i.id || (!byId.has(i.id) && !i.deleted))
+              .map((raw, idx) => ({
+                id: raw.id || newTodoId(now, idx),
+                content: raw.content || '',
+                status: raw.status || 'pending',
+                assignee: raw.assignee,
+                createdBy: author,
+                createdAt: now,
+                updatedAt: now,
+              }));
+
+            next = [...patched, ...additions].filter((t) => !deletions.has(t.id));
+          } else {
+            // Replace all
+            next = inputs
+              .filter((i) => !i.deleted)
+              .map((raw, idx) => {
+                const prior = raw.id ? byId.get(raw.id) : undefined;
+                return {
+                  id: prior?.id || raw.id || newTodoId(now, idx),
+                  content: raw.content || prior?.content || '',
+                  status: raw.status || prior?.status || 'pending',
+                  assignee: raw.assignee ?? prior?.assignee,
+                  createdBy: prior?.createdBy || author,
+                  createdAt: prior?.createdAt || now,
+                  updatedAt: now,
+                  ...(prior?.result !== undefined ? { result: prior.result } : {}),
+                };
+              });
+          }
 
           await persistTodos(storage, context.state, next);
 
@@ -463,56 +521,6 @@ export const busServicesPlugin =
         } catch (error) {
           yield {
             type: 'action:todo_write:result',
-            data: {
-              success: false,
-              todos: readTodos(context.state),
-              error: error instanceof Error ? error.message : 'Unknown error',
-            },
-            meta: resultMeta,
-          } as OpenBotEvent;
-        }
-      });
-
-      builder.on('action:todo_update', async function* (event, context) {
-        const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
-        const patch = event.data as {
-          id: string;
-          status?: TodoStatus;
-          content?: string;
-          assignee?: string;
-        };
-        try {
-          if (!context.state.threadId) {
-            throw new Error('todo_update requires an active thread');
-          }
-          const existing = readTodos(context.state);
-          const idx = existing.findIndex((t) => t.id === patch.id);
-          if (idx === -1) {
-            throw new Error(`Todo "${patch.id}" not found`);
-          }
-          const now = Date.now();
-          const updated: TodoItem = {
-            ...existing[idx],
-            ...(patch.content !== undefined ? { content: patch.content } : {}),
-            ...(patch.status !== undefined ? { status: patch.status } : {}),
-            ...(patch.assignee !== undefined
-              ? { assignee: patch.assignee === '' ? undefined : patch.assignee }
-              : {}),
-            updatedAt: now,
-          };
-          const next = [...existing];
-          next[idx] = updated;
-
-          await persistTodos(storage, context.state, next);
-
-          yield {
-            type: 'action:todo_update:result',
-            data: { success: true, todo: updated, todos: next },
-            meta: resultMeta,
-          } as OpenBotEvent;
-        } catch (error) {
-          yield {
-            type: 'action:todo_update:result',
             data: {
               success: false,
               todos: readTodos(context.state),

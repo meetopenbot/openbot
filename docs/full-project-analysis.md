@@ -144,7 +144,7 @@ CLI (commander) ──► startServer (Express)
 | Approval | `approval` plugin | `plugins/approval` | `state.approvals` | Complete |
 | SDUI | `render_ui_widget` | `plugins/ui` | — | Complete |
 | Memory | `remember` / `recall` / `forget` | `bus/services.ts`, `memory.ts` | `memory/log.jsonl` | Complete |
-| Todos | `todo_write` / `todo_update` | `bus/services.ts`, `todo-advance.ts` | thread `state.json` | Complete |
+| Todos | `todo_write` | `bus/services.ts`, `todo-advance.ts` | thread `state.json` | Complete |
 | Marketplace | `action:marketplace:list` | `bus/services.ts` | remote JSON | Complete |
 | Install agent | `action:agent:install` | `bus/services.ts` | `agents/` | Complete (heuristic) |
 | Install plugin | `action:plugin:install` | `services/plugins.ts` | `plugins/` | Complete |
