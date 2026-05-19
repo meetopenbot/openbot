@@ -2,7 +2,7 @@ import { MelonyPlugin, RuntimeContext } from 'melony';
 import { generateText, type LanguageModel, type ModelMessage } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
-import { OpenBotEvent, OpenBotMessage, OpenBotState } from '../../app/types.js';
+import { OpenBotEvent, OpenBotMessage, OpenBotState, AgentInvokeEvent } from '../../app/types.js';
 import { reconstructHistory } from '../../harness/history.js';
 import { Storage } from '../../bus/types.js';
 import type { ToolDefinition } from '../../bus/plugin.js';
@@ -10,6 +10,8 @@ import {
   createDefaultContextEngine,
   ContextEngine,
   ORCHESTRATOR_AGENT_ID,
+  DEFAULT_CONTEXT_BUDGET,
+  getContextBudgetForModel,
 } from '../../harness/context.js';
 import { saveConfig } from '../../app/config.js';
 import { OPENBOT_SYSTEM_PROMPT } from './system-prompt.js';
@@ -144,18 +146,36 @@ export const openbotRuntime =
       const runLLM = async function* (
         context: RuntimeContext<OpenBotState, OpenBotEvent>,
         threadId?: string,
+        trigger?: AgentInvokeEvent,
       ): AsyncGenerator<OpenBotEvent> {
         if (!storage) return;
 
+        context.state.model = currentModelString;
+
         const systemPrompt = await buildSystemPrompt(context.state, storage, contextEngine);
+
+        console.log('system prompt', systemPrompt);
+
         const events = await storage.getEvents({
           channelId: context.state.channelId,
           threadId: context.state.threadId,
         });
 
-        console.log('system prompt', systemPrompt);
+        let messages = reconstructHistory(events);
 
-        const messages = reconstructHistory(events);
+        const triggerContent = trigger?.data?.content?.trim();
+        if (triggerContent && trigger) {
+          const role = (trigger.data?.role || 'user') as OpenBotMessage['role'];
+          const last = messages[messages.length - 1];
+          const alreadyLast =
+            last &&
+            last.role === role &&
+            typeof last.content === 'string' &&
+            last.content.trim() === triggerContent;
+          if (!alreadyLast) {
+            messages.push({ role, content: triggerContent } as OpenBotMessage);
+          }
+        }
 
         try {
           const result = await generateText({
@@ -164,6 +184,28 @@ export const openbotRuntime =
             messages: toModelMessages(messages),
             tools: toolDefinitions as Record<string, { description: string; inputSchema: any }>,
           });
+
+          if (result.usage) {
+            const usage = result.usage;
+            yield {
+              type: 'agent:usage',
+              data: {
+                usage: {
+                  promptTokens: usage.inputTokens,
+                  completionTokens: usage.outputTokens,
+                  totalTokens: usage.totalTokens,
+                  currentContextTokens: usage.inputTokens,
+                  contextBudget: getContextBudgetForModel(currentModelString),
+                },
+                model: currentModelString,
+              },
+              meta: {
+                agentId: context.state.agentId,
+                threadId,
+                runId: context.state.runId,
+              },
+            } as OpenBotEvent;
+          }
 
           const toolCalls = result.toolCalls ?? [];
 
@@ -257,7 +299,7 @@ export const openbotRuntime =
         }
 
         const threadId = event.meta?.threadId || context.state.threadId;
-        yield* runLLM(context, threadId);
+        yield* runLLM(context, threadId, event as AgentInvokeEvent);
       });
 
       builder.on('*', async function* (event, context) {

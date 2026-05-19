@@ -19,6 +19,8 @@ export interface OpenBotState {
   channelDetails?: ChannelDetails;
   threadDetails?: ThreadDetails;
   triggerEvent?: OpenBotEvent;
+  /** Active model string (e.g. `openai/gpt-4o-mini`). */
+  model?: string;
 }
 
 export type BaseEvent = {
@@ -689,6 +691,25 @@ export type InstallAgentResultEvent = BaseEvent & {
 
 export type MemoryScopeAlias = 'global' | 'agent' | 'channel';
 
+export interface Usage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export type AgentUsageEvent = BaseEvent & {
+  type: 'agent:usage';
+  data: {
+    usage: Usage;
+    model?: string;
+  };
+  meta: {
+    agentId: string;
+    threadId?: string;
+    runId?: string;
+  };
+};
+
 export type RememberEvent = BaseEvent & {
   type: 'action:remember';
   data: {
@@ -793,6 +814,27 @@ export type TodoWriteResultEvent = BaseEvent & {
   meta?: { toolCallId?: string; agentId?: string; threadId?: string };
 };
 
+export type DelegateToAgentEvent = BaseEvent & {
+  type: 'action:delegate_to_agent';
+  data: {
+    agentId: string;
+    task: string;
+    todoId?: string;
+  };
+  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
+};
+
+export type DelegateToAgentResultEvent = BaseEvent & {
+  type: 'action:delegate_to_agent:result';
+  data: {
+    success: boolean;
+    agentId?: string;
+    output?: string;
+    error?: string;
+  };
+  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
+};
+
 /**
  * Internal message representation to decouple harness history from specific AI SDKs.
  */
@@ -811,6 +853,7 @@ export type OpenBotEvent =
   | UserInputEvent
   | AgentInvokeEvent
   | AgentOutputEvent
+  | AgentUsageEvent
   | AgentRunStartEvent
   | AgentRunEndEvent
   | AgentRunStoppedEvent
@@ -884,4 +927,6 @@ export type OpenBotEvent =
   | ForgetEvent
   | ForgetResultEvent
   | TodoWriteEvent
-  | TodoWriteResultEvent;
+  | TodoWriteResultEvent
+  | DelegateToAgentEvent
+  | DelegateToAgentResultEvent;

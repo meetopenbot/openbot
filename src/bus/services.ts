@@ -12,6 +12,9 @@ import type { PluginRef } from './plugin.js';
 import { Storage } from './types.js';
 import { storageService } from '../services/storage.js';
 import { pluginService } from '../services/plugins.js';
+import { isParticipantDispatchAllowed } from '../harness/channel-participants.js';
+import { ORCHESTRATOR_AGENT_ID } from '../harness/context.js';
+import { makeInternalInvoke, runAgentTurn } from '../harness/agent-turn.js';
 
 const readTodos = (state: OpenBotState): TodoItem[] => {
   const raw = (state.threadDetails?.state as Record<string, unknown> | undefined)?.todos;
@@ -21,6 +24,13 @@ const readTodos = (state: OpenBotState): TodoItem[] => {
 let todoCounter = 0;
 const newTodoId = (now: number, idx: number): string =>
   `todo_${now.toString(36)}_${(todoCounter++).toString(36)}_${idx}`;
+
+const normalizeAgentId = (id: string): string => id.trim().replace(/^@+/, '');
+
+const normalizeAssignee = (assignee: string | undefined): string | undefined => {
+  if (assignee === undefined || assignee === '') return undefined;
+  return normalizeAgentId(assignee);
+};
 
 async function persistTodos(
   storage: Storage,
@@ -473,7 +483,7 @@ export const busServicesPlugin =
                 ...(patch.content !== undefined ? { content: patch.content } : {}),
                 ...(patch.status !== undefined ? { status: patch.status } : {}),
                 ...(patch.assignee !== undefined
-                  ? { assignee: patch.assignee === '' ? undefined : patch.assignee }
+                  ? { assignee: normalizeAssignee(patch.assignee === '' ? undefined : patch.assignee) }
                   : {}),
                 updatedAt: now,
               };
@@ -485,7 +495,7 @@ export const busServicesPlugin =
                 id: raw.id || newTodoId(now, idx),
                 content: raw.content || '',
                 status: raw.status || 'pending',
-                assignee: raw.assignee,
+                assignee: normalizeAssignee(raw.assignee),
                 createdBy: author,
                 createdAt: now,
                 updatedAt: now,
@@ -502,7 +512,7 @@ export const busServicesPlugin =
                   id: prior?.id || raw.id || newTodoId(now, idx),
                   content: raw.content || prior?.content || '',
                   status: raw.status || prior?.status || 'pending',
-                  assignee: raw.assignee ?? prior?.assignee,
+                  assignee: normalizeAssignee(raw.assignee ?? prior?.assignee),
                   createdBy: prior?.createdBy || author,
                   createdAt: prior?.createdAt || now,
                   updatedAt: now,
@@ -529,6 +539,113 @@ export const busServicesPlugin =
             meta: resultMeta,
           } as OpenBotEvent;
         }
+      });
+
+      builder.on('action:delegate_to_agent', async function* (event, context) {
+        const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+        try {
+          if (context.state.agentId !== ORCHESTRATOR_AGENT_ID) {
+            throw new Error('delegate_to_agent is only available to the orchestrator agent');
+          }
+          if (!context.state.threadId) {
+            throw new Error('delegate_to_agent requires an active thread');
+          }
+
+          const rawAgentId = (event.data as { agentId: string }).agentId;
+          const agentId = normalizeAgentId(rawAgentId);
+          const { task, todoId } = event.data as {
+            agentId: string;
+            task: string;
+            todoId?: string;
+          };
+
+          if (!agentId) throw new Error('agentId is required');
+          if (!task?.trim()) throw new Error('task is required');
+
+          await storage.getAgentDetails({ agentId });
+
+          const participants = context.state.channelDetails?.participants ?? [];
+          if (
+            !isParticipantDispatchAllowed(participants, context.state.agentId, agentId)
+          ) {
+            throw new Error(
+              `Agent "${agentId}" is not allowed in this channel. Check channel participants.`,
+            );
+          }
+
+          const trimmedTask = task.trim();
+          const linkedTodoId = todoId?.trim() || undefined;
+          const workerInvoke = makeInternalInvoke(trimmedTask, context.state.threadId);
+
+          let workerOutput: string | undefined;
+          const turn = runAgentTurn({
+            runId: context.state.runId,
+            channelId: context.state.channelId,
+            threadId: context.state.threadId,
+            agentId,
+            event: workerInvoke,
+            delegationTodoId: linkedTodoId,
+          });
+          let next = await turn.next();
+          while (!next.done) {
+            yield next.value;
+            next = await turn.next();
+          }
+          workerOutput = next.value;
+
+          context.state.threadDetails = await storage.getThreadDetails({
+            channelId: context.state.channelId,
+            threadId: context.state.threadId,
+          });
+
+          yield {
+            type: 'action:delegate_to_agent:result',
+            data: {
+              success: true,
+              agentId,
+              output: workerOutput?.trim() || '(no text output)',
+            },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        } catch (error) {
+          yield {
+            type: 'action:delegate_to_agent:result',
+            data: {
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        }
+      });
+
+      builder.on('agent:usage', async function* (event, context) {
+        const { usage } = event.data;
+        if (!context.state.threadId) return;
+
+        const currentState = (context.state.threadDetails?.state as Record<string, any>) || {};
+        const currentUsage = currentState.usage || {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+        };
+
+        const nextUsage = {
+          promptTokens: (currentUsage.promptTokens || 0) + usage.promptTokens,
+          completionTokens: (currentUsage.completionTokens || 0) + usage.completionTokens,
+          totalTokens: (currentUsage.totalTokens || 0) + usage.totalTokens,
+        };
+
+        await storage.patchThreadState({
+          channelId: context.state.channelId,
+          threadId: context.state.threadId,
+          state: { usage: nextUsage },
+        });
+
+        context.state.threadDetails = await storage.getThreadDetails({
+          channelId: context.state.channelId,
+          threadId: context.state.threadId,
+        });
       });
 
       builder.on('action:storage:get-channels', async function* () {

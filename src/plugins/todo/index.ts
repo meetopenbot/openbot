@@ -1,18 +1,6 @@
 import z from 'zod';
 import type { Plugin } from '../../bus/plugin.js';
 
-/**
- * `todo` — shared, per-thread task list for autonomous multi-agent flows.
- *
- * Todos live in `threadDetails.state.todos` and are owned by the system
- * (handlers in `bus/services.ts`). Any agent in the thread can read the
- * list via context, and propose mutations through these tools. Each item
- * may carry an `assignee` agent id to drive an
- * autonomous, multi-step plan across agents.
- *
- * Keep the surface minimal: two tools (replace-all, patch-one) cover plan
- * authoring, status transitions, and reassignment.
- */
 const todoStatus = z.enum(['pending', 'in_progress', 'done', 'cancelled']);
 
 const todoToolDefinitions = {
@@ -31,7 +19,7 @@ const todoToolDefinitions = {
             assignee: z
               .string()
               .optional()
-              .describe('Agent id responsible for this step.'),
+              .describe('Suggested agent id for this step (plain id, no @ prefix).'),
             deleted: z.boolean().optional().describe('If true, remove this item.'),
           }),
         )
@@ -44,16 +32,31 @@ const todoToolDefinitions = {
         ),
     }),
   },
+  delegate_to_agent: {
+    description:
+      'Run a worker agent on a self-contained task and return their output. ' +
+      'Call when a todo step should be executed by a participant; review the result and update todos before delegating again or replying to the user.',
+    inputSchema: z.object({
+      agentId: z
+        .string()
+        .min(1)
+        .describe('Worker agent id from channel participants (plain id, no @ prefix).'),
+      task: z
+        .string()
+        .min(1)
+        .describe('Complete instruction for the worker — they do not see the full todo plan.'),
+      todoId: z.string().optional().describe('Optional todo id this step relates to.'),
+    }),
+  },
 };
 
 export const todoPlugin: Plugin = {
   id: 'todo',
   name: 'Todo',
-  description:
-    'Shared todo list for coordinating multi-step, multi-agent work.',
+  description: 'Shared todo list and worker delegation for multi-step orchestration.',
   toolDefinitions: todoToolDefinitions,
   factory: () => () => {
-    // Handlers live in bus/services.ts; this plugin only contributes tool definitions.
+    // Handlers live in bus/services.ts.
   },
 };
 

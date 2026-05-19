@@ -2,6 +2,29 @@ import { OpenBotEvent, OpenBotState, TodoItem } from '../app/types.js';
 import { Storage } from '../bus/types.js';
 import { isDmSoloChannel } from './channel-participants.js';
 
+export const DEFAULT_CONTEXT_BUDGET = 8000;
+
+/**
+ * Returns the known context window budget (in tokens) for a given model string.
+ * This is used to drive the context usage ring in the UI and to configure
+ * the prompt pruning budget.
+ */
+export const getContextBudgetForModel = (modelString: string): number => {
+  const budgets: Record<string, number> = {
+    'openai/gpt-4o': 128000,
+    'openai/gpt-4o-mini': 128000,
+    'openai/o1-preview': 128000,
+    'openai/o1-mini': 128000,
+    'anthropic/claude-3-5-sonnet-20240620': 200000,
+    'anthropic/claude-3-5-sonnet-latest': 200000,
+    'anthropic/claude-3-opus-20240229': 200000,
+    'anthropic/claude-3-sonnet-20240229': 200000,
+    'anthropic/claude-3-haiku-20240307': 200000,
+  };
+
+  return budgets[modelString] || DEFAULT_CONTEXT_BUDGET;
+};
+
 /** Built-in orchestrator agent id (`~/.openbot/agents/system/AGENT.md` overrides instructions). */
 export const ORCHESTRATOR_AGENT_ID = 'system';
 
@@ -131,8 +154,8 @@ class EnvironmentProvider implements ContextProvider {
 
       const peerIds = participants.filter((id) => id !== agentId);
       if (peerIds.length > 0) {
-        content += `- Participants: ${peerIds.map((id) => `@${id}`).join(', ')}\n`;
-        content += `  (Use these IDs as \`assignee\` when calling \`todo_write\` to delegate tasks.)\n`;
+        content += `- Participants: ${peerIds.join(', ')}\n`;
+        content += `  (Use these plain ids for todo assignees and delegate_to_agent — no @ prefix.)\n`;
       }
     }
 
@@ -203,6 +226,8 @@ class AgentDetailsProvider implements ContextProvider {
 class TodoProvider implements ContextProvider {
   name = 'todos';
   async provide(state: OpenBotState): Promise<ContextItem[]> {
+    if (state.agentId !== ORCHESTRATOR_AGENT_ID) return [];
+
     const raw = (state.threadDetails?.state as Record<string, unknown> | undefined)?.todos;
     const todos: TodoItem[] = Array.isArray(raw) ? (raw as TodoItem[]) : [];
     if (todos.length === 0) return [];
@@ -359,19 +384,22 @@ class RecentEventsProvider implements ContextProvider {
 export class TokenBudgetProcessor implements ContextProcessor {
   name = 'token-budget';
   /** Soft prompt budget in tokens (matches gpt-4o-mini's reasonable system slice). */
-  static DEFAULT_BUDGET = 8000;
+  static DEFAULT_BUDGET = DEFAULT_CONTEXT_BUDGET;
   /** Items at or above this priority are never dropped. */
   static KEEP_FLOOR = 100;
 
   constructor(
-    private budget: number = TokenBudgetProcessor.DEFAULT_BUDGET,
+    private budget: number | undefined = undefined,
     private keepFloor: number = TokenBudgetProcessor.KEEP_FLOOR,
   ) {}
 
-  async process(items: ContextItem[]): Promise<ContextItem[]> {
+  async process(items: ContextItem[], state: OpenBotState): Promise<ContextItem[]> {
     const sorted = [...items].sort((a, b) => b.priority - a.priority);
     const out: ContextItem[] = [];
     let used = 0;
+
+    const activeBudget =
+      this.budget ?? (state.model ? getContextBudgetForModel(state.model) : TokenBudgetProcessor.DEFAULT_BUDGET);
 
     for (const item of sorted) {
       const cost = estimateTokens(item.content);
@@ -380,7 +408,7 @@ export class TokenBudgetProcessor implements ContextProcessor {
         used += cost;
         continue;
       }
-      if (used + cost <= this.budget) {
+      if (used + cost <= activeBudget) {
         out.push(item);
         used += cost;
       }

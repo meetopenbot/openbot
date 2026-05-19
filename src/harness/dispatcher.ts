@@ -3,23 +3,20 @@ import {
   OpenBotEvent,
   OpenBotState,
   StopAgentRunEvent,
+  TodoItem,
+  TodoStatus,
 } from '../app/types.js';
 import { ensureEventId } from '../app/utils.js';
 import { storageService } from '../services/storage.js';
 import { createAgentRuntime } from './runtime-factory.js';
+import { ORCHESTRATOR_AGENT_ID } from './context.js';
 
 /**
  * Single entry point for every event arriving at the bus.
  *
- * Three flavors of dispatch:
- *
- *   1. `action:agent_run_stop` — record a stop signal, ack, done.
- *   2. `user:input` / `agent:invoke` — *agent step*: normalize, emit user-facing
- *      copy, then run the target agent with `run:start`/`run:end` bracketing.
- *   3. Everything else — *bus pass-through*: run the event through the targeted
- *      agent's runtime once and forward emitted chunks. No `run:start`/`run:end`.
- *      This is what backs `/api/state` queries and out-of-band action events
- *      posted to `/api/publish`.
+ * Agent steps (`user:input` / `agent:invoke`) run one orchestrator turn.
+ * Worker runs are triggered by the orchestrator via `delegate_to_agent` during
+ * that turn (see bus/services), not queued in thread state afterward.
  */
 
 export interface DispatchOptions {
@@ -34,14 +31,14 @@ export interface DispatchOptions {
 interface StepContext {
   runId: string;
   channelId: string;
-  /** Mutable: a `create_thread:result` mid-run can rebind the active thread. */
   threadId?: string;
   onEvent: DispatchOptions['onEvent'];
 }
 
-// ---------------------------------------------------------------------------
-// Stop requests
-// ---------------------------------------------------------------------------
+interface AgentStep {
+  agentId: string;
+  event: AgentInvokeEvent;
+}
 
 type StopRequest = {
   runId: string;
@@ -80,9 +77,34 @@ const findStopRequest = (target: {
   });
 };
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
+const readThreadState = (state: OpenBotState): Record<string, unknown> =>
+  (state.threadDetails?.state as Record<string, unknown> | undefined) ?? {};
+
+const readTodos = (state: OpenBotState): TodoItem[] => {
+  const raw = readThreadState(state).todos;
+  return Array.isArray(raw) ? (raw as TodoItem[]) : [];
+};
+
+/** Cancel open todos when the user starts a new message (fresh intent). */
+async function clearPlanOnNewUserMessage(state: OpenBotState): Promise<void> {
+  if (!state.threadId) return;
+  const todos = readTodos(state);
+  if (todos.length === 0) return;
+
+  const now = Date.now();
+  const closedTodos = todos.map((t) => {
+    if (t.status === 'pending' || t.status === 'in_progress') {
+      return { ...t, status: 'cancelled' as TodoStatus, updatedAt: now };
+    }
+    return t;
+  });
+
+  await storageService.patchThreadState({
+    channelId: state.channelId,
+    threadId: state.threadId,
+    state: { todos: closedTodos, orchestration: null },
+  });
+}
 
 export async function dispatch(options: DispatchOptions): Promise<void> {
   const { event } = options;
@@ -102,34 +124,24 @@ export async function dispatch(options: DispatchOptions): Promise<void> {
 
   if (event.type === 'user:input' || event.type === 'agent:invoke') {
     const invoke = await normalizeUserInput(event, ctx);
-    await runStep(options.agentId || 'system', invoke, ctx);
+    await runOrchestratorStep({ agentId: options.agentId || ORCHESTRATOR_AGENT_ID, event: invoke }, ctx);
     return;
   }
 
-  // Bus pass-through: route to the targeted agent's runtime once. No agent step.
-  // Keeps queries (`/api/state`) cheap and idempotent.
-  await runBusEvent(event, options.agentId || 'system', ctx);
+  await runBusEvent(event, options.agentId || ORCHESTRATOR_AGENT_ID, ctx);
 }
 
-// ---------------------------------------------------------------------------
-// Agent step: run:start -> runtime -> run:end
-// ---------------------------------------------------------------------------
-
-async function runStep(
-  agentId: string,
-  event: AgentInvokeEvent,
-  ctx: StepContext,
-): Promise<void> {
+async function runOrchestratorStep(step: AgentStep, ctx: StepContext): Promise<void> {
   const target = {
     runId: ctx.runId,
-    agentId,
+    agentId: step.agentId,
     channelId: ctx.channelId,
     threadId: ctx.threadId,
   };
 
   const preStop = findStopRequest(target);
   if (preStop) {
-    const state = await storageService.getOpenBotState({ ...target, event });
+    const state = await storageService.getOpenBotState({ ...target, event: step.event });
     await ctx.onEvent(
       { type: 'agent:run:stopped', data: { ...target, reason: preStop.reason } },
       state,
@@ -139,19 +151,21 @@ async function runStep(
 
   let state: OpenBotState;
   try {
-    state = await storageService.getOpenBotState({ ...target, event });
+    state = await storageService.getOpenBotState({ ...target, event: step.event });
   } catch (error) {
     if ((error as Error & { code?: string }).code === 'AGENT_NOT_FOUND') {
       const fallback = await storageService.getOpenBotState({
         ...target,
-        agentId: 'system',
-        event,
+        agentId: ORCHESTRATOR_AGENT_ID,
+        event: step.event,
       });
       await ctx.onEvent(
         {
           type: 'agent:output',
-          data: { content: `⚠️ Agent **${agentId}** does not exist. Please check the agent ID and try again.` },
-          meta: { agentId: 'system', threadId: ctx.threadId },
+          data: {
+            content: `⚠️ Agent **${step.agentId}** does not exist. Use participant ids without an @ prefix.`,
+          },
+          meta: { agentId: ORCHESTRATOR_AGENT_ID, threadId: ctx.threadId },
         },
         fallback,
       );
@@ -162,10 +176,12 @@ async function runStep(
 
   await ctx.onEvent({ type: 'agent:run:start', data: { ...target } }, state);
 
+  let stateAfterRun = state;
+
   try {
     const runtime = await createAgentRuntime(state);
 
-    for await (const chunk of runtime.run(event, { state, runId: ctx.runId })) {
+    for await (const chunk of runtime.run(step.event, { state, runId: ctx.runId })) {
       const stop = findStopRequest(target);
       if (stop) {
         await ctx.onEvent(
@@ -175,27 +191,23 @@ async function runStep(
         break;
       }
 
-      if (chunk.id === event.id && chunk.type === event.type) continue;
+      if (chunk.id === step.event.id && chunk.type === step.event.type) continue;
 
       if (chunk.type === 'action:create_thread:result' && chunk.data.success) {
         ctx.threadId = chunk.data.threadId || ctx.threadId;
       }
 
-      chunk.meta = { ...chunk.meta, agentId };
+      chunk.meta = { ...chunk.meta, agentId: step.agentId };
       await ctx.onEvent(chunk, state);
     }
   } catch (error) {
-    console.error(`[dispatcher] Agent run failed: ${agentId}`, error);
+    console.error(`[dispatcher] Agent run failed: ${step.agentId}`, error);
   } finally {
-    const stateAfterRun = await storageService.getOpenBotState({ ...target, event });
+    stateAfterRun = await storageService.getOpenBotState({ ...target, event: step.event });
     await ctx.onEvent({ type: 'agent:run:end', data: { ...target } }, stateAfterRun);
   }
-}
 
-// ---------------------------------------------------------------------------
-// Bus pass-through: run an event through the targeted agent's runtime, forward
-// chunks. No run:start/end.
-// ---------------------------------------------------------------------------
+}
 
 async function runBusEvent(
   event: OpenBotEvent,
@@ -212,10 +224,7 @@ async function runBusEvent(
       event,
     });
   } catch (error) {
-    if ((error as Error & { code?: string }).code === 'AGENT_NOT_FOUND') {
-      // Silently drop: bus pass-through has no UI surface to warn into.
-      return;
-    }
+    if ((error as Error & { code?: string }).code === 'AGENT_NOT_FOUND') return;
     throw error;
   }
 
@@ -231,23 +240,18 @@ async function runBusEvent(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 async function normalizeUserInput(
   event: OpenBotEvent,
   ctx: StepContext,
 ): Promise<AgentInvokeEvent> {
   const rawContent = (event as { data?: { content?: string } }).data?.content || '';
 
-  // The user-facing copy stored/streamed for the UI.
   const userFacing: AgentInvokeEvent = {
     type: 'agent:invoke',
     id: event.id,
     data: { content: rawContent, role: 'user' },
     meta: {
-      agentId: 'system',
+      agentId: ORCHESTRATOR_AGENT_ID,
       userId: event.meta?.userId,
       userName: event.meta?.userName,
       userAvatarUrl: event.meta?.userAvatarUrl,
@@ -256,15 +260,16 @@ async function normalizeUserInput(
 
   const initialState = await storageService.getOpenBotState({
     runId: ctx.runId,
-    agentId: 'system',
+    agentId: ORCHESTRATOR_AGENT_ID,
     channelId: ctx.channelId,
     threadId: ctx.threadId,
     event: userFacing,
   });
+  if (event.type === 'user:input') {
+    await clearPlanOnNewUserMessage(initialState);
+  }
   await ctx.onEvent(userFacing, initialState);
 
-  // The event actually fed to the target agent. Carries the input threadId (or the
-  // message id, used as the anchor for Slack-style new threads).
   return {
     ...(event as AgentInvokeEvent),
     type: 'agent:invoke',
@@ -289,7 +294,7 @@ async function handleStop(stopEvent: StopAgentRunEvent, options: DispatchOptions
 
   const state = await storageService.getOpenBotState({
     runId,
-    agentId: options.agentId || 'system',
+    agentId: options.agentId || ORCHESTRATOR_AGENT_ID,
     channelId,
     threadId,
     event: stopEvent,
