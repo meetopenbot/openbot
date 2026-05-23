@@ -1,13 +1,13 @@
-import type { OpenBotEvent } from '../app/types.js';
-import type { PluginRef } from './plugin.js';
-import type { MemoryRecord, ListMemoriesArgs } from '../services/memory.js';
+import type { OpenBotEvent } from '../../app/types.js';
+import type { PluginRef } from './types.js';
+import type { MemoryRecord, ListMemoriesArgs } from '../../plugins/memory/service.js';
 
 /**
- * Public data types exposed by the OpenBot bus.
+ * Public data types exposed by the OpenBot platform.
  *
- * The bus is the platform layer that owns channels, threads, the agent registry,
- * and the event stream. Agents are composed entirely of Plugins (see
- * `bus/plugin.ts`); their internal implementation is opaque to the bus.
+ * The platform layer owns channels, threads, the agent registry, and the event
+ * stream. Agents are composed entirely of Plugins (see `./types.ts`); their
+ * internal implementation is opaque to the platform.
  */
 
 export type Agent = {

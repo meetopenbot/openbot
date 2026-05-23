@@ -1,19 +1,42 @@
 import z from 'zod';
-import type { Plugin } from '../../bus/plugin.js';
+import type { Plugin } from '../../services/plugins/types.js';
+import { OpenBotEvent, MemoryScopeAlias } from '../../app/types.js';
 
 /**
- * `memory` — exposes the global memory store as agent tools.
- *
- * The actual handlers live in `bus/services.ts` because memory is platform
- * infrastructure (shared across every agent on the bus); this plugin only
- * contributes the tool definitions so a runtime plugin (e.g. `openbot`) can
- * surface them to the LLM.
- *
- * Scopes
- * ------
- * - `global`  (default) — visible to every agent and channel.
- * - `agent`   — visible only to the agent that wrote it.
- * - `channel` — visible only inside the active channel.
+ * Resolve a scope alias to a concrete scope string. Aliases let tools accept
+ * `agent`/`channel`/`global` without knowing the active ids; the bus rewrites
+ * them using `context.state`.
+ */
+function resolveMemoryScope(
+  alias: MemoryScopeAlias | undefined,
+  state: any,
+): string {
+  switch (alias) {
+    case 'agent':
+      return `agent:${state.agentId}`;
+    case 'channel':
+      return `channel:${state.channelId}`;
+    case 'global':
+    case undefined:
+      return 'global';
+    default:
+      return 'global';
+  }
+}
+
+function resolveMemoryScopeFilter(
+  alias: MemoryScopeAlias | 'all' | undefined,
+  state: any,
+): string[] | undefined {
+  if (alias === 'all' || alias === undefined) {
+    return ['global', `agent:${state.agentId}`, `channel:${state.channelId}`];
+  }
+  return [resolveMemoryScope(alias, state)];
+}
+
+/**
+ * `memory` — exposes the global memory store as agent tools and provides
+ * platform-level memory handlers.
  */
 const memoryToolDefinitions = {
   remember: {
@@ -77,8 +100,82 @@ export const memoryPlugin: Plugin = {
   description:
     'Global long-term memory: remember/recall/forget facts across runs and agents.',
   toolDefinitions: memoryToolDefinitions,
-  factory: () => () => {
-    // Handlers live in bus/services.ts; this plugin only contributes tool definitions.
+  factory: ({ storage }) => (builder) => {
+    builder.on('action:remember', async function* (event, context) {
+      const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+      try {
+        const { content, scope, tags } = event.data;
+        const record = await storage.appendMemory({
+          scope: resolveMemoryScope(scope, context.state),
+          content,
+          tags,
+        });
+        yield {
+          type: 'action:remember:result',
+          data: { success: true, record },
+          meta: resultMeta,
+        } as OpenBotEvent;
+      } catch (error) {
+        yield {
+          type: 'action:remember:result',
+          data: {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          meta: resultMeta,
+        } as OpenBotEvent;
+      }
+    });
+
+    builder.on('action:recall', async function* (event, context) {
+      const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+      try {
+        const { query, tag, scope, limit } = event.data;
+        const records = await storage.listMemories({
+          scopes: resolveMemoryScopeFilter(scope, context.state),
+          query,
+          tag,
+          limit,
+        });
+        yield {
+          type: 'action:recall:result',
+          data: { success: true, records },
+          meta: resultMeta,
+        } as OpenBotEvent;
+      } catch (error) {
+        yield {
+          type: 'action:recall:result',
+          data: {
+            success: false,
+            records: [],
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          meta: resultMeta,
+        } as OpenBotEvent;
+      }
+    });
+
+    builder.on('action:forget', async function* (event, context) {
+      const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+      try {
+        const deleted = await storage.deleteMemory({ id: event.data.id });
+        yield {
+          type: 'action:forget:result',
+          data: { success: true, deleted },
+          meta: resultMeta,
+        } as OpenBotEvent;
+      } catch (error) {
+        yield {
+          type: 'action:forget:result',
+          data: {
+            success: false,
+            deleted: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          meta: resultMeta,
+        } as OpenBotEvent;
+      }
+    });
   },
 };
 

@@ -6,9 +6,9 @@ import {
   PluginDescriptor,
   Thread,
   ThreadDetails,
-} from '../bus/types.js';
-import type { PluginRef } from '../bus/plugin.js';
-import type { MemoryRecord } from '../services/memory.js';
+} from '../services/plugins/domain.js';
+import type { PluginRef } from '../services/plugins/types.js';
+import type { MemoryRecord } from '../plugins/memory/service.js';
 
 export interface OpenBotState {
   agentId: string;
@@ -504,12 +504,26 @@ export type UIWidgetListItem = {
   metadata?: Record<string, unknown>;
 };
 
+export type UIMediaItem = {
+  type: 'image' | 'video' | 'audio' | 'file';
+  url: string;
+  title?: string;
+  alt?: string;
+  thumbnailUrl?: string;
+  metadata?: Record<string, unknown>;
+};
+
 export type UIWidgetBase = {
-  widgetId?: string;
+  widgetId: string;
   title?: string;
   description?: string;
-  body?: string;
+  /** Optional hero media for the widget */
+  media?: UIMediaItem;
+  /** Optional actions for the widget */
+  actions?: UIWidgetAction[];
   state?: 'open' | 'submitted' | 'cancelled' | 'error';
+  display?: 'expanded' | 'collapsed';
+  size?: 'small' | 'medium' | 'large' | 'full';
   metadata?: Record<string, unknown>;
 };
 
@@ -538,19 +552,6 @@ export type UIListWidget = UIWidgetBase & {
 
 export type UIWidgetSpec = UIMessageWidget | UIChoiceWidget | UIFormWidget | UIListWidget;
 
-export type RenderUIWidgetData =
-  | (Omit<UIMessageWidget, 'widgetId'> & { widgetId?: string })
-  | (Omit<UIChoiceWidget, 'widgetId'> & { widgetId?: string })
-  | (Omit<UIFormWidget, 'widgetId'> & { widgetId?: string })
-  | (Omit<UIListWidget, 'widgetId'> & { widgetId?: string })
-  | {
-      kind: 'approval' | 'todo_list';
-      widgetId?: string;
-      title?: string;
-      props?: Record<string, unknown>;
-      metadata?: Record<string, unknown>;
-    };
-
 export type UIWidgetEvent = BaseEvent & {
   type: 'client:ui:widget';
   data: UIWidgetSpec;
@@ -558,11 +559,6 @@ export type UIWidgetEvent = BaseEvent & {
     agentId: string;
     threadId?: string;
   };
-};
-
-export type RenderUIWidgetEvent = BaseEvent & {
-  type: 'action:render_ui_widget';
-  data: RenderUIWidgetData;
 };
 
 export type UIWidgetResponseEvent = BaseEvent & {
@@ -601,18 +597,6 @@ export type ShellExecResultEvent = BaseEvent & {
     stderr: string;
     timedOut: boolean;
     error?: string;
-  };
-};
-
-export type UserInputEvent = BaseEvent & {
-  type: 'user:input';
-  data: {
-    content: string;
-  };
-  meta?: {
-    userId?: string;
-    userName?: string;
-    userAvatarUrl?: string;
   };
 };
 
@@ -761,78 +745,21 @@ export type ForgetResultEvent = BaseEvent & {
   };
 };
 
-export type TodoStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
-
-/**
- * A single unit of work tracked in thread state. Todos are owned by the
- * system (bus services); agents can only mutate them by calling the
- * `todo_write` tool so every change is observable on the
- * event stream and audit-friendly.
- */
-export interface TodoItem {
-  id: string;
-  content: string;
-  status: TodoStatus;
-  /** Optional agent id responsible for this item — drives autonomous coordination. */
-  assignee?: string;
-  /** Agent id that created the todo (or "system"). */
-  createdBy: string;
-  createdAt: number;
-  updatedAt: number;
-  /**
-   * Captured final reply when this item reaches `done` (last `agent:output`
-   * from the assignee for that run). Lets downstream agents rely on thread
-   * state instead of merged short-term messages.
-   */
-  result?: string;
-}
-
-export type TodoWriteInput = {
-  id?: string;
-  content?: string;
-  status?: TodoStatus;
-  assignee?: string;
-  deleted?: boolean;
-};
-
-export type TodoWriteEvent = BaseEvent & {
-  type: 'action:todo_write';
-  data: {
-    todos: TodoWriteInput[];
-    merge?: boolean;
-  };
-  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
-};
-
-export type TodoWriteResultEvent = BaseEvent & {
-  type: 'action:todo_write:result';
-  data: {
-    success: boolean;
-    todos: TodoItem[];
-    error?: string;
-  };
-  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
-};
-
-export type DelegateToAgentEvent = BaseEvent & {
-  type: 'action:delegate_to_agent';
+export type DelegateTaskEvent = BaseEvent & {
+  type: 'action:delegate_task';
   data: {
     agentId: string;
-    task: string;
-    todoId?: string;
+    prompt: string;
   };
-  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
 };
 
-export type DelegateToAgentResultEvent = BaseEvent & {
-  type: 'action:delegate_to_agent:result';
+export type DelegateTaskResultEvent = BaseEvent & {
+  type: 'action:delegate_task:result';
   data: {
     success: boolean;
-    agentId?: string;
     output?: string;
     error?: string;
   };
-  meta?: { toolCallId?: string; agentId?: string; threadId?: string };
 };
 
 /**
@@ -850,7 +777,6 @@ export type OpenBotMessagePart =
   | { type: 'tool-result'; toolCallId: string; toolName: string; output: any };
 
 export type OpenBotEvent =
-  | UserInputEvent
   | AgentInvokeEvent
   | AgentOutputEvent
   | AgentUsageEvent
@@ -908,7 +834,6 @@ export type OpenBotEvent =
   | UpdateChannelEvent
   | UpdateChannelResultEvent
   | UIWidgetEvent
-  | RenderUIWidgetEvent
   | UIWidgetResponseEvent
   | ShellExecEvent
   | ShellExecResultEvent
@@ -926,7 +851,5 @@ export type OpenBotEvent =
   | RecallResultEvent
   | ForgetEvent
   | ForgetResultEvent
-  | TodoWriteEvent
-  | TodoWriteResultEvent
-  | DelegateToAgentEvent
-  | DelegateToAgentResultEvent;
+  | DelegateTaskEvent
+  | DelegateTaskResultEvent;

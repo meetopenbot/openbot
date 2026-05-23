@@ -10,10 +10,9 @@ const pkg = require('../../package.json');
 import { generateId } from 'melony';
 import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
 import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
-import { processService } from '../harness/process.js';
-import { storageService } from '../services/storage.js';
-import { dispatch } from '../harness/dispatcher.js';
-import { initPlugins } from '../registry/plugins.js';
+import { processService } from '../services/process.js';
+import { runAgent, STATE_AGENT_ID, ORCHESTRATOR_AGENT_ID } from '../harness/index.js';
+import { initPlugins } from '../services/plugins/registry.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
 
 type Bucket = { channelId: string; threadId?: string; activeCount: number; agentIds: Set<string> };
@@ -212,8 +211,6 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     const onEvent = async (chunk: OpenBotEvent, state?: OpenBotState) => {
-      ensureEventId(chunk);
-
       const targetChannelId = state?.channelId || channelId;
       const targetThreadId = state?.threadId || threadId;
       const targetClientKey = getClientKey(targetChannelId, targetThreadId);
@@ -234,12 +231,6 @@ export async function startServer(options: ServerOptions = {}) {
         );
       }
 
-      await storageService.storeEvent({
-        channelId: targetChannelId,
-        threadId: targetThreadId,
-        event: chunk,
-      });
-
       sendToClientKey(targetClientKey, chunk);
 
       if (
@@ -254,9 +245,9 @@ export async function startServer(options: ServerOptions = {}) {
     try {
       ensureEventId(event);
 
-      await dispatch({
+      await runAgent({
         runId,
-        agentId: agentId || 'system',
+        agentId: agentId || ORCHESTRATOR_AGENT_ID,
         event,
         channelId,
         threadId,
@@ -295,12 +286,13 @@ export async function startServer(options: ServerOptions = {}) {
     try {
       ensureEventId(event);
 
-      await dispatch({
+      await runAgent({
         runId,
-        agentId: agentId || 'system',
+        agentId: agentId || STATE_AGENT_ID,
         event,
         channelId,
         threadId,
+        persistEvents: false,
         onEvent,
       });
       res.json({ events });

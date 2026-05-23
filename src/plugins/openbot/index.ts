@@ -1,4 +1,4 @@
-import type { Plugin } from '../../bus/plugin.js';
+import type { Plugin } from '../../services/plugins/types.js';
 import { openbotRuntime } from './runtime.js';
 
 /**
@@ -24,14 +24,10 @@ export const openbotPlugin: Plugin = {
       },
     },
   },
-  factory: ({ agentDetails, config, storage, tools }) => {
-    const model =
-      typeof config.model === 'string' && config.model
-        ? config.model
-        : 'openai/gpt-4o-mini';
+  factory: ({ config, storage, tools }) => {
 
     return openbotRuntime({
-      model,
+      model: config?.model as string,
       storage,
       toolDefinitions: tools,
     });

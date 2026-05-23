@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
+import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../../app/config.js';
 
 /**
  * Global memory service.

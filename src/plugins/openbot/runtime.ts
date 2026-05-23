@@ -1,66 +1,23 @@
 import { MelonyPlugin, RuntimeContext } from 'melony';
-import { generateText, type LanguageModel, type ModelMessage } from 'ai';
+import { generateText, type LanguageModel } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
-import { OpenBotEvent, OpenBotMessage, OpenBotState, AgentInvokeEvent } from '../../app/types.js';
-import { reconstructHistory } from '../../harness/history.js';
-import { Storage } from '../../bus/types.js';
-import type { ToolDefinition } from '../../bus/plugin.js';
+import { OpenBotEvent, OpenBotState, AgentInvokeEvent } from '../../app/types.js';
+import { eventsToModelMessages } from './history.js';
+import { Storage } from '../../services/plugins/domain.js';
+import type { ToolDefinition } from '../../services/plugins/types.js';
 import {
-  createDefaultContextEngine,
-  ContextEngine,
   ORCHESTRATOR_AGENT_ID,
-  DEFAULT_CONTEXT_BUDGET,
   getContextBudgetForModel,
-} from '../../harness/context.js';
+  buildContext,
+} from './context.js';
 import { saveConfig } from '../../app/config.js';
 import { OPENBOT_SYSTEM_PROMPT } from './system-prompt.js';
-
-/**
- * Maps OpenBot internal messages to Vercel AI SDK ModelMessages.
- */
-function toModelMessages(messages: OpenBotMessage[]): ModelMessage[] {
-  return messages.map((m): ModelMessage => {
-    if (typeof m.content === 'string') {
-      return m as ModelMessage;
-    }
-
-    return {
-      role: m.role,
-      content: m.content.map((part) => {
-        if (part.type === 'text') {
-          return { type: 'text', text: part.text };
-        }
-        if (part.type === 'tool-call') {
-          return {
-            type: 'tool-call',
-            toolCallId: part.toolCallId,
-            toolName: part.toolName,
-            input: part.input,
-          };
-        }
-        if (part.type === 'tool-result') {
-          return {
-            type: 'tool-result',
-            toolCallId: part.toolCallId,
-            toolName: part.toolName,
-            output: {
-              type: 'json',
-              value: part.output,
-            },
-          };
-        }
-        throw new Error(`Unsupported message part type: ${(part as any).type}`);
-      }),
-    } as ModelMessage;
-  });
-}
 
 export interface OpenBotRuntimeOptions {
   /** Provider model string (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20240620`). */
   model?: string;
   storage?: Storage;
-  contextEngine?: ContextEngine;
   /** Tool definitions merged from all tool plugins attached to this agent. */
   toolDefinitions?: Record<string, ToolDefinition>;
 }
@@ -81,34 +38,11 @@ function resolveModel(modelString: string): LanguageModel {
   }
 }
 
-const asRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-
-/** Per-message hard cap (in characters) on tool-result payloads we feed back
- *  to the model. Prevents one huge tool output from eating the context window;
- *  the original event remains intact in storage. */
-const TOOL_RESULT_MAX_CHARS = 8000;
-
-/** Sliding window: max number of messages we replay to the model on each
- *  invocation. Older turns stay on disk but are not sent. Keeps both the
- *  recent prompts and the prompt token budget bounded. */
-const MAX_WINDOW_MESSAGES = 80;
-
-const truncateToolPayload = (raw: unknown): string => {
-  const serialized = typeof raw === 'string' ? raw : JSON.stringify(raw);
-  if (serialized.length <= TOOL_RESULT_MAX_CHARS) return serialized;
-  const dropped = serialized.length - TOOL_RESULT_MAX_CHARS;
-  return `${serialized.slice(0, TOOL_RESULT_MAX_CHARS)}\n…[truncated ${dropped} chars]`;
-};
-
 async function buildSystemPrompt(
   state: OpenBotState,
   storage: Storage | undefined,
-  contextEngine: ContextEngine,
 ): Promise<string> {
-  const context = await contextEngine.buildContext(state, storage);
+  const context = await buildContext(state, storage);
 
   const instructions =
     state.agentId === ORCHESTRATOR_AGENT_ID
@@ -123,12 +57,39 @@ async function buildSystemPrompt(
 }
 
 /**
- * The standard OpenBot agent runtime.
+ * Tracks tool-call IDs from one LLM turn until matching `:result` events arrive.
  *
- * This is the opinionated execution loop for OpenBot. It owns `agent:invoke`,
- * runs the LLM, emits tool-call events, and stitches tool results back into
- * the conversation. Tools are supplied externally by the loader (merged from
- * every tool plugin attached to the same agent).
+ * Melony runs yielded `action:*` events depth-first, so parallel tool calls from
+ * a single `generateText` response execute one-by-one. We must wait for every ID
+ * in the batch before calling the LLM again — not after the first result.
+ */
+function createToolBatchTracker() {
+  let pending: Set<string> | null = null;
+
+  return {
+    startBatch(toolCallIds: string[]) {
+      pending = new Set(toolCallIds);
+    },
+    clear() {
+      pending = null;
+    },
+    /** Returns true when this result completes the batch (time to call the LLM again). */
+    recordResult(toolCallId: string): boolean {
+      if (!pending?.has(toolCallId)) return false;
+      pending.delete(toolCallId);
+      if (pending.size > 0) return false;
+      pending = null;
+      return true;
+    },
+  };
+}
+
+/**
+ * OpenBot agent runtime.
+ *
+ * - One `generateText` call per `runLLM` (tools have no `execute`; SDK stops at 1 step).
+ * - Tool calls become `action:*` events; plugins emit `:result` when done.
+ * - When a full batch of results is in, `runLLM` runs again with updated history.
  */
 export const openbotRuntime =
   (options: OpenBotRuntimeOptions): MelonyPlugin<OpenBotState, OpenBotEvent> =>
@@ -136,12 +97,12 @@ export const openbotRuntime =
       const {
         model: modelString = 'openai/gpt-4o-mini',
         storage,
-        contextEngine = createDefaultContextEngine(),
         toolDefinitions = {},
       } = options;
 
       let currentModelString = modelString;
       let model = resolveModel(currentModelString);
+      const toolBatch = createToolBatchTracker();
 
       const runLLM = async function* (
         context: RuntimeContext<OpenBotState, OpenBotEvent>,
@@ -150,85 +111,89 @@ export const openbotRuntime =
       ): AsyncGenerator<OpenBotEvent> {
         if (!storage) return;
 
+        // Capture parent metadata for event enrichment
+        const triggerEvent = trigger || context.state.triggerEvent;
+        const parentAgentId = triggerEvent?.meta?.parentAgentId;
+        const parentToolCallId = triggerEvent?.meta?.parentToolCallId;
+
         context.state.model = currentModelString;
 
-        const systemPrompt = await buildSystemPrompt(context.state, storage, contextEngine);
-
-        console.log('system prompt', systemPrompt);
+        const systemPrompt = await buildSystemPrompt(context.state, storage);
 
         const events = await storage.getEvents({
           channelId: context.state.channelId,
           threadId: context.state.threadId,
         });
 
-        let messages = reconstructHistory(events);
-
-        const triggerContent = trigger?.data?.content?.trim();
-        if (triggerContent && trigger) {
-          const role = (trigger.data?.role || 'user') as OpenBotMessage['role'];
-          const last = messages[messages.length - 1];
-          const alreadyLast =
-            last &&
-            last.role === role &&
-            typeof last.content === 'string' &&
-            last.content.trim() === triggerContent;
-          if (!alreadyLast) {
-            messages.push({ role, content: triggerContent } as OpenBotMessage);
-          }
-        }
+        const messages = eventsToModelMessages(events);
 
         try {
+          // Single LLM request — tool execution happens externally via action:* handlers.
           const result = await generateText({
             model,
             system: systemPrompt,
-            messages: toModelMessages(messages),
+            messages,
             tools: toolDefinitions as Record<string, { description: string; inputSchema: any }>,
+            stopWhen: ({ steps }) => steps.length === 1,
           });
-
-          if (result.usage) {
-            const usage = result.usage;
-            yield {
-              type: 'agent:usage',
-              data: {
-                usage: {
-                  promptTokens: usage.inputTokens,
-                  completionTokens: usage.outputTokens,
-                  totalTokens: usage.totalTokens,
-                  currentContextTokens: usage.inputTokens,
-                  contextBudget: getContextBudgetForModel(currentModelString),
-                },
-                model: currentModelString,
-              },
-              meta: {
-                agentId: context.state.agentId,
-                threadId,
-                runId: context.state.runId,
-              },
-            } as OpenBotEvent;
-          }
 
           const toolCalls = result.toolCalls ?? [];
 
+          // if (result.usage) {
+          //   const usage = result.usage;
+          //   yield {
+          //     type: 'agent:usage',
+          //     data: {
+          //       usage: {
+          //         promptTokens: usage.inputTokens,
+          //         completionTokens: usage.outputTokens,
+          //         totalTokens: usage.totalTokens,
+          //         currentContextTokens: usage.inputTokens,
+          //         contextBudget: getContextBudgetForModel(currentModelString),
+          //       },
+          //       model: currentModelString,
+          //     },
+          //     meta: {
+          //       agentId: context.state.agentId,
+          //       threadId,
+          //       runId: context.state.runId,
+          //     },
+          //   } as OpenBotEvent;
+          // }
+
+          const outputMeta = {
+            agentId: context.state.agentId,
+            threadId,
+            parentAgentId,
+            parentToolCallId,
+          };
+
+          // Text before actions so history/UI show the model's intent first.
+          if (result.text) {
+            yield {
+              type: 'agent:output',
+              data: { content: result.text },
+              meta: outputMeta,
+            };
+          }
+
           if (toolCalls.length > 0) {
+            // when multiple tool calls are made, Melony runtime handles them one by one, thats why we need to start a new batch
+            toolBatch.startBatch(toolCalls.map((tc) => tc.toolCallId));
+
             for (const toolCall of toolCalls) {
               yield {
                 type: `action:${toolCall.toolName}` as OpenBotEvent['type'],
                 data: toolCall.input,
                 meta: {
                   toolCallId: toolCall.toolCallId,
-                  agentId: context.state.agentId,
-                  threadId,
+                  ...outputMeta,
                 },
               } as unknown as OpenBotEvent;
             }
-          }
-
-          if (result.text) {
-            yield {
-              type: 'agent:output',
-              data: { content: result.text },
-              meta: { agentId: context.state.agentId, threadId },
-            };
+          } else {
+            // clear the tool batch if there are no tool calls
+            toolBatch.clear();
           }
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -298,47 +263,26 @@ export const openbotRuntime =
           return;
         }
 
+        // clear the tool batch if the agent is invoked
+        // this is to prevent the tool batch from being used for a new agent invocation
+        toolBatch.clear();
+
         const threadId = event.meta?.threadId || context.state.threadId;
         yield* runLLM(context, threadId, event as AgentInvokeEvent);
       });
 
+      // this is to handle the tool results from the tool calls
+      // because Melony runtime handles them one by one, thats why we need to record the result
       builder.on('*', async function* (event, context) {
         if (!event.type.endsWith(':result')) return;
         if (event.meta?.agentId !== context.state.agentId) return;
+
         const toolCallId = event.meta?.toolCallId;
-        if (!toolCallId) return;
+        // record the result of the tool call
+        if (!toolCallId || !toolBatch.recordResult(toolCallId)) return;
 
-        if (!storage) return;
-
-        const toolName = event.type.replace(/^action:/, '').replace(/:result$/, '');
-
-        const events = await storage.getEvents({
-          channelId: context.state.channelId,
-          threadId: context.state.threadId,
-        });
-
-        // Find the assistant message that made this tool call
-        const messages = reconstructHistory(events);
-        const lastAssistant = [...messages]
-          .reverse()
-          .find(
-            (m): m is Extract<OpenBotMessage, { role: 'assistant' }> =>
-              m.role === 'assistant' && Array.isArray(m.content) && m.content.some((p: any) => p.type === 'tool-call'),
-          );
-
-        if (lastAssistant && Array.isArray(lastAssistant.content)) {
-          const toolCalls = lastAssistant.content.filter((p: any) => p.type === 'tool-call');
-          const allFulfilled = toolCalls.every((tc: any) =>
-            messages.some(
-              (m) => m.role === 'tool' && Array.isArray(m.content) && m.content.some((p) => p.type === 'tool-result' && p.toolCallId === tc.toolCallId),
-            ),
-          );
-
-          if (allFulfilled) {
-            const threadId = event.meta?.threadId || context.state.threadId;
-            yield* runLLM(context, threadId);
-          }
-        }
+        const threadId = event.meta?.threadId || context.state.threadId;
+        yield* runLLM(context, threadId);
       });
 
       builder.on('client:ui:widget:response', async function* (event, context) {

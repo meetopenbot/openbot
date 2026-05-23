@@ -1,6 +1,6 @@
 import { MelonyPlugin } from 'melony';
-import { OpenBotEvent, OpenBotState } from '../app/types.js';
-import { AgentDetails, ConfigSchema, Storage } from './types.js';
+import { OpenBotEvent, OpenBotState } from '../../app/types.js';
+import { AgentDetails, ConfigSchema, Storage } from './domain.js';
 
 /**
  * Reference to a plugin from an agent's AGENT.md frontmatter.

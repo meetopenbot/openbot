@@ -47,9 +47,9 @@ name collisions.
 | `claude-code`   | Runtime    | Claude Agent SDK; owns its own tool loop                  |
 | `gemini-cli`    | Runtime    | Google `gemini` CLI in headless mode                      |
 | `shell`         | Tool       | `shell_exec`                                              |
-| `storage-tools` | Tool       | `create_channel`, `patch_*`, `create_variable`, ...       |
-| `ui`            | Tool       | `render_ui_widget`                                        |
-| `approval`      | Middleware | Gates protected actions behind a UI confirmation widget   |
+| `storage`       | Tool       | `create_channel`, `patch_*`, `create_variable`, ...       |
+| `memory`        | Tool       | `remember`, `recall`, `forget`                            |
+| `plugin-manager`| Infra      | Marketplace list, npm plugin install/uninstall, agent install |
 
 ## Community plugins
 
@@ -69,18 +69,11 @@ On first use OpenBot installs the package into
 
 ## Approval plugin
 
-The `approval` plugin reads its rules from per-agent config:
+The `approval` plugin gates protected tool calls behind a UI confirmation widget. By default, it gates `action:shell_exec`.
 
 ```yaml
 plugins:
   - id: approval
     config:
-      rules:
-        - action: action:shell_exec
-          message: The agent wants to run a terminal command.
-          detailKeys: [command, cwd, shell, timeoutMs]
-          hiddenKeys: [env]
+      actions: [action:shell_exec]
 ```
-
-If `rules` is omitted, sensible defaults are applied (currently: gate
-`action:shell_exec`).

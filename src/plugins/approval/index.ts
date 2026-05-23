@@ -1,228 +1,130 @@
-import { MelonyPlugin } from 'melony';
-import type { Plugin } from '../../bus/plugin.js';
-import { OpenBotEvent, OpenBotState } from '../../app/types.js';
-import { storageService } from '../../services/storage.js';
+import { randomUUID } from 'node:crypto';
+import type { Plugin } from '../../services/plugins/types.js';
+import { OpenBotEvent } from '../../app/types.js';
 
 /**
  * `approval` — gates protected tool calls behind a UI confirmation widget.
- *
- * Configuration is read from the per-agent plugin config in AGENT.md:
- * ```yaml
- * plugins:
- *   - id: approval
- *     config:
- *       rules:
- *         - action: action:shell_exec
- *           message: The agent wants to run a terminal command.
- *           detailKeys: [command, cwd, shell, timeoutMs]
- * ```
+ * 
+ * This is a simplified version that intercepts specified actions (default: shell_exec)
+ * and requires user approval before they are allowed to proceed.
  */
 
-export type ApprovalRule = {
-  action: string;
-  message?: string;
-  detailKeys?: string[];
-  hiddenKeys?: string[];
-  executeEvent?: string;
-  denyEvent?: string;
-  denyData?: Record<string, unknown>;
-};
+// In-memory tracking for pending approval IDs with TTL (shared across plugin instances)
+const pendingApprovals = new Map<string, number>();
+const TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
-export const DEFAULT_APPROVAL_RULES: ApprovalRule[] = [
-  {
-    action: 'action:shell_exec',
-    denyEvent: 'action:shell_exec:result',
-    message: 'The agent wants to run a terminal command.',
-    detailKeys: ['command', 'cwd', 'shell', 'timeoutMs'],
-    hiddenKeys: ['env'],
-    denyData: {
-      exitCode: null,
-      stdout: '',
-      stderr: 'Command execution was denied by the user.',
-      timedOut: false,
-    },
-  },
-];
+export const approvalPlugin: Plugin = {
+  id: 'approval',
+  name: 'Approval',
+  description: 'Gate protected tool calls behind a UI confirmation widget.',
+  factory: ({ config }) => (builder) => {
+    // Actions that require approval. Defaults to shell_exec.
+    const actionsToApprove = (config.actions as string[]) || ['action:shell_exec'];
 
-type PendingApproval = {
-  id: string;
-  action: string;
-  executeEvent: string;
-  denyEvent: string;
-  denyData: Record<string, unknown>;
-  payload: Record<string, unknown>;
-  meta?: Record<string, unknown>;
-  message: string;
-  createdAt: string;
-  status: 'pending' | 'approved' | 'denied';
-};
+    for (const action of actionsToApprove) {
+      builder.intercept(action as OpenBotEvent['type'], (event, context) => {
+        // If already approved in this flow, let it pass to the actual handler
+        if (event.meta?.approvalStatus === 'approved') return event;
 
-const asRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+        // Otherwise, intercept and ask for approval via a UI widget
+        const displayData = action === 'action:shell_exec'
+          ? `\`\`\`bash\n${(event as any).data.command}\n\`\`\``
+          : `\`\`\`json\n${JSON.stringify((event as any).data, null, 2)}\n\`\`\``;
 
-const getApprovalsFromState = (state: OpenBotState): Record<string, PendingApproval> => {
-  const source = state.threadDetails?.state ?? state.channelDetails?.state;
-  const stateRecord = asRecord(source);
-  return asRecord(stateRecord.approvals) as Record<string, PendingApproval>;
-};
+        const widgetId = randomUUID();
+        pendingApprovals.set(widgetId, Date.now());
 
-const persistApprovals = async (
-  state: OpenBotState,
-  approvals: Record<string, PendingApproval>,
-): Promise<void> => {
-  if (state.threadId) {
-    await storageService.patchThreadState({
-      channelId: state.channelId,
-      threadId: state.threadId,
-      state: { approvals },
-    });
-    return;
-  }
-  await storageService.patchChannelState({
-    channelId: state.channelId,
-    state: { approvals },
-  });
-};
-
-const buildApprovalPlugin =
-  (rules: ApprovalRule[]): MelonyPlugin<OpenBotState, OpenBotEvent> =>
-  (builder) => {
-    for (const rule of rules) {
-      builder.on(rule.action as OpenBotEvent['type'], async function* (event, context) {
-        const meta = asRecord(event.meta);
-        if (meta.approvalStatus === 'approved') return;
-
-        const eventData = asRecord((event as { data?: unknown }).data);
-        const eventMeta = meta;
-
-        const approvalId = `approval_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const widgetId = `widget_${approvalId}`;
-        const executeEvent = rule.executeEvent || rule.action;
-        const denyEvent = rule.denyEvent || `${rule.action}:result`;
-        const denyData = rule.denyData || {};
-        const hiddenKeys = new Set(rule.hiddenKeys || []);
-        const detailKeys = rule.detailKeys || Object.keys(eventData);
-        const details = detailKeys
-          .filter((key) => !hiddenKeys.has(key))
-          .map((key) => `- ${key}: ${String(eventData[key] ?? '')}`)
-          .join('\n');
-
-        const pendingApprovals = getApprovalsFromState(context.state);
-        pendingApprovals[approvalId] = {
-          id: approvalId,
-          action: rule.action,
-          executeEvent,
-          denyEvent,
-          denyData,
-          payload: eventData,
-          meta: eventMeta,
-          message: rule.message || `Approval required for ${rule.action}.`,
-          createdAt: new Date().toISOString(),
-          status: 'pending',
-        };
-        await persistApprovals(context.state, pendingApprovals);
-
-        yield {
+        context.suspend({
           type: 'client:ui:widget',
           data: {
-            kind: 'choice',
             widgetId,
-            title: 'Approval Required',
-            body: `${rule.message || 'A protected action requires approval.'}${
-              details ? `\n\n${details}` : ''
-            }`,
-            metadata: { type: 'approval:request', approvalId, action: rule.action },
+            kind: 'message',
+            title: `The agent wants to perform \`${action}\``,
+            body: displayData,
+            metadata: {
+              type: 'approval:request',
+              originalEvent: event,
+            },
             actions: [
               { id: 'approve', label: 'Approve', variant: 'primary' },
               { id: 'deny', label: 'Deny', variant: 'danger' },
             ],
           },
-          meta: { ...(event.meta || {}), agentId: context.state.agentId },
-        } as OpenBotEvent;
-
-        yield {
-          type: 'agent:output',
-          data: { content: `Waiting for approval before running \`${rule.action}\`.` },
-          meta: { ...(event.meta || {}), agentId: context.state.agentId },
-        } as OpenBotEvent;
-
-        context.suspend();
+          meta: { agentId: context.state.agentId, threadId: context.state.threadId },
+        } as OpenBotEvent);
       });
     }
 
+    // Handle the user's response from the UI widget
     builder.on('client:ui:widget:response', async function* (event, context) {
-      const metadata = asRecord(event.data?.metadata);
-      if (metadata.type !== 'approval:request') return;
+      const { widgetId, actionId } = event.data;
+      const metadata = event.data?.metadata;
+      if (metadata?.type !== 'approval:request') return;
 
-      const approvalId = String(metadata.approvalId || '');
-      if (!approvalId) return;
-
-      const approvals = getApprovalsFromState(context.state);
-      const approval = approvals[approvalId];
-      if (!approval || approval.status !== 'pending') {
-        yield {
-          type: 'agent:output',
-          data: { content: 'Approval request not found or already resolved.' },
-          meta: { ...(event.meta || {}), agentId: context.state.agentId },
-        } as OpenBotEvent;
+      // Verify the widget is still pending and hasn't expired
+      if (!widgetId || !pendingApprovals.has(widgetId)) {
+        console.warn(`[approval] Received response for unknown or already handled widget: ${widgetId}`);
         return;
       }
 
-      const approved = event.data.actionId === 'approve';
-      approvals[approvalId] = {
-        ...approval,
-        status: approved ? 'approved' : 'denied',
-      };
-      await persistApprovals(context.state, approvals);
+      const timestamp = pendingApprovals.get(widgetId)!;
+      if (Date.now() - timestamp > TTL_MS) {
+        pendingApprovals.delete(widgetId);
+        console.warn(`[approval] Received response for expired widget: ${widgetId}`);
+        return;
+      }
+
+      // Mark as handled
+      pendingApprovals.delete(widgetId);
+
+      const originalEvent = metadata.originalEvent as OpenBotEvent;
+      const approved = actionId === 'approve';
+
+      // Yield a "responded" widget update to the UI
+      yield {
+        type: 'client:ui:widget',
+        data: {
+          widgetId,
+          kind: 'message',
+          title: `Action ${approved ? 'Approved' : 'Denied'}`,
+          body: `The request for \`${originalEvent.type}\` was ${approved ? 'approved' : 'denied'}.`,
+          state: approved ? 'submitted' : 'cancelled',
+          display: 'collapsed',
+          disabled: true,
+          actions: [], // Clear actions to disable buttons in UI
+        },
+        meta: { agentId: context.state.agentId, threadId: context.state.threadId },
+      } as OpenBotEvent;
 
       if (approved) {
+        // Re-emit the original event with approved status so the actual handler can run
         yield {
-          type: approval.executeEvent as OpenBotEvent['type'],
-          data: approval.payload,
+          ...originalEvent,
           meta: {
-            ...(approval.meta || {}),
-            approvalId,
+            ...(originalEvent.meta || {}),
             approvalStatus: 'approved',
           },
+        };
+      } else {
+        // Emit a failure result event for the denied action
+        // yield {
+        //   type: `${originalEvent.type}:result` as OpenBotEvent['type'],
+        //   data: {
+        //     success: false,
+        //     error: 'Action denied by user.',
+        //     stderr: 'Action denied by user.',
+        //   },
+        //   meta: originalEvent.meta,
+        // } as OpenBotEvent;
+
+        yield {
+          type: 'agent:output',
+          data: { content: `Action \`${originalEvent.type}\` was denied.` },
+          meta: { agentId: context.state.agentId },
         } as OpenBotEvent;
-        return;
       }
-
-      yield {
-        type: approval.denyEvent as OpenBotEvent['type'],
-        data: {
-          success: false,
-          approved: false,
-          error: 'Action denied by user approval.',
-          ...approval.denyData,
-        },
-        meta: { ...(approval.meta || {}), approvalId },
-      } as OpenBotEvent;
-
-      yield {
-        type: 'agent:output',
-        data: { content: 'Action denied by user approval.' },
-        meta: { ...(event.meta || {}), agentId: context.state.agentId },
-      } as OpenBotEvent;
     });
-  };
-
-const readRules = (config: Record<string, unknown>): ApprovalRule[] => {
-  const raw = config.rules;
-  if (!Array.isArray(raw)) return DEFAULT_APPROVAL_RULES;
-  return raw.filter(
-    (entry): entry is ApprovalRule =>
-      !!entry && typeof entry === 'object' && typeof (entry as { action?: unknown }).action === 'string',
-  );
-};
-
-export const approvalPlugin: Plugin = {
-  id: 'approval',
-  name: 'Approval',
-  description: 'Gate protected tool calls (e.g. shell_exec) behind a UI confirmation prompt.',
-  factory: ({ config }) => buildApprovalPlugin(readRules(config)),
+  },
 };
 
 export default approvalPlugin;

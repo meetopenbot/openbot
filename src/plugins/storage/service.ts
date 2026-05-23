@@ -1,3 +1,4 @@
+import { ORCHESTRATOR_AGENT_ID, STATE_AGENT_ID } from '../../app/agent-ids.js';
 import {
   DEFAULT_PLUGINS_DIR,
   DEFAULT_AGENTS_DIR,
@@ -7,7 +8,7 @@ import {
   resolvePath,
   StoredVariable,
   VARIABLES_FILE,
-} from '../app/config.js';
+} from '../../app/config.js';
 import fs from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -22,14 +23,14 @@ import {
   PluginDescriptor,
   Thread,
   ThreadDetails,
-} from '../bus/types.js';
-import type { PluginRef } from '../bus/plugin.js';
-import { openbotPlugin } from '../plugins/openbot/index.js';
-import { OPENBOT_SYSTEM_PROMPT } from '../plugins/openbot/system-prompt.js';
-import { listBuiltInPlugins, parsePluginModule } from '../registry/plugins.js';
-import { OpenBotEvent, OpenBotState } from '../app/types.js';
-import { processService } from '../harness/process.js';
-import { memoryService } from './memory.js';
+} from '../../services/plugins/domain.js';
+import type { PluginRef } from '../../services/plugins/types.js';
+import { openbotPlugin } from '../openbot/index.js';
+import { OPENBOT_SYSTEM_PROMPT } from '../openbot/system-prompt.js';
+import { listBuiltInPlugins, parsePluginModule } from '../../services/plugins/registry.js';
+import { OpenBotEvent, OpenBotState } from '../../app/types.js';
+import { processService } from '../../services/process.js';
+import { memoryService } from '../memory/service.js';
 
 const resolveBaseDir = () => {
   const config = loadConfig();
@@ -49,7 +50,10 @@ function getBundledSystemAgentImage(): string | undefined {
   if (bundledSystemAgentImageLoaded) return bundledSystemAgentImage;
   bundledSystemAgentImageLoaded = true;
   try {
-    const iconPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '../assets/icon.svg');
+    const iconPath = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../assets/icon.svg',
+    );
     const trimmed = readFileSync(iconPath, 'utf-8').trim();
     if (!trimmed.startsWith('<svg')) return undefined;
     bundledSystemAgentImage = toSvgDataUrl(trimmed);
@@ -103,17 +107,24 @@ const getConversationDir = (channelId: string, threadId?: string) => {
 };
 
 /** Built-in orchestrator agent id. Not creatable as a normal disk agent. */
-const SYSTEM_AGENT_ID = 'system';
+const SYSTEM_AGENT_ID = ORCHESTRATOR_AGENT_ID;
 
 const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
-  { id: 'openbot', config: { model: 'openai/gpt-5.4-nano' } },
-  { id: 'storage-tools' },
+  { id: 'openbot', config: { model: 'openai/gpt-5.4-mini' } },
   { id: 'shell' },
-  { id: 'todo' },
-  // { id: 'ui' },
   { id: 'approval' },
   { id: 'memory' },
+  { id: 'delegation' },
 ];
+
+/** No `openbot` / `shell` — storage-side effects and infra plugins only. */
+const STATE_DEFAULT_PLUGINS: PluginRef[] = [
+  { id: 'storage' },
+  { id: 'plugin-manager' },
+];
+
+const STATE_AGENT_INSTRUCTIONS =
+  'Built-in infra agent for deterministic state reads. No conversational model is attached; handle storage, approvals, memory, and plugin marketplace events.';
 
 function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails {
   const defaults: AgentDetails = {
@@ -121,7 +132,7 @@ function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails 
     name: 'OpenBot',
     image: getBundledSystemAgentImage(),
     description:
-      'First-party orchestration agent for OpenBot. Coordinates other agents via shared todos.',
+      'First-party orchestration agent for OpenBot.',
     instructions: OPENBOT_SYSTEM_PROMPT,
     plugins: SYSTEM_DEFAULT_PLUGINS.map((ref) => ref.id),
     pluginRefs: SYSTEM_DEFAULT_PLUGINS,
@@ -151,10 +162,45 @@ function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails 
   };
 }
 
+function getStateAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails {
+  const defaults: AgentDetails = {
+    id: STATE_AGENT_ID,
+    name: 'State',
+    image: getBundledSystemAgentImage(),
+    description: 'Infrastructure agent for OpenBot — storage and hooks without an LLM.',
+    instructions: STATE_AGENT_INSTRUCTIONS,
+    plugins: STATE_DEFAULT_PLUGINS.map((ref) => ref.id),
+    pluginRefs: STATE_DEFAULT_PLUGINS,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  if (!overrides) return defaults;
+
+  const refs = overrides.pluginRefs && overrides.pluginRefs.length > 0
+    ? overrides.pluginRefs
+    : defaults.pluginRefs;
+
+  const diskInstructions = overrides.instructions?.trim();
+  const instructions =
+    diskInstructions && diskInstructions.length > 0 ? diskInstructions : defaults.instructions;
+
+  return {
+    ...defaults,
+    ...overrides,
+    id: STATE_AGENT_ID,
+    instructions,
+    image: overrides.image || defaults.image,
+    plugins: refs.map((ref) => ref.id),
+    pluginRefs: refs,
+    updatedAt: new Date(),
+  };
+}
+
 // Suppress unused warning until system agent customization re-uses openbotPlugin metadata.
 void openbotPlugin;
 
-const RESERVED_DISK_AGENT_IDS = new Set([SYSTEM_AGENT_ID]);
+const RESERVED_DISK_AGENT_IDS = new Set([SYSTEM_AGENT_ID, STATE_AGENT_ID]);
 
 const assertValidDiskAgentId = (agentId: string): void => {
   if (!agentId || typeof agentId !== 'string') {
@@ -178,9 +224,7 @@ const THREAD_TITLE_MAX_LENGTH = 80;
 const buildThreadTitleFromEvent = (event: OpenBotEvent): string | undefined => {
   let rawContent = '';
 
-  if (event.type === 'user:input' && typeof event.data?.content === 'string') {
-    rawContent = event.data.content;
-  } else if (
+  if (
     event.type === 'agent:invoke' &&
     event.data?.role === 'user' &&
     typeof event.data.content === 'string'
@@ -778,8 +822,20 @@ export const storageService = {
       updatedAt: system.updatedAt,
     };
 
+    const builtInStateRow = await storageService.getAgentDetails({ agentId: STATE_AGENT_ID });
+    const builtInStateAgent: Agent = {
+      id: builtInStateRow.id,
+      name: builtInStateRow.name,
+      description: builtInStateRow.description || '',
+      image: builtInStateRow.image,
+      plugins: builtInStateRow.plugins,
+      createdAt: builtInStateRow.createdAt,
+      updatedAt: builtInStateRow.updatedAt,
+    };
+
     const deduped = new Map<string, Agent>();
     deduped.set(builtInSystemAgent.id, builtInSystemAgent);
+    deduped.set(builtInStateAgent.id, builtInStateAgent);
     for (const agent of agents) {
       if (!deduped.has(agent.id)) deduped.set(agent.id, agent);
     }
@@ -832,17 +888,21 @@ export const storageService = {
         updatedAt: stats.mtime,
       };
     } catch (error) {
-      if (agentId !== SYSTEM_AGENT_ID) {
+      if (agentId !== SYSTEM_AGENT_ID && agentId !== STATE_AGENT_ID) {
         const err = new Error(`Agent "${agentId}" does not exist.`);
         (err as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
         throw err;
       }
-      // swallow: system agent has on-disk overrides optional
+      // swallow: built-in agents have optional `agents/<id>/AGENT.md` overrides
       void error;
     }
 
     if (agentId === SYSTEM_AGENT_ID) {
       return getSystemAgentDetails(diskDetails);
+    }
+
+    if (agentId === STATE_AGENT_ID) {
+      return getStateAgentDetails(diskDetails);
     }
 
     if (!diskDetails) {

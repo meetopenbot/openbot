@@ -1,7 +1,7 @@
 import { MelonyPlugin } from 'melony';
 import { z } from 'zod';
 import { spawn } from 'node:child_process';
-import type { Plugin } from '../../bus/plugin.js';
+import type { Plugin } from '../../services/plugins/types.js';
 import { OpenBotEvent, OpenBotState } from '../../app/types.js';
 
 const shellToolDefinitions = {

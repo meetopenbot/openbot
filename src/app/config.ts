@@ -82,24 +82,3 @@ export function loadVariables(): { version: number; variables: StoredVariable[] 
   }
   return { version: 1, variables: [] };
 }
-
-export const DEFAULT_AGENT_MD = `---
-description: A specialized AI agent
----
-
-# Agent Profile
-
-You are a specialized AI agent within the OpenBot system.
-Your role is defined by your configuration and the tools you have access to.
-
-## Persona
-- Helpful and precise
-- Focused on my specific domain
-- Professional in all interactions
-`;
-
-export const DEFAULT_USER_MD = `# About Me
-
-<!-- OpenBot reads this file to understand who you are and how you like to work. -->
-<!-- Edit it here or just chat — agents can update it with the "remember" tool. -->
-`;

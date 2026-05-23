@@ -1,28 +1,31 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { Plugin } from '../bus/plugin.js';
-import { openbotPlugin } from '../plugins/openbot/index.js';
-import { shellPlugin } from '../plugins/shell/index.js';
-import { storageToolsPlugin } from '../plugins/storage-tools/index.js';
-import { uiPlugin } from '../plugins/ui/index.js';
-import { approvalPlugin } from '../plugins/approval/index.js';
-import { memoryPlugin } from '../plugins/memory/index.js';
-import { todoPlugin } from '../plugins/todo/index.js';
-import { DEFAULT_PLUGINS_DIR, DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
+import type { Plugin } from './types.js';
+import { openbotPlugin } from '../../plugins/openbot/index.js';
+import { shellPlugin } from '../../plugins/shell/index.js';
+import { storagePlugin } from '../../plugins/storage/index.js';
+import { approvalPlugin } from '../../plugins/approval/index.js';
+import { memoryPlugin } from '../../plugins/memory/index.js';
+import { delegationPlugin } from '../../plugins/delegation/index.js';
+import { pluginManagerPlugin } from '../../plugins/plugin-manager/index.js';
+import { DEFAULT_PLUGINS_DIR, DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../../app/config.js';
+import {
+  invalidatePlugin as clearResolvedPluginEntry,
+  loadedCommunityPlugins,
+  resolvedPluginCache,
+} from './plugin-cache.js';
 
 let pluginsDir: string | null = null;
-const loadedPlugins = new Set<string>();
-const cache = new Map<string, Plugin>();
 
 const BUILT_IN: Record<string, Plugin> = {
   [openbotPlugin.id]: openbotPlugin,
   [shellPlugin.id]: shellPlugin,
-  [storageToolsPlugin.id]: storageToolsPlugin,
-  [uiPlugin.id]: uiPlugin,
+  [storagePlugin.id]: storagePlugin,
   [approvalPlugin.id]: approvalPlugin,
   [memoryPlugin.id]: memoryPlugin,
-  [todoPlugin.id]: todoPlugin,
+  [delegationPlugin.id]: delegationPlugin,
+  [pluginManagerPlugin.id]: pluginManagerPlugin,
 };
 
 /**
@@ -79,9 +82,9 @@ export function initPlugins(dir?: string) {
  *     in which case the folder layout is `plugins/<id>/dist/index.js`.
  */
 export async function resolvePlugin(id: string): Promise<Plugin | null> {
-  if (cache.has(id)) return cache.get(id)!;
+  if (resolvedPluginCache.has(id)) return resolvedPluginCache.get(id)!;
   if (BUILT_IN[id]) {
-    cache.set(id, BUILT_IN[id]);
+    resolvedPluginCache.set(id, BUILT_IN[id]);
     return BUILT_IN[id];
   }
 
@@ -105,10 +108,10 @@ export async function resolvePlugin(id: string): Promise<Plugin | null> {
       return null;
     }
     const plugin: Plugin = { id, ...parsed, name: parsed.name || id };
-    cache.set(id, plugin);
-    if (!loadedPlugins.has(id)) {
+    resolvedPluginCache.set(id, plugin);
+    if (!loadedCommunityPlugins.has(id)) {
       console.log(`[plugins] Loaded community plugin "${id}" from ${distPath}`);
-      loadedPlugins.add(id);
+      loadedCommunityPlugins.add(id);
     }
     return plugin;
   } catch (e) {
@@ -119,8 +122,7 @@ export async function resolvePlugin(id: string): Promise<Plugin | null> {
 
 /** Drop a single id from the in-memory cache (e.g. after fresh install). */
 export function invalidatePlugin(id: string): void {
-  cache.delete(id);
-  loadedPlugins.delete(id);
+  clearResolvedPluginEntry(id);
 }
 
 /** List built-in plugins (for marketplace/registry views). */

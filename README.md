@@ -18,7 +18,8 @@ OpenBot is a local-first harness for running AI agents. It is built around a sma
 
 - Runs a local agent server.
 - Stores channels, threads, agents, plugins, config, and variables under `~/.openbot`.
-- Ships with a built-in `system` agent named OpenBot.
+- Ships with a built-in `system` agent named OpenBot (orchestrator, includes the LLM runtime).
+- Ships with a built-in `state` agent for deterministic, non-LLM handling (e.g. `/api/state` defaults).
 - Loads custom agents from `~/.openbot/agents/<agent-id>/AGENT.md`.
 - Loads shared plugins from `~/.openbot/plugins`.
 - Streams events to clients with Server-Sent Events.
@@ -50,15 +51,17 @@ npm run dev
 OpenBot intentionally keeps the public API small:
 
 - `GET /api/events` opens an SSE stream for a channel or thread.
-- `POST /api/publish` publishes an event into the harness.
-- `GET /api/state` runs an event and returns the resulting events without opening a stream.
+- `POST /api/publish` publishes an event into the harness (defaults to the built-in `system` agent with the OpenBot / LLM runtime).
+- `GET /api/state` runs an event and returns the resulting events without opening a stream (defaults to the built-in `state` agent: storage-oriented plugins, no LLM).
+
+You can override the agent with `agentId` (header, query, or body where applicable).
 
 Example:
 
 ```bash
 curl -X POST http://localhost:4132/api/publish \
   -H "content-type: application/json" \
-  -d '{"type":"user:input","data":{"content":"hello"}}'
+  -d '{"type":"agent:invoke","data":{"role":"user","content":"hello"}}'
 ```
 
 Useful context can be passed as headers, query params, or body fields:
@@ -94,7 +97,7 @@ plugins:
   - id: openbot
     config:
       model: openai/gpt-4o-mini
-  - id: storage-tools
+  - id: storage
 ---
 
 You are a careful research assistant.
@@ -109,7 +112,6 @@ Built-in plugins include:
 
 - `storage-tools`
 - `delegation`
-- `ui`
 - `openbot`
 
 Shared plugins can be placed in `~/.openbot/plugins` and referenced by agents.
