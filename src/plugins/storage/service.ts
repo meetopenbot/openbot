@@ -110,11 +110,13 @@ const getConversationDir = (channelId: string, threadId?: string) => {
 const SYSTEM_AGENT_ID = ORCHESTRATOR_AGENT_ID;
 
 const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
+  { id: 'naming' },
   { id: 'openbot', config: { model: 'openai/gpt-5.4-mini' } },
   { id: 'shell' },
   { id: 'approval' },
   { id: 'memory' },
   { id: 'delegation' },
+  { id: 'storage' },
 ];
 
 /** No `openbot` / `shell` — storage-side effects and infra plugins only. */
@@ -570,7 +572,7 @@ export const storageService = {
 
     const baseState: Record<string, unknown> = { ...(initialState || {}) };
     if (threadTitle?.trim()) {
-      baseState.generatedName = threadTitle.trim();
+      baseState.name = threadTitle.trim();
     }
 
     await fs.mkdir(threadDir, { recursive: true });
@@ -598,10 +600,10 @@ export const storageService = {
         try {
           const threadStateRaw = await fs.readFile(threadStatePath, 'utf-8');
           const threadState = JSON.parse(threadStateRaw) as Record<string, unknown>;
-          const generatedName =
-            typeof threadState.generatedName === 'string' ? threadState.generatedName.trim() : '';
-          if (generatedName) {
-            threadDisplayName = generatedName;
+          const threadName =
+            typeof threadState.name === 'string' ? threadState.name.trim() : '';
+          if (threadName) {
+            threadDisplayName = threadName;
           }
         } catch (error: unknown) {
           if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
@@ -647,14 +649,14 @@ export const storageService = {
       }
     }
 
-    const generatedName =
-      isRecord(state) && typeof state.generatedName === 'string'
-        ? state.generatedName.trim()
+    const threadName =
+      isRecord(state) && typeof state.name === 'string'
+        ? state.name.trim()
         : '';
 
     return {
       id: threadId,
-      name: generatedName || threadId,
+      name: threadName || threadId,
       channelId,
       state,
     };
@@ -1124,8 +1126,10 @@ export const storageService = {
     try {
       const threadDir = getConversationDir(channelId, threadId);
       if (threadId) {
+        let exists = false;
         try {
           await fs.access(threadDir);
+          exists = true;
         } catch (error: unknown) {
           if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
             const threadTitle = buildThreadTitleFromEvent(event);
@@ -1136,6 +1140,23 @@ export const storageService = {
             });
           } else {
             throw error;
+          }
+        }
+
+        if (exists) {
+          // If the thread already exists, check if it has a name.
+          // This handles threads created via action:create_thread without a title.
+          const threadDetails = await storageService.getThreadDetails({ channelId, threadId });
+          const currentState = (threadDetails.state as Record<string, unknown>) || {};
+          if (!currentState.name) {
+            const threadTitle = buildThreadTitleFromEvent(event);
+            if (threadTitle) {
+              await storageService.patchThreadState({
+                channelId,
+                threadId,
+                state: { name: threadTitle },
+              });
+            }
           }
         }
       } else {

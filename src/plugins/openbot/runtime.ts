@@ -127,6 +127,10 @@ export const openbotRuntime =
 
         const messages = eventsToModelMessages(events);
 
+        // console.log('systemPrompt:::::::\n', systemPrompt);
+        // console.log('messages:::::::\n', JSON.stringify(messages, null, 2));
+        // console.log('toolDefinitions:::::::\n', JSON.stringify(toolDefinitions, null, 2));
+
         try {
           // Single LLM request — tool execution happens externally via action:* handlers.
           const result = await generateText({
@@ -135,6 +139,7 @@ export const openbotRuntime =
             messages,
             tools: toolDefinitions as Record<string, { description: string; inputSchema: any }>,
             stopWhen: ({ steps }) => steps.length === 1,
+            allowSystemInMessages: true,
           });
 
           const toolCalls = result.toolCalls ?? [];

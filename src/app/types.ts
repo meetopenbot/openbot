@@ -694,6 +694,13 @@ export type AgentUsageEvent = BaseEvent & {
   };
 };
 
+export type AgentHintEvent = BaseEvent & {
+  type: 'agent:hint';
+  data: {
+    content: string;
+  };
+};
+
 export type RememberEvent = BaseEvent & {
   type: 'action:remember';
   data: {
@@ -783,6 +790,7 @@ export type OpenBotEvent =
   | AgentRunStartEvent
   | AgentRunEndEvent
   | AgentRunStoppedEvent
+  | AgentHintEvent
   | ActiveRunsSnapshotEvent
   | StopAgentRunEvent
   | StopAgentRunResultEvent

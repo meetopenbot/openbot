@@ -8,6 +8,7 @@ import { storagePlugin } from '../../plugins/storage/index.js';
 import { approvalPlugin } from '../../plugins/approval/index.js';
 import { memoryPlugin } from '../../plugins/memory/index.js';
 import { delegationPlugin } from '../../plugins/delegation/index.js';
+import { namingPlugin } from '../../plugins/naming/index.js';
 import { pluginManagerPlugin } from '../../plugins/plugin-manager/index.js';
 import { DEFAULT_PLUGINS_DIR, DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../../app/config.js';
 import {
@@ -25,6 +26,7 @@ const BUILT_IN: Record<string, Plugin> = {
   [approvalPlugin.id]: approvalPlugin,
   [memoryPlugin.id]: memoryPlugin,
   [delegationPlugin.id]: delegationPlugin,
+  [namingPlugin.id]: namingPlugin,
   [pluginManagerPlugin.id]: pluginManagerPlugin,
 };
 

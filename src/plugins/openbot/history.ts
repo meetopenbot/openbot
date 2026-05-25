@@ -39,6 +39,14 @@ export function eventsToModelMessages(events: OpenBotEvent[]): ModelMessage[] {
         break;
       }
 
+      case 'agent:hint': {
+        messages.push({
+          role: 'system',
+          content: event.data.content
+        } as any);
+        break;
+      }
+
       default:
         // Handle tool calls (action:*)
         if (event.type.startsWith('action:') && !event.type.endsWith(':result')) {
