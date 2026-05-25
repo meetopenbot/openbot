@@ -113,6 +113,7 @@ export interface Storage {
   getAgents: () => Promise<Agent[]>;
   getPlugins: () => Promise<PluginDescriptor[]>;
   getAgentDetails: (args: { agentId: string }) => Promise<AgentDetails>;
+  /** Includes built-in `system` / `state` agents as optional AGENT.md overlays. */
   createAgent: (args: {
     agentId: string;
     name: string;
@@ -122,6 +123,7 @@ export interface Storage {
     instructions: string;
     plugins: PluginRef[];
   }) => Promise<void>;
+  /** Partial update; for `system` / `state`, creates overlay file if missing. */
   updateAgent: (args: {
     agentId: string;
     name?: string;
@@ -131,6 +133,7 @@ export interface Storage {
     instructions?: string;
     plugins?: PluginRef[];
   }) => Promise<void>;
+  /** For `system` / `state`, removes only `AGENT.md` (reverts to code defaults). */
   deleteAgent: (args: { agentId: string }) => Promise<void>;
   getEvents: (args: { channelId: string; threadId?: string }) => Promise<OpenBotEvent[]>;
   getChannelDetails: (args: { channelId: string }) => Promise<ChannelDetails>;

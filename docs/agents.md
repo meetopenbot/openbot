@@ -42,11 +42,14 @@ one, the agent will not respond to user input. Built-in runtime plugins:
 plugins like `shell` to them has no effect. Pair tool plugins with
 `openbot`.
 
-## Built-in agent
+## Built-in agents
 
-OpenBot ships a built-in `system` agent (the orchestrator) with the
-`openbot` runtime plus the standard tool plugins (storage, shell,
-delegation, ui, approval, memory). It cannot be deleted.
+OpenBot ships a built-in **`system`** agent (the orchestrator) with the `openbot`
+runtime plus the standard tool plugins (storage, shell, delegation,
+approval, memory, etc.). A built-in **`state`** agent backs deterministic
+`/api/state` handling and infra events.
+
+You can optionally persist overrides for either id at `~/.openbot/agents/system/AGENT.md` or `~/.openbot/agents/state/AGENT.md`. When present, settings are merged on top of the code defaults (`getAgentDetails`). Use **`action:storage:create-agent`** to create an overlay once, **`action:storage:update-agent`** for partial updates (creating the file if missing for `system` / `state`), and **`action:storage:delete-agent`** to remove only that `AGENT.md` and revert to defaults (other files under the folder are left untouched).
 
 ## Memory
 

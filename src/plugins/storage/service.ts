@@ -202,14 +202,13 @@ function getStateAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails {
 // Suppress unused warning until system agent customization re-uses openbotPlugin metadata.
 void openbotPlugin;
 
-const RESERVED_DISK_AGENT_IDS = new Set([SYSTEM_AGENT_ID, STATE_AGENT_ID]);
+/** Built-in agents may persist optional `agents/<id>/AGENT.md` overlays; read path merges them with defaults. */
+const isBuiltinOverlayAgentId = (agentId: string): boolean =>
+  agentId === SYSTEM_AGENT_ID || agentId === STATE_AGENT_ID;
 
-const assertValidDiskAgentId = (agentId: string): void => {
+const assertAgentIdFormat = (agentId: string): void => {
   if (!agentId || typeof agentId !== 'string') {
     throw new Error('agentId is required');
-  }
-  if (RESERVED_DISK_AGENT_IDS.has(agentId)) {
-    throw new Error(`Agent id "${agentId}" is reserved`);
   }
   if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) {
     throw new Error('agentId must contain only letters, digits, underscores, and hyphens');
@@ -930,7 +929,7 @@ export const storageService = {
     instructions: string;
     plugins: PluginRef[];
   }): Promise<void> => {
-    assertValidDiskAgentId(agentId);
+    assertAgentIdFormat(agentId);
     const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
     const agentMdPath = path.join(agentDir, 'AGENT.md');
 
@@ -977,7 +976,7 @@ export const storageService = {
     instructions?: string;
     plugins?: PluginRef[];
   }): Promise<void> => {
-    assertValidDiskAgentId(agentId);
+    assertAgentIdFormat(agentId);
     const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
     const agentMdPath = path.join(agentDir, 'AGENT.md');
 
@@ -986,14 +985,18 @@ export const storageService = {
       raw = await fs.readFile(agentMdPath, 'utf-8');
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
-        const err = new Error(`Agent "${agentId}" does not exist.`);
-        (err as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
-        throw err;
+        if (!isBuiltinOverlayAgentId(agentId)) {
+          const err = new Error(`Agent "${agentId}" does not exist.`);
+          (err as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
+          throw err;
+        }
+        raw = '';
+      } else {
+        throw error;
       }
-      throw error;
     }
 
-    const parsed = matter(raw);
+    const parsed = raw === '' ? { data: {}, content: '' } : matter(raw);
     const nextData: Record<string, unknown> = { ...parsed.data };
     if (name !== undefined) nextData.name = name;
     if (description !== undefined) nextData.description = description;
@@ -1008,13 +1011,39 @@ export const storageService = {
 
     const nextContent = instructions !== undefined ? instructions : parsed.content;
     const body = matter.stringify(`${String(nextContent).trim()}\n`, nextData);
+    await fs.mkdir(path.dirname(agentMdPath), { recursive: true });
     await fs.writeFile(agentMdPath, body, 'utf-8');
   },
   deleteAgent: async ({ agentId }: { agentId: string }): Promise<void> => {
-    assertValidDiskAgentId(agentId);
+    assertAgentIdFormat(agentId);
     const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
     const agentMdPath = path.join(agentDir, 'AGENT.md');
     const packageJsonPath = path.join(agentDir, 'package.json');
+
+    if (isBuiltinOverlayAgentId(agentId)) {
+      try {
+        await fs.access(agentMdPath);
+      } catch (error: unknown) {
+        if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+          const err = new Error(
+            `Agent "${agentId}" has no AGENT.md on disk; nothing to remove (defaults already apply).`,
+          );
+          (err as Error & { code?: string }).code = 'AGENT_NOT_FOUND';
+          throw err;
+        }
+        throw error;
+      }
+      await fs.unlink(agentMdPath);
+      try {
+        const remaining = await fs.readdir(agentDir);
+        if (remaining.length === 0) {
+          await fs.rmdir(agentDir);
+        }
+      } catch {
+        // ignore cleanup failures
+      }
+      return;
+    }
 
     try {
       await fs.access(agentDir);
