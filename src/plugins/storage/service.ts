@@ -173,6 +173,7 @@ function getStateAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails {
     instructions: STATE_AGENT_INSTRUCTIONS,
     plugins: STATE_DEFAULT_PLUGINS.map((ref) => ref.id),
     pluginRefs: STATE_DEFAULT_PLUGINS,
+    hidden: true,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -193,11 +194,23 @@ function getStateAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails {
     id: STATE_AGENT_ID,
     instructions,
     image: overrides.image || defaults.image,
+    hidden: overrides.hidden !== undefined ? overrides.hidden : defaults.hidden,
     plugins: refs.map((ref) => ref.id),
     pluginRefs: refs,
     updatedAt: new Date(),
   };
 }
+
+const agentSummaryFromDetails = (details: AgentDetails): Agent => ({
+  id: details.id,
+  name: details.name || details.id,
+  description: details.description || '',
+  image: details.image,
+  plugins: details.plugins,
+  hidden: details.hidden,
+  createdAt: details.createdAt,
+  updatedAt: details.updatedAt,
+});
 
 // Suppress unused warning until system agent customization re-uses openbotPlugin metadata.
 void openbotPlugin;
@@ -388,6 +401,12 @@ const readChannelStateFileFields = (
  * Parse the `plugins:` array from AGENT.md frontmatter. Each entry must have an
  * `id`; `config` is optional. Strings are accepted as a shorthand for `{ id }`.
  */
+const parseHiddenFlag = (raw: unknown): boolean | undefined => {
+  if (raw === true) return true;
+  if (raw === false) return false;
+  return undefined;
+};
+
 const parsePluginRefs = (raw: unknown): PluginRef[] => {
   if (!Array.isArray(raw)) return [];
   const refs: PluginRef[] = [];
@@ -790,15 +809,7 @@ export const storageService = {
       agentIds.map(async (id) => {
         try {
           const details = await storageService.getAgentDetails({ agentId: id });
-          return {
-            id,
-            name: details.name || id,
-            description: details.description || '',
-            image: details.image,
-            plugins: details.plugins,
-            createdAt: details.createdAt,
-            updatedAt: details.updatedAt,
-          } satisfies Agent;
+          return agentSummaryFromDetails(details);
         } catch {
           return {
             id,
@@ -813,26 +824,10 @@ export const storageService = {
     );
 
     const system = await storageService.getAgentDetails({ agentId: SYSTEM_AGENT_ID });
-    const builtInSystemAgent: Agent = {
-      id: system.id,
-      name: system.name,
-      description: system.description || '',
-      image: system.image,
-      plugins: system.plugins,
-      createdAt: system.createdAt,
-      updatedAt: system.updatedAt,
-    };
+    const builtInSystemAgent = agentSummaryFromDetails(system);
 
     const builtInStateRow = await storageService.getAgentDetails({ agentId: STATE_AGENT_ID });
-    const builtInStateAgent: Agent = {
-      id: builtInStateRow.id,
-      name: builtInStateRow.name,
-      description: builtInStateRow.description || '',
-      image: builtInStateRow.image,
-      plugins: builtInStateRow.plugins,
-      createdAt: builtInStateRow.createdAt,
-      updatedAt: builtInStateRow.updatedAt,
-    };
+    const builtInStateAgent = agentSummaryFromDetails(builtInStateRow);
 
     const deduped = new Map<string, Agent>();
     deduped.set(builtInSystemAgent.id, builtInSystemAgent);
@@ -841,7 +836,7 @@ export const storageService = {
       if (!deduped.has(agent.id)) deduped.set(agent.id, agent);
     }
 
-    return Array.from(deduped.values());
+    return Array.from(deduped.values()).filter((agent) => !agent.hidden);
   },
   getPlugins: async (): Promise<PluginDescriptor[]> => {
     const [builtIn, fromDisk] = await Promise.all([
@@ -885,6 +880,7 @@ export const storageService = {
         pluginRefs,
         description: typeof data.description === 'string' ? data.description : '',
         image: frontmatterImage || discoveredImage || undefined,
+        hidden: parseHiddenFlag(data.hidden),
         createdAt: stats.birthtime,
         updatedAt: stats.mtime,
       };
@@ -919,6 +915,7 @@ export const storageService = {
     name,
     description = '',
     image,
+    hidden,
     instructions,
     plugins,
   }: {
@@ -926,6 +923,7 @@ export const storageService = {
     name: string;
     description?: string;
     image?: string;
+    hidden?: boolean;
     instructions: string;
     plugins: PluginRef[];
   }): Promise<void> => {
@@ -957,6 +955,9 @@ export const storageService = {
     if (typeof image === 'string' && image.trim() !== '') {
       data.image = image.trim();
     }
+    if (hidden === true) {
+      data.hidden = true;
+    }
 
     const body = matter.stringify(`${instructions.trim()}\n`, data);
     await fs.writeFile(agentMdPath, body, 'utf-8');
@@ -966,6 +967,7 @@ export const storageService = {
     name,
     description,
     image,
+    hidden,
     instructions,
     plugins,
   }: {
@@ -973,6 +975,7 @@ export const storageService = {
     name?: string;
     description?: string;
     image?: string;
+    hidden?: boolean;
     instructions?: string;
     plugins?: PluginRef[];
   }): Promise<void> => {
@@ -1006,6 +1009,13 @@ export const storageService = {
         nextData.image = image.trim();
       } else {
         delete nextData.image;
+      }
+    }
+    if (hidden !== undefined) {
+      if (hidden) {
+        nextData.hidden = true;
+      } else {
+        delete nextData.hidden;
       }
     }
 

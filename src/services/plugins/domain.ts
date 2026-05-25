@@ -17,6 +17,8 @@ export type Agent = {
   image?: string;
   /** Plugin ids that compose this agent (mirrors AGENT.md `plugins[].id`). */
   plugins: string[];
+  /** When true, omitted from `action:storage:get-agents` (still available via get-agent-details). */
+  hidden?: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -110,6 +112,7 @@ export interface Storage {
   }) => Promise<void>;
   getThreads: (args: { channelId: string }) => Promise<Thread[]>;
   getThreadDetails: (args: { channelId: string; threadId: string }) => Promise<ThreadDetails>;
+  /** User-facing agent list; excludes agents with `hidden: true` (e.g. built-in `state`). */
   getAgents: () => Promise<Agent[]>;
   getPlugins: () => Promise<PluginDescriptor[]>;
   getAgentDetails: (args: { agentId: string }) => Promise<AgentDetails>;
@@ -120,6 +123,8 @@ export interface Storage {
     description?: string;
     /** Avatar/logo URL or data URI; persisted in AGENT.md frontmatter. */
     image?: string;
+    /** When true, agent is omitted from `getAgents` / `action:storage:get-agents`. */
+    hidden?: boolean;
     instructions: string;
     plugins: PluginRef[];
   }) => Promise<void>;
@@ -130,6 +135,7 @@ export interface Storage {
     description?: string;
     /** Omit to leave unchanged; empty string removes stored image. */
     image?: string;
+    hidden?: boolean;
     instructions?: string;
     plugins?: PluginRef[];
   }) => Promise<void>;

@@ -437,8 +437,16 @@ export const storagePlugin: Plugin = {
 
     builder.on('action:storage:create-agent', async function* (event) {
       try {
-        const { agentId, name, description, image, instructions, plugins } = event.data;
-        await storage.createAgent({ agentId, name, description, image, instructions, plugins });
+        const { agentId, name, description, image, hidden, instructions, plugins } = event.data;
+        await storage.createAgent({
+          agentId,
+          name,
+          description,
+          image,
+          hidden,
+          instructions,
+          plugins,
+        });
         yield { type: 'action:storage:create-agent-result', data: { success: true } };
       } catch (error) {
         yield {
@@ -453,8 +461,16 @@ export const storagePlugin: Plugin = {
 
     builder.on('action:storage:update-agent', async function* (event) {
       try {
-        const { agentId, name, description, image, instructions, plugins } = event.data;
-        await storage.updateAgent({ agentId, name, description, image, instructions, plugins });
+        const { agentId, name, description, image, hidden, instructions, plugins } = event.data;
+        await storage.updateAgent({
+          agentId,
+          name,
+          description,
+          image,
+          hidden,
+          instructions,
+          plugins,
+        });
         yield { type: 'action:storage:update-agent-result', data: { success: true } };
       } catch (error) {
         yield {

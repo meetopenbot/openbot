@@ -28,6 +28,10 @@ synthesize information. Be concise and cite sources where relevant.
 The body below the frontmatter is the system prompt passed to the runtime
 plugin as `agentDetails.instructions`.
 
+Set `hidden: true` to omit the agent from `action:storage:get-agents` (it
+remains available via `action:storage:get-agent-details` and can still run on
+the bus). Built-in **`state`** is hidden by default.
+
 ### Required: at least one runtime plugin
 
 A runtime plugin is one that handles `agent:invoke` (the LLM loop). Without
@@ -49,7 +53,7 @@ runtime plus the standard tool plugins (storage, shell, delegation,
 approval, memory, etc.). A built-in **`state`** agent backs deterministic
 `/api/state` handling and infra events.
 
-You can optionally persist overrides for either id at `~/.openbot/agents/system/AGENT.md` or `~/.openbot/agents/state/AGENT.md`. When present, settings are merged on top of the code defaults (`getAgentDetails`). Use **`action:storage:create-agent`** to create an overlay once, **`action:storage:update-agent`** for partial updates (creating the file if missing for `system` / `state`), and **`action:storage:delete-agent`** to remove only that `AGENT.md` and revert to defaults (other files under the folder are left untouched).
+You can optionally persist overrides for either id at `~/.openbot/agents/system/AGENT.md` or `~/.openbot/agents/state/AGENT.md`. When present, settings are merged on top of the code defaults (`getAgentDetails`). The **`state`** agent is not listed by **`action:storage:get-agents`** (`hidden: true`); **`system`** is listed. Use **`action:storage:create-agent`** to create an overlay once, **`action:storage:update-agent`** for partial updates (creating the file if missing for `system` / `state`), and **`action:storage:delete-agent`** to remove only that `AGENT.md` and revert to defaults (other files under the folder are left untouched).
 
 ## Memory
 
