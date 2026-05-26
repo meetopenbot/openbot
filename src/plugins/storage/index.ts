@@ -299,6 +299,7 @@ export const storagePlugin: Plugin = {
         yield {
           type: "client:ui:widget",
           data: {
+            widgetId: "patch-channel-details-result" + Date.now(),
             kind: "message",
             title: "Channel details updated.",
             body: "The channel details have been updated.",
