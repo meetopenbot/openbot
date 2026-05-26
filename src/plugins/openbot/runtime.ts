@@ -12,7 +12,7 @@ import {
   buildContext,
 } from './context.js';
 import { saveConfig } from '../../app/config.js';
-import { OPENBOT_SYSTEM_PROMPT } from './system-prompt.js';
+import { API_KEY_SETUP_MESSAGE, OPENBOT_SYSTEM_PROMPT } from './system-prompt.js';
 
 export interface OpenBotRuntimeOptions {
   /** Provider model string (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20240620`). */
@@ -49,11 +49,19 @@ async function buildSystemPrompt(
       ? (state.agentDetails?.instructions?.trim() || OPENBOT_SYSTEM_PROMPT)
       : OPENBOT_SYSTEM_PROMPT;
 
-  return [
-    instructions,
-    '',
-    context,
-  ].join('\n');
+  const sections = [instructions, '', context];
+
+  // Hardcoded naming hint logic
+  const threadState = state.threadDetails?.state as any;
+  if (!threadState?.isSmartNamed) {
+    sections.push(
+      '',
+      '## SYSTEM HINT',
+      'This thread is unnamed. Please use the `patch_thread_details` tool to set a concise, descriptive, and regular `name` (e.g., "Project Brainstorming" instead of "project-brainstorm") in the thread state and set `isSmartNamed: true` in the same patch. Only do this once.',
+    );
+  }
+
+  return sections.join('\n');
 }
 
 /**
@@ -211,13 +219,14 @@ export const openbotRuntime =
           if (isApiKeyError) {
             const [currentProvider, ...rest] = currentModelString.split('/');
             const currentModelId = rest.join('/');
+
             yield {
               type: 'client:ui:widget',
               data: {
                 kind: 'form',
                 widgetId: `api_key_request_${Date.now()}`,
                 title: `AI Provider API Key Required`,
-                description: `The AI provider returned an authentication error. Select your provider, model, and provide a valid API key to continue. The key never leaves your local runtime.`,
+                description: API_KEY_SETUP_MESSAGE,
                 fields: [
                   {
                     id: 'provider',
@@ -320,6 +329,23 @@ export const openbotRuntime =
           model = resolveModel(currentModelString);
           try {
             saveConfig({ model: currentModelString });
+
+            // Also update the agent's AGENT.md if it has an openbot plugin config
+            const details = await storage.getAgentDetails({ agentId: context.state.agentId });
+            const updatedPlugins = details.pluginRefs.map((ref) => {
+              if (ref.id === 'openbot') {
+                return {
+                  ...ref,
+                  config: { ...ref.config, model: currentModelString },
+                };
+              }
+              return ref;
+            });
+
+            await storage.updateAgent({
+              agentId: context.state.agentId,
+              plugins: updatedPlugins,
+            });
           } catch {
             // best-effort: config persistence failure shouldn't block the conversation
           }

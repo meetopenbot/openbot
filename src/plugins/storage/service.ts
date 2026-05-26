@@ -110,7 +110,6 @@ const getConversationDir = (channelId: string, threadId?: string) => {
 const SYSTEM_AGENT_ID = ORCHESTRATOR_AGENT_ID;
 
 const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
-  { id: 'naming' },
   { id: 'openbot', config: { model: 'openai/gpt-5.4-mini' } },
   { id: 'shell' },
   { id: 'approval' },
@@ -1019,7 +1018,41 @@ export const storageService = {
       }
     }
 
-    const nextContent = instructions !== undefined ? instructions : parsed.content;
+    let nextContent = instructions !== undefined ? instructions : parsed.content;
+
+    // Built-in agents merge disk overlays with code defaults on read; on write, partial
+    // updates (e.g. plugins-only) must still persist a complete AGENT.md.
+    if (isBuiltinOverlayAgentId(agentId)) {
+      const pluginRefs =
+        plugins ??
+        (nextData.plugins !== undefined ? parsePluginRefs(nextData.plugins) : undefined);
+      const diskOverrides: Partial<AgentDetails> = {};
+      if (typeof nextData.name === 'string' && nextData.name.trim() !== '') {
+        diskOverrides.name = nextData.name;
+      }
+      if (typeof nextData.description === 'string') {
+        diskOverrides.description = nextData.description;
+      }
+      const trimmedContent = String(nextContent).trim();
+      if (trimmedContent) {
+        diskOverrides.instructions = trimmedContent;
+      }
+      if (pluginRefs && pluginRefs.length > 0) {
+        diskOverrides.pluginRefs = pluginRefs;
+      }
+
+      const effective =
+        agentId === SYSTEM_AGENT_ID
+          ? getSystemAgentDetails(diskOverrides)
+          : getStateAgentDetails(diskOverrides);
+
+      if (name === undefined) nextData.name = effective.name;
+      if (description === undefined) nextData.description = effective.description;
+      if (instructions === undefined && !String(nextContent).trim()) {
+        nextContent = effective.instructions;
+      }
+    }
+
     const body = matter.stringify(`${String(nextContent).trim()}\n`, nextData);
     await fs.mkdir(path.dirname(agentMdPath), { recursive: true });
     await fs.writeFile(agentMdPath, body, 'utf-8');
