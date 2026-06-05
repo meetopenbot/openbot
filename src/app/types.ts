@@ -21,6 +21,8 @@ export interface OpenBotState {
   triggerEvent?: OpenBotEvent;
   /** Active model string (e.g. `openai/gpt-4o-mini`). */
   model?: string;
+  /** Persisted tool call IDs waiting for results. */
+  pendingToolCallIds?: string[];
 }
 
 export type BaseEvent = {
@@ -479,6 +481,42 @@ export type UpdateChannelResultEvent = BaseEvent & {
   };
 };
 
+export type DeleteChannelEvent = BaseEvent & {
+  type: 'action:storage:delete-channel';
+  data: {
+    channelId: string;
+  };
+};
+
+export type DeleteChannelResultEvent = BaseEvent & {
+  type: 'action:storage:delete-channel-result';
+  data: {
+    success: boolean;
+    error?: string;
+  };
+};
+
+export type DeleteChannelToolEvent = BaseEvent & {
+  type: 'action:delete_channel';
+  data: {
+    channelId: string;
+  };
+  meta?: {
+    toolCallId?: string;
+    agentId?: string;
+    threadId?: string;
+  };
+};
+
+export type DeleteChannelToolResultEvent = BaseEvent & {
+  type: 'action:delete_channel:result';
+  data: {
+    success: boolean;
+    channelId: string;
+    error?: string;
+  };
+};
+
 export type UIWidgetAction = {
   id: string;
   label: string;
@@ -634,11 +672,11 @@ export type UninstallPluginResultEvent = BaseEvent & {
   };
 };
 
-export type ListMarketplaceAgentsEvent = BaseEvent & {
+export type ListMarketplaceRegistryEvent = BaseEvent & {
   type: 'action:marketplace:list';
 };
 
-export type ListMarketplaceAgentsResultEvent = BaseEvent & {
+export type ListMarketplaceRegistryResultEvent = BaseEvent & {
   type: 'action:marketplace:list:result';
   data: {
     success: boolean;
@@ -650,6 +688,36 @@ export type ListMarketplaceAgentsResultEvent = BaseEvent & {
       instructions: string;
       plugins: PluginRef[];
     }>;
+    channels: Array<{
+      id: string;
+      name: string;
+      description: string;
+      image?: string;
+      spec?: string;
+      initialState?: Record<string, unknown>;
+      participants: string[];
+      starterPrompts?: Array<{ label: string; prompt: string }>;
+    }>;
+    error?: string;
+  };
+};
+
+export type InstallChannelEvent = BaseEvent & {
+  type: 'action:channel:install';
+  data: {
+    channelId: string;
+    name?: string;
+    participants?: string[];
+    initialState?: Record<string, unknown>;
+  };
+};
+
+export type InstallChannelResultEvent = BaseEvent & {
+  type: 'action:channel:install:result';
+  data: {
+    success: boolean;
+    channelId?: string;
+    channelUrl?: string;
     error?: string;
   };
 };
@@ -835,6 +903,10 @@ export type OpenBotEvent =
   | CreateChannelResultEvent
   | UpdateChannelEvent
   | UpdateChannelResultEvent
+  | DeleteChannelEvent
+  | DeleteChannelResultEvent
+  | DeleteChannelToolEvent
+  | DeleteChannelToolResultEvent
   | UIWidgetEvent
   | UIWidgetResponseEvent
   | ShellExecEvent
@@ -843,10 +915,12 @@ export type OpenBotEvent =
   | InstallPluginResultEvent
   | UninstallPluginEvent
   | UninstallPluginResultEvent
-  | ListMarketplaceAgentsEvent
-  | ListMarketplaceAgentsResultEvent
+  | ListMarketplaceRegistryEvent
+  | ListMarketplaceRegistryResultEvent
   | InstallAgentEvent
   | InstallAgentResultEvent
+  | InstallChannelEvent
+  | InstallChannelResultEvent
   | RememberEvent
   | RememberResultEvent
   | RecallEvent

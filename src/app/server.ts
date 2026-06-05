@@ -71,7 +71,7 @@ export async function startServer(options: ServerOptions = {}) {
       (req.body && req.body.responseType);
 
     return {
-      channelId: (channelId || (threadId ? 'general' : 'general')) as string, // Default to general if none
+      channelId: (channelId || (threadId ? 'uncategorized' : 'uncategorized')) as string, // Default to uncategorized if none
       threadId: threadId as string | undefined,
       agentId: agentId as string | undefined,
       runId: runId as string,

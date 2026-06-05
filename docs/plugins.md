@@ -43,15 +43,36 @@ name collisions.
 
 | Id              | Role       | Notes                                                     |
 | --------------- | ---------- | --------------------------------------------------------- |
-| `openbot`       | Runtime    | The standard, opinionated OpenBot agent runtime.          |
+| `openbot`       | Runtime    | Standard batteries-included OpenBot agent runtime.        |
 | `claude-code`   | Runtime    | Claude Agent SDK; owns its own tool loop                  |
 | `gemini-cli`    | Runtime    | Google `gemini` CLI in headless mode                      |
-| `shell`         | Tool       | `shell_exec`                                              |
-| `storage`       | Tool       | `create_channel`, `patch_*`, `create_variable`, ...       |
-| `memory`        | Tool       | `remember`, `recall`, `forget`                            |
+| `shell`         | Tool       | `shell_exec` (inbuilt in `openbot`)                       |
+| `storage`       | Tool       | `create_channel`, `patch_*`, ... (inbuilt in `openbot`)   |
+| `memory`        | Tool       | `remember`, `recall`, `forget` (inbuilt in `openbot`)     |
 | `plugin-manager`| Infra      | Marketplace list, npm plugin install/uninstall, agent install |
 
-## Community plugins
+## Batteries-included: `openbot` runtime
+
+The `openbot` plugin is the standard runtime for OpenBot agents. It is designed
+to be isolated and self-contained, providing a core ecosystem of inbuilt tools:
+
+- **Shell**: System tasks and file operations.
+- **Memory**: Long-term durable fact storage.
+- **Storage**: Channel and thread management.
+- **Delegation**: Calling upon other specialized agents.
+- **Approval**: Gating protected actions behind UI confirmation.
+
+When you use the `openbot` runtime, these tools are automatically available.
+You can configure the inbuilt `approval` plugin via the `openbot` plugin config:
+
+```yaml
+plugins:
+  - id: openbot
+    config:
+      model: openai/gpt-4o-mini
+      approval:
+        actions: [action:shell_exec, action:create_channel]
+```
 
 A community plugin is just an npm package whose default export matches the
 `Plugin` interface. Reference it by its npm package name in AGENT.md:

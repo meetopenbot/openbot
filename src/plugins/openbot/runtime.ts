@@ -8,7 +8,6 @@ import { Storage } from '../../services/plugins/domain.js';
 import type { ToolDefinition } from '../../services/plugins/types.js';
 import {
   ORCHESTRATOR_AGENT_ID,
-  getContextBudgetForModel,
   buildContext,
 } from './context.js';
 import { saveConfig } from '../../app/config.js';
@@ -44,12 +43,7 @@ async function buildSystemPrompt(
 ): Promise<string> {
   const context = await buildContext(state, storage);
 
-  const instructions =
-    state.agentId === ORCHESTRATOR_AGENT_ID
-      ? (state.agentDetails?.instructions?.trim() || OPENBOT_SYSTEM_PROMPT)
-      : OPENBOT_SYSTEM_PROMPT;
-
-  const sections = [instructions, '', context];
+  const sections = [OPENBOT_SYSTEM_PROMPT, '', context];
 
   // Hardcoded naming hint logic
   const threadState = state.threadDetails?.state as any;
@@ -71,23 +65,44 @@ async function buildSystemPrompt(
  * a single `generateText` response execute one-by-one. We must wait for every ID
  * in the batch before calling the LLM again — not after the first result.
  */
-function createToolBatchTracker() {
-  let pending: Set<string> | null = null;
+function createToolBatchTracker(
+  state: OpenBotState,
+  storage?: Storage,
+  channelId?: string,
+  threadId?: string,
+) {
+  const save = async (ids?: string[]) => {
+    if (!storage || !channelId || !threadId) return;
+    try {
+      await storage.patchThreadState({
+        channelId,
+        threadId,
+        state: { pendingToolCallIds: ids },
+      });
+    } catch (error) {
+      console.error('[openbot] Failed to persist pendingToolCallIds:', error);
+    }
+  };
 
   return {
-    startBatch(toolCallIds: string[]) {
-      pending = new Set(toolCallIds);
+    async startBatch(toolCallIds: string[]) {
+      state.pendingToolCallIds = [...toolCallIds];
+      await save(state.pendingToolCallIds);
     },
-    clear() {
-      pending = null;
+    async clear() {
+      state.pendingToolCallIds = undefined;
+      await save(undefined);
     },
     /** Returns true when this result completes the batch (time to call the LLM again). */
-    recordResult(toolCallId: string): boolean {
-      if (!pending?.has(toolCallId)) return false;
-      pending.delete(toolCallId);
-      if (pending.size > 0) return false;
-      pending = null;
-      return true;
+    async recordResult(toolCallId: string): Promise<boolean> {
+      if (!state.pendingToolCallIds?.includes(toolCallId)) return false;
+      state.pendingToolCallIds = state.pendingToolCallIds.filter((id) => id !== toolCallId);
+      const done = state.pendingToolCallIds.length === 0;
+      if (done) {
+        state.pendingToolCallIds = undefined;
+      }
+      await save(state.pendingToolCallIds);
+      return done;
     },
   };
 }
@@ -110,7 +125,6 @@ export const openbotRuntime =
 
       let currentModelString = modelString;
       let model = resolveModel(currentModelString);
-      const toolBatch = createToolBatchTracker();
 
       const runLLM = async function* (
         context: RuntimeContext<OpenBotState, OpenBotEvent>,
@@ -118,6 +132,13 @@ export const openbotRuntime =
         trigger?: AgentInvokeEvent,
       ): AsyncGenerator<OpenBotEvent> {
         if (!storage) return;
+
+        const toolBatch = createToolBatchTracker(
+          context.state,
+          storage,
+          context.state.channelId,
+          threadId || context.state.threadId,
+        );
 
         // Capture parent metadata for event enrichment
         const triggerEvent = trigger || context.state.triggerEvent;
@@ -127,6 +148,8 @@ export const openbotRuntime =
         context.state.model = currentModelString;
 
         const systemPrompt = await buildSystemPrompt(context.state, storage);
+
+        // console.log('systemPrompt:::::::\n', systemPrompt);
 
         const events = await storage.getEvents({
           channelId: context.state.channelId,
@@ -192,7 +215,7 @@ export const openbotRuntime =
 
           if (toolCalls.length > 0) {
             // when multiple tool calls are made, Melony runtime handles them one by one, thats why we need to start a new batch
-            toolBatch.startBatch(toolCalls.map((tc) => tc.toolCallId));
+            await toolBatch.startBatch(toolCalls.map((tc) => tc.toolCallId));
 
             for (const toolCall of toolCalls) {
               yield {
@@ -206,7 +229,7 @@ export const openbotRuntime =
             }
           } else {
             // clear the tool batch if there are no tool calls
-            toolBatch.clear();
+            await toolBatch.clear();
           }
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -279,7 +302,12 @@ export const openbotRuntime =
 
         // clear the tool batch if the agent is invoked
         // this is to prevent the tool batch from being used for a new agent invocation
-        toolBatch.clear();
+        await createToolBatchTracker(
+          context.state,
+          storage,
+          context.state.channelId,
+          event.meta?.threadId || context.state.threadId,
+        ).clear();
 
         const threadId = event.meta?.threadId || context.state.threadId;
         yield* runLLM(context, threadId, event as AgentInvokeEvent);
@@ -293,7 +321,16 @@ export const openbotRuntime =
 
         const toolCallId = event.meta?.toolCallId;
         // record the result of the tool call
-        if (!toolCallId || !toolBatch.recordResult(toolCallId)) return;
+        if (
+          !toolCallId ||
+          !(await createToolBatchTracker(
+            context.state,
+            storage,
+            context.state.channelId,
+            event.meta?.threadId || context.state.threadId,
+          ).recordResult(toolCallId))
+        )
+          return;
 
         const threadId = event.meta?.threadId || context.state.threadId;
         yield* runLLM(context, threadId);

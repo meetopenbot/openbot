@@ -26,7 +26,7 @@ export interface InstalledPlugin {
   version: string;
 }
 
-/** One marketplace entry; matches `action:marketplace:list:result` agent shape. */
+/** One marketplace entry; matches `action:marketplace:list:result` shape. */
 export type MarketplaceAgentListing = {
   id: string;
   name: string;
@@ -36,7 +36,32 @@ export type MarketplaceAgentListing = {
   plugins: PluginRef[];
 };
 
+export type StarterPrompt = {
+  label: string;
+  prompt: string;
+};
+
+/** One channel entry from the marketplace. */
+export type MarketplaceChannelListing = {
+  id: string;
+  name: string;
+  description: string;
+  image?: string;
+  spec?: string;
+  initialState?: Record<string, unknown>;
+  /** List of agent IDs that should be participants in the channel. */
+  participants: string[];
+  /** Starter prompts for the channel. */
+  starterPrompts?: StarterPrompt[];
+};
+
+export interface MarketplaceRegistry {
+  agents: MarketplaceAgentListing[];
+  channels: MarketplaceChannelListing[];
+}
+
 const DEFAULT_MARKETPLACE_AGENTS: MarketplaceAgentListing[] = [];
+const DEFAULT_MARKETPLACE_CHANNELS: MarketplaceChannelListing[] = [];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -44,51 +69,108 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * Parses JSON from a remote registry file. Supports either
- * `{ "agents": [ ... ] }` or a top-level array.
+ * `{ "agents": [ ... ], "channels": [ ... ] }` or a top-level array (legacy agents-only).
  */
-export function parseMarketplaceRegistryJson(data: unknown): MarketplaceAgentListing[] {
-  const rawAgents: unknown =
-    Array.isArray(data) ? data : isRecord(data) && Array.isArray(data.agents) ? data.agents : null;
-  if (!Array.isArray(rawAgents)) {
-    throw new Error('Registry JSON must be an array or an object with an "agents" array');
-  }
-  return rawAgents.map((item, i) => {
-    if (!isRecord(item)) {
-      throw new Error(`agents[${i}]: expected object`);
-    }
-    const id = item.id;
-    const name = item.name;
-    const description = item.description;
-    const instructions = item.instructions;
-    const pluginsRaw = item.plugins;
-    if (typeof id !== 'string' || !id) throw new Error(`agents[${i}].id must be a non-empty string`);
-    if (typeof name !== 'string') throw new Error(`agents[${i}].name must be a string`);
-    if (typeof description !== 'string') throw new Error(`agents[${i}].description must be a string`);
-    if (typeof instructions !== 'string') {
-      throw new Error(`agents[${i}].instructions must be a string`);
-    }
-    if (!Array.isArray(pluginsRaw)) throw new Error(`agents[${i}].plugins must be an array`);
-    const plugins: PluginRef[] = pluginsRaw.map((p, j) => {
-      if (!isRecord(p) || typeof p.id !== 'string' || !p.id) {
-        throw new Error(`agents[${i}].plugins[${j}]: expected { "id": string, "config"?: object }`);
+export function parseMarketplaceRegistryJson(data: unknown): MarketplaceRegistry {
+  const isLegacyArray = Array.isArray(data);
+  const rawAgents: unknown = isLegacyArray
+    ? data
+    : isRecord(data) && Array.isArray(data.agents)
+      ? data.agents
+      : [];
+  const rawChannels: unknown =
+    !isLegacyArray && isRecord(data) && Array.isArray(data.channels)
+      ? data.channels
+      : isRecord(data) && Array.isArray((data as any).templates)
+        ? (data as any).templates
+        : [];
+
+  const agents: MarketplaceAgentListing[] = (Array.isArray(rawAgents) ? rawAgents : []).map(
+    (item, i) => {
+      if (!isRecord(item)) {
+        throw new Error(`agents[${i}]: expected object`);
       }
-      const ref: PluginRef = { id: p.id };
-      if (p.config !== undefined) {
-        if (!isRecord(p.config)) throw new Error(`agents[${i}].plugins[${j}].config must be an object`);
-        ref.config = p.config;
+      const id = item.id;
+      const name = item.name;
+      const description = item.description;
+      const instructions = item.instructions;
+      const pluginsRaw = item.plugins;
+      if (typeof id !== 'string' || !id)
+        throw new Error(`agents[${i}].id must be a non-empty string`);
+      if (typeof name !== 'string') throw new Error(`agents[${i}].name must be a string`);
+      if (typeof description !== 'string')
+        throw new Error(`agents[${i}].description must be a string`);
+      if (typeof instructions !== 'string') {
+        throw new Error(`agents[${i}].instructions must be a string`);
       }
-      return ref;
-    });
-    const listing: MarketplaceAgentListing = { id, name, description, instructions, plugins };
-    if (item.image !== undefined) {
-      if (typeof item.image !== 'string') throw new Error(`agents[${i}].image must be a string`);
-      listing.image = item.image;
-    }
-    return listing;
-  });
+      if (!Array.isArray(pluginsRaw)) throw new Error(`agents[${i}].plugins must be an array`);
+      const plugins: PluginRef[] = pluginsRaw.map((p, j) => {
+        if (!isRecord(p) || typeof p.id !== 'string' || !p.id) {
+          throw new Error(`agents[${i}].plugins[${j}]: expected { "id": string, "config"?: object }`);
+        }
+        const ref: PluginRef = { id: p.id };
+        if (p.config !== undefined) {
+          if (!isRecord(p.config))
+            throw new Error(`agents[${i}].plugins[${j}].config must be an object`);
+          ref.config = p.config;
+        }
+        return ref;
+      });
+      const listing: MarketplaceAgentListing = { id, name, description, instructions, plugins };
+      if (item.image !== undefined) {
+        if (typeof item.image !== 'string') throw new Error(`agents[${i}].image must be a string`);
+        listing.image = item.image;
+      }
+      return listing;
+    },
+  );
+
+  const channels: MarketplaceChannelListing[] = (Array.isArray(rawChannels) ? rawChannels : []).map(
+    (item, i) => {
+      if (!isRecord(item)) {
+        throw new Error(`channels[${i}]: expected object`);
+      }
+      const id = item.id;
+      const name = item.name;
+      const description = item.description;
+      const participants = item.participants;
+
+      if (typeof id !== 'string' || !id)
+        throw new Error(`channels[${i}].id must be a non-empty string`);
+      if (typeof name !== 'string') throw new Error(`channels[${i}].name must be a string`);
+      if (typeof description !== 'string')
+        throw new Error(`channels[${i}].description must be a string`);
+      if (!Array.isArray(participants))
+        throw new Error(`channels[${i}].participants must be an array`);
+
+      const listing: MarketplaceChannelListing = {
+        id,
+        name,
+        description,
+        participants: participants.filter((p): p is string => typeof p === 'string'),
+      };
+
+      if (typeof item.image === 'string') listing.image = item.image;
+      if (typeof item.spec === 'string') listing.spec = item.spec;
+      if (isRecord(item.initialState)) listing.initialState = item.initialState;
+
+      if (Array.isArray(item.starterPrompts)) {
+        listing.starterPrompts = item.starterPrompts.map((p: any, j: number) => {
+          if (!isRecord(p) || typeof p.label !== 'string' || typeof p.prompt !== 'string') {
+            throw new Error(`channels[${i}].starterPrompts[${j}] must have label and prompt`);
+          }
+          return { label: p.label, prompt: p.prompt };
+        });
+      }
+
+      return listing;
+    },
+  );
+
+  return { agents, channels };
 }
 
-async function fetchMarketplaceAgentsFromUrl(url: string): Promise<MarketplaceAgentListing[]> {
+async function fetchMarketplaceRegistryFromUrl(url: string): Promise<MarketplaceRegistry> {
   const res = await fetch(url, {
     headers: { Accept: 'application/json' },
     signal: AbortSignal.timeout(15_000),
@@ -101,20 +183,29 @@ async function fetchMarketplaceAgentsFromUrl(url: string): Promise<MarketplaceAg
 }
 
 /**
- * Resolves marketplace agent listings from configured registry URL, or falls back to an empty list.
+ * Resolves marketplace registry (agents and channels) from configured registry URL.
  */
-export async function resolveMarketplaceAgentList(): Promise<MarketplaceAgentListing[]> {
+export async function resolveMarketplaceRegistry(): Promise<MarketplaceRegistry> {
   const { marketplaceRegistryUrl } = loadConfig();
   const registryUrl = marketplaceRegistryUrl?.trim() || DEFAULT_MARKETPLACE_REGISTRY_URL;
   try {
-    return await fetchMarketplaceAgentsFromUrl(registryUrl);
+    return await fetchMarketplaceRegistryFromUrl(registryUrl);
   } catch (err) {
     console.warn(
       `[plugins] marketplace registry fetch failed (${registryUrl}), using built-in list:`,
       err instanceof Error ? err.message : err,
     );
-    return DEFAULT_MARKETPLACE_AGENTS;
+    return { agents: DEFAULT_MARKETPLACE_AGENTS, channels: DEFAULT_MARKETPLACE_CHANNELS };
   }
+}
+
+/**
+ * Resolves marketplace agent listings from configured registry URL.
+ * @deprecated Use resolveMarketplaceRegistry instead.
+ */
+export async function resolveMarketplaceAgentList(): Promise<MarketplaceAgentListing[]> {
+  const registry = await resolveMarketplaceRegistry();
+  return registry.agents;
 }
 
 const getPluginsDir = (): string => {

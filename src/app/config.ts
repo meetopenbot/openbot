@@ -23,6 +23,8 @@ export interface StoredVariable {
 }
 
 export const DEFAULT_BASE_DIR = '~/.openbot';
+/** Default parent directory for per-channel working directories (user-facing workspace). */
+export const DEFAULT_CHANNELS_WORKSPACE_DIR = '~/openbot';
 export const DEFAULT_PLUGINS_DIR = 'plugins';
 export const DEFAULT_AGENTS_DIR = 'agents';
 export const DEFAULT_CHANNELS_DIR = 'channels';
@@ -35,6 +37,15 @@ export const DEFAULT_MARKETPLACE_REGISTRY_URL =
 
 export function resolvePath(p: string) {
   return p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : path.resolve(p);
+}
+
+/** Default absolute cwd for a channel when none is provided at creation time. */
+export function getDefaultChannelCwd(channelId: string): string {
+  const id = channelId.trim();
+  if (!id) {
+    throw new Error('channelId is required');
+  }
+  return resolvePath(`${DEFAULT_CHANNELS_WORKSPACE_DIR}/${id}`);
 }
 
 export function loadConfig(): OpenBotconfig {

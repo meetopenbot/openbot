@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { generateId } from 'melony';
 import type { Plugin } from '../../services/plugins/types.js';
-import { runAgent } from '../../harness/index.js';
 import {
   OpenBotEvent,
   DelegateTaskEvent,
@@ -53,6 +52,9 @@ export const delegationPlugin: Plugin = {
       const toolCallId = delegateEvent.meta?.toolCallId;
 
       if (!toolCallId) return;
+
+      // Break circular dependency by dynamic import
+      const { runAgent } = await import('../../harness/index.js');
 
       const runId = `dg_${generateId()}`;
       let lastAgentOutput = '';

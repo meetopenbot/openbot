@@ -1,7 +1,9 @@
 import { OpenBotState } from '../../app/types.js';
 import { Storage } from '../../services/plugins/domain.js';
+import { OPENBOT_SYSTEM_PROMPT } from './system-prompt.js';
 
 export const DEFAULT_CONTEXT_BUDGET = 8000;
+export const MAX_CONTEXT_FILES = 50;
 
 /**
  * Returns the known context window budget (in tokens) for a given model string.
@@ -49,6 +51,9 @@ export async function buildContext(state: OpenBotState, storage?: Storage): Prom
   } else {
     const channelName = channelDetails?.name || channelId;
     env += `- Mode: Channel (#${channelName})\n`;
+    if (channelDetails?.cwd) {
+      env += `- Workspace: ${channelDetails.cwd}\n`;
+    }
     if (threadId) {
       env += `- Thread: ${threadDetails?.name || threadId}\n`;
     }
@@ -65,12 +70,38 @@ export async function buildContext(state: OpenBotState, storage?: Storage): Prom
     sections.push(`## CHANNEL SPECIFICATION\n${spec}`);
   }
 
-  // 3. Agent Instructions
-  if (agentDetails?.instructions) {
-    sections.push(`## AGENT: ${agentDetails?.name}\n${agentDetails.instructions}`);
+  // 3. Files
+  if (storage?.listFiles && channelId) {
+    try {
+      const files = await storage.listFiles({ channelId });
+      if (files.length > 0) {
+        const limited = files.slice(0, MAX_CONTEXT_FILES);
+        const formatted = limited
+          .map((f) => `- ${f.name}${f.isDirectory ? '/' : ''}`)
+          .join('\n');
+        let fileSection = `## FILES\n${formatted}`;
+        if (files.length > MAX_CONTEXT_FILES) {
+          fileSection += `\n- ... and ${files.length - MAX_CONTEXT_FILES} more files`;
+        }
+        sections.push(fileSection);
+      } else {
+        sections.push('## FILES\n- (No files in workspace)');
+      }
+    } catch (error) {
+      console.warn('[context] Failed to fetch files:', error);
+    }
   }
 
-  // 4. Memories
+  // 4. Agent Instructions
+  const rawInstructions = agentDetails?.instructions?.trim();
+  if (
+    rawInstructions &&
+    rawInstructions !== OPENBOT_SYSTEM_PROMPT.trim()
+  ) {
+    sections.push(`## Instructions\n${rawInstructions}`);
+  }
+
+  // 5. Memories
   if (storage?.listMemories) {
     try {
       const scopes = ['global', `agent:${agentId}`];

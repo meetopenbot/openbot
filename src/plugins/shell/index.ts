@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { spawn } from 'node:child_process';
 import type { Plugin } from '../../services/plugins/types.js';
 import { OpenBotEvent, OpenBotState } from '../../app/types.js';
+import { resolvePath } from '../../app/config.js';
 
 const shellToolDefinitions = {
   shell_exec: {
@@ -31,7 +32,9 @@ const shellPluginRuntime = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (buil
     const { command, cwd, shell = 'bash', timeoutMs = 30000 } = event.data;
 
     const actualTimeout = Math.max(1000, Math.min(timeoutMs, 60000));
-    const actualCwd = cwd || context.state.channelDetails?.cwd || process.cwd();
+    const actualCwd = resolvePath(
+      cwd || context.state.channelDetails?.cwd || process.cwd(),
+    );
 
     try {
       const result = await new Promise<{

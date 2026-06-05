@@ -4,6 +4,7 @@ import {
   DEFAULT_AGENTS_DIR,
   DEFAULT_BASE_DIR,
   DEFAULT_CHANNELS_DIR,
+  getDefaultChannelCwd,
   loadConfig,
   resolvePath,
   StoredVariable,
@@ -26,7 +27,6 @@ import {
 } from '../../services/plugins/domain.js';
 import type { PluginRef } from '../../services/plugins/types.js';
 import { openbotPlugin } from '../openbot/index.js';
-import { OPENBOT_SYSTEM_PROMPT } from '../openbot/system-prompt.js';
 import { listBuiltInPlugins, parsePluginModule } from '../../services/plugins/registry.js';
 import { OpenBotEvent, OpenBotState } from '../../app/types.js';
 import { processService } from '../../services/process.js';
@@ -110,12 +110,15 @@ const getConversationDir = (channelId: string, threadId?: string) => {
 const SYSTEM_AGENT_ID = ORCHESTRATOR_AGENT_ID;
 
 const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
-  { id: 'openbot', config: { model: 'openai/gpt-5.4-mini' } },
-  { id: 'shell' },
-  { id: 'approval' },
-  { id: 'memory' },
-  { id: 'delegation' },
-  { id: 'storage' },
+  {
+    id: 'openbot',
+    config: {
+      model: 'openai/gpt-5.4-mini',
+      approval: {
+        actions: ['action:shell_exec', 'action:create_channel', 'action:delete_channel'],
+      },
+    },
+  },
 ];
 
 /** No `openbot` / `shell` — storage-side effects and infra plugins only. */
@@ -134,7 +137,7 @@ function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails 
     image: getBundledSystemAgentImage(),
     description:
       'First-party orchestration agent for OpenBot.',
-    instructions: OPENBOT_SYSTEM_PROMPT,
+    instructions: '',
     plugins: SYSTEM_DEFAULT_PLUGINS.map((ref) => ref.id),
     pluginRefs: SYSTEM_DEFAULT_PLUGINS,
     createdAt: new Date(),
@@ -460,6 +463,7 @@ export const storageService = {
     const channels = await Promise.all(
       channelNames.map(async (name) => {
         const channelDir = getConversationDir(name);
+        const stats = await fs.stat(channelDir);
         const statePath = path.join(channelDir, 'state.json');
         let cwd: string | undefined;
         let displayName = name;
@@ -482,8 +486,8 @@ export const storageService = {
           description: '',
           cwd,
           participants,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          createdAt: stats.birthtime,
+          updatedAt: stats.mtime,
         };
         const rid = lastReadByChannel[name];
         try {
@@ -507,7 +511,7 @@ export const storageService = {
       }),
     );
 
-    return channels;
+    return channels.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   },
   createChannel: async ({
     channelId,
@@ -539,21 +543,60 @@ export const storageService = {
       }
     }
 
-    const finalState = {
+    const finalState: Record<string, unknown> = {
       ...(initialState || {}),
     };
 
-    if (cwd) {
-      (finalState as Record<string, unknown>).cwd = cwd;
-    }
+    const rawCwd =
+      (typeof cwd === 'string' && cwd.trim()) ||
+      (typeof finalState.cwd === 'string' && finalState.cwd.trim()) ||
+      getDefaultChannelCwd(normalizedChannelId);
 
+    const resolvedCwd = resolvePath(rawCwd);
+    finalState.cwd = resolvedCwd;
+    await fs.mkdir(resolvedCwd, { recursive: true });
     await fs.mkdir(channelDir, { recursive: true });
     await fs.writeFile(
       specPath,
       spec?.trim() ||
-      `# ${normalizedChannelId}\n\nDefine the goals and rules for this channel here.\n`,
+      `# ${normalizedChannelId}\n\n`,
     );
     await fs.writeFile(statePath, JSON.stringify(finalState, null, 2));
+  },
+  deleteChannel: async ({ channelId }: { channelId: string }): Promise<void> => {
+    const normalizedChannelId = channelId.trim();
+    if (!normalizedChannelId) {
+      throw new Error('channelId is required');
+    }
+    if (normalizedChannelId === '_meta') {
+      throw new Error('Cannot delete reserved channel path');
+    }
+
+    const channelDir = getConversationDir(normalizedChannelId);
+    try {
+      await fs.access(channelDir);
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        const err = new Error(`Channel "${normalizedChannelId}" does not exist.`);
+        (err as Error & { code?: string }).code = 'CHANNEL_NOT_FOUND';
+        throw err;
+      }
+      throw error;
+    }
+
+    await fs.rm(channelDir, { recursive: true, force: true });
+
+    try {
+      const lastReadPath = getLastReadFilePath();
+      const map = await readJsonFile<Record<string, string>>(lastReadPath, {});
+      if (normalizedChannelId in map) {
+        delete map[normalizedChannelId];
+        await fs.mkdir(path.dirname(lastReadPath), { recursive: true });
+        await fs.writeFile(lastReadPath, JSON.stringify(map, null, 2), 'utf-8');
+      }
+    } catch {
+      // ignore last-read cleanup failures
+    }
   },
   createThread: async ({
     channelId,
@@ -1357,7 +1400,7 @@ export const storageService = {
       throw new Error('Channel has no CWD configured');
     }
 
-    const resolvedBase = path.resolve(baseCwd);
+    const resolvedBase = resolvePath(baseCwd);
     const targetDir = path.resolve(resolvedBase, subPath);
 
     if (!targetDir.startsWith(resolvedBase)) {
@@ -1387,7 +1430,7 @@ export const storageService = {
       throw new Error('Channel has no CWD configured');
     }
 
-    const resolvedBase = path.resolve(baseCwd);
+    const resolvedBase = resolvePath(baseCwd);
     const targetFile = path.resolve(resolvedBase, filePath);
 
     if (!targetFile.startsWith(resolvedBase)) {
@@ -1443,12 +1486,17 @@ export const storageService = {
       }
     }
 
+    const threadState = (threadDetails?.state as Record<string, unknown>) || {};
+
     return {
       runId,
       agentId,
       channelId,
       threadId,
       triggerEvent: event,
+      pendingToolCallIds: Array.isArray(threadState.pendingToolCallIds)
+        ? (threadState.pendingToolCallIds as string[])
+        : undefined,
       agentDetails: {
         id: agentDetails.id,
         name: agentDetails.name,

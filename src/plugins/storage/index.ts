@@ -25,7 +25,9 @@ const storageToolDefinitions = {
       cwd: z
         .string()
         .optional()
-        .describe('Optional initial current working directory for the channel.'),
+        .describe(
+          'Optional initial current working directory for the channel. Defaults to an absolute path under ~/openbot/{channelId}.',
+        ),
     }),
   },
   patch_channel_details: {
@@ -73,6 +75,13 @@ const storageToolDefinitions = {
     description: 'Delete a variable from the workspace storage.',
     inputSchema: z.object({
       key: z.string().describe('The key of the variable to delete.'),
+    }),
+  },
+  delete_channel: {
+    description:
+      'Permanently delete a channel and all its threads and events. Always confirm with the user before deleting.',
+    inputSchema: z.object({
+      channelId: z.string().describe('The channel ID to delete.'),
     }),
   },
 };
@@ -175,6 +184,44 @@ export const storagePlugin: Plugin = {
         yield {
           type: 'action:create_channel:result',
           data: { success: false, channelId: rawChannelId, channelUrl },
+          meta: resultMeta,
+        } as OpenBotEvent;
+      }
+    });
+
+    builder.on('action:delete_channel', async function* (event, context) {
+      const rawChannelId = ((event.data as { channelId?: string })?.channelId || '').trim();
+      const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
+
+      if (!rawChannelId) {
+        yield {
+          type: 'action:delete_channel:result',
+          data: { success: false, channelId: '', error: 'channelId is required' },
+          meta: resultMeta,
+        } as OpenBotEvent;
+        return;
+      }
+
+      try {
+        await storage.deleteChannel({ channelId: rawChannelId });
+        yield {
+          type: 'action:delete_channel:result',
+          data: { success: true, channelId: rawChannelId },
+          meta: resultMeta,
+        } as OpenBotEvent;
+        yield {
+          type: 'agent:output',
+          data: { content: `Deleted channel \`${rawChannelId}\`.` },
+          meta: resultMeta,
+        } as OpenBotEvent;
+      } catch (error) {
+        yield {
+          type: 'action:delete_channel:result',
+          data: {
+            success: false,
+            channelId: rawChannelId,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
           meta: resultMeta,
         } as OpenBotEvent;
       }
@@ -476,6 +523,21 @@ export const storagePlugin: Plugin = {
       } catch (error) {
         yield {
           type: 'action:storage:update-agent-result',
+          data: {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    });
+
+    builder.on('action:storage:delete-channel', async function* (event) {
+      try {
+        await storage.deleteChannel({ channelId: event.data.channelId });
+        yield { type: 'action:storage:delete-channel-result', data: { success: true } };
+      } catch (error) {
+        yield {
+          type: 'action:storage:delete-channel-result',
           data: {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',

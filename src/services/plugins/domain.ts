@@ -45,13 +45,15 @@ export type ConfigSchema = {
   type: 'object';
   properties: {
     [key: string]: {
-      type: 'string' | 'number' | 'boolean' | 'integer';
+      type: 'string' | 'number' | 'boolean' | 'integer' | 'object' | 'array';
       description?: string;
       default?: unknown;
       enum?: unknown[];
       minimum?: number;
       maximum?: number;
       format?: 'password' | 'url' | 'email';
+      properties?: ConfigSchema['properties'];
+      items?: ConfigSchema['properties'][string];
     };
   };
   required?: string[];
@@ -104,6 +106,8 @@ export interface Storage {
     initialState?: Record<string, unknown>;
     cwd?: string;
   }) => Promise<void>;
+  /** Removes the channel directory and cleans up `_meta/last-read.json`. */
+  deleteChannel: (args: { channelId: string }) => Promise<void>;
   createThread: (args: {
     channelId: string;
     threadId: string;

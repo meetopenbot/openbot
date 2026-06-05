@@ -34,7 +34,7 @@ export const approvalPlugin: Plugin = {
         const widgetId = randomUUID();
         pendingApprovals.set(widgetId, Date.now());
 
-        context.suspend({
+        return {
           type: 'client:ui:widget',
           data: {
             widgetId,
@@ -51,7 +51,7 @@ export const approvalPlugin: Plugin = {
             ],
           },
           meta: { agentId: context.state.agentId, threadId: context.state.threadId },
-        } as OpenBotEvent);
+        } as OpenBotEvent;
       });
     }
 
@@ -106,16 +106,16 @@ export const approvalPlugin: Plugin = {
           },
         };
       } else {
-        // Emit a failure result event for the denied action
-        // yield {
-        //   type: `${originalEvent.type}:result` as OpenBotEvent['type'],
-        //   data: {
-        //     success: false,
-        //     error: 'Action denied by user.',
-        //     stderr: 'Action denied by user.',
-        //   },
-        //   meta: originalEvent.meta,
-        // } as OpenBotEvent;
+        // Emit a failure result event for the denied action to clear the pending tool batch
+        yield {
+          type: `${originalEvent.type}:result` as OpenBotEvent['type'],
+          data: {
+            success: false,
+            error: 'Action denied by user.',
+            stderr: 'Action denied by user.',
+          },
+          meta: originalEvent.meta,
+        } as OpenBotEvent;
 
         yield {
           type: 'agent:output',

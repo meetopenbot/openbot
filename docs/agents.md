@@ -17,8 +17,6 @@ plugins:
   - id: openbot
     config:
       model: anthropic/claude-3-5-sonnet-20240620
-  - id: shell
-  - id: delegation
 ---
 
 You are a web research specialist. Use the available tools to gather and
@@ -37,20 +35,19 @@ the bus). Built-in **`state`** is hidden by default.
 A runtime plugin is one that handles `agent:invoke` (the LLM loop). Without
 one, the agent will not respond to user input. Built-in runtime plugins:
 
-- `openbot` — the standard, opinionated OpenBot agent runtime. Consumes tools
-  from other plugins listed alongside it.
+- `openbot` — the standard, opinionated OpenBot agent runtime. It is
+  **batteries-included** and provides inbuilt tools (shell, memory, storage,
+  delegation, and approval).
 - `claude-code` — runs Claude inside the Claude Agent SDK with its own tools.
 - `gemini-cli` — spawns Google's `gemini` CLI in headless mode.
 
 `claude-code` and `gemini-cli` own their own tool loops, so attaching tool
-plugins like `shell` to them has no effect. Pair tool plugins with
-`openbot`.
+plugins like `shell` to them has no effect.
 
 ## Built-in agents
 
 OpenBot ships a built-in **`system`** agent (the orchestrator) with the `openbot`
-runtime plus the standard tool plugins (storage, shell, delegation,
-approval, memory, etc.). A built-in **`state`** agent backs deterministic
+runtime. A built-in **`state`** agent backs deterministic
 `/api/state` handling and infra events.
 
 You can optionally persist overrides for either id at `~/.openbot/agents/system/AGENT.md` or `~/.openbot/agents/state/AGENT.md`. When present, settings are merged on top of the code defaults (`getAgentDetails`). The **`state`** agent is not listed by **`action:storage:get-agents`** (`hidden: true`); **`system`** is listed. Use **`action:storage:create-agent`** to create an overlay once, **`action:storage:update-agent`** for partial updates (creating the file if missing for `system` / `state`), and **`action:storage:delete-agent`** to remove only that `AGENT.md` and revert to defaults (other files under the folder are left untouched).
