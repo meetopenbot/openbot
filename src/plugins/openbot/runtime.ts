@@ -19,6 +19,8 @@ export interface OpenBotRuntimeOptions {
   storage?: Storage;
   /** Tool definitions merged from all tool plugins attached to this agent. */
   toolDefinitions?: Record<string, ToolDefinition>;
+  /** Fires when the run is stopped; cancels the in-flight LLM call. */
+  abortSignal?: AbortSignal;
 }
 
 function resolveModel(modelString: string): LanguageModel {
@@ -121,6 +123,7 @@ export const openbotRuntime =
         model: modelString = 'openai/gpt-4o-mini',
         storage,
         toolDefinitions = {},
+        abortSignal,
       } = options;
 
       let currentModelString = modelString;
@@ -132,6 +135,7 @@ export const openbotRuntime =
         trigger?: AgentInvokeEvent,
       ): AsyncGenerator<OpenBotEvent> {
         if (!storage) return;
+        if (abortSignal?.aborted) return;
 
         const toolBatch = createToolBatchTracker(
           context.state,
@@ -149,8 +153,6 @@ export const openbotRuntime =
 
         const systemPrompt = await buildSystemPrompt(context.state, storage);
 
-        // console.log('systemPrompt:::::::\n', systemPrompt);
-
         const events = await storage.getEvents({
           channelId: context.state.channelId,
           threadId: context.state.threadId,
@@ -159,8 +161,8 @@ export const openbotRuntime =
         const messages = eventsToModelMessages(events);
 
         // console.log('systemPrompt:::::::\n', systemPrompt);
-        // console.log('messages:::::::\n', JSON.stringify(messages, null, 2));
-        // console.log('toolDefinitions:::::::\n', JSON.stringify(toolDefinitions, null, 2));
+        // console.log('messages:::::::\n', JSON.stringify(messages));
+        // console.log('toolDefinitions:::::::\n', JSON.stringify(toolDefinitions));
 
         try {
           // Single LLM request — tool execution happens externally via action:* handlers.
@@ -171,6 +173,7 @@ export const openbotRuntime =
             tools: toolDefinitions as Record<string, { description: string; inputSchema: any }>,
             stopWhen: ({ steps }) => steps.length === 1,
             allowSystemInMessages: true,
+            abortSignal,
           });
 
           const toolCalls = result.toolCalls ?? [];
@@ -232,6 +235,9 @@ export const openbotRuntime =
             await toolBatch.clear();
           }
         } catch (error: unknown) {
+          // Run was stopped — unwind quietly without surfacing an error.
+          if (abortSignal?.aborted) return;
+
           const errorMessage = error instanceof Error ? error.message : String(error);
           const isApiKeyError =
             errorMessage.includes('API key') ||
@@ -298,6 +304,13 @@ export const openbotRuntime =
         const routedTo = (event as { data?: { agentId?: string } }).data?.agentId;
         if (typeof routedTo === 'string' && routedTo && routedTo !== context.state.agentId) {
           return;
+        }
+
+        // Capture user info from meta if available
+        if (event.meta?.userName) {
+          context.state.currentUser = {
+            userName: event.meta.userName,
+          };
         }
 
         // clear the tool batch if the agent is invoked

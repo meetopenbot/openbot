@@ -46,7 +46,7 @@ name collisions.
 | `openbot`       | Runtime    | Standard batteries-included OpenBot agent runtime.        |
 | `claude-code`   | Runtime    | Claude Agent SDK; owns its own tool loop                  |
 | `gemini-cli`    | Runtime    | Google `gemini` CLI in headless mode                      |
-| `shell`         | Tool       | `shell_exec` (inbuilt in `openbot`)                       |
+| `bash`          | Tool       | `bash` (inbuilt in `openbot`)                             |
 | `storage`       | Tool       | `create_channel`, `patch_*`, ... (inbuilt in `openbot`)   |
 | `memory`        | Tool       | `remember`, `recall`, `forget` (inbuilt in `openbot`)     |
 | `plugin-manager`| Infra      | Marketplace list, npm plugin install/uninstall, agent install |
@@ -56,7 +56,7 @@ name collisions.
 The `openbot` plugin is the standard runtime for OpenBot agents. It is designed
 to be isolated and self-contained, providing a core ecosystem of inbuilt tools:
 
-- **Shell**: System tasks and file operations.
+- **Bash**: Stateful system tasks and file operations.
 - **Memory**: Long-term durable fact storage.
 - **Storage**: Channel and thread management.
 - **Delegation**: Calling upon other specialized agents.
@@ -71,7 +71,7 @@ plugins:
     config:
       model: openai/gpt-4o-mini
       approval:
-        actions: [action:shell_exec, action:create_channel]
+        actions: [action:bash, action:create_channel]
 ```
 
 A community plugin is just an npm package whose default export matches the
@@ -90,11 +90,11 @@ On first use OpenBot installs the package into
 
 ## Approval plugin
 
-The `approval` plugin gates protected tool calls behind a UI confirmation widget. By default, it gates `action:shell_exec`.
+The `approval` plugin gates protected tool calls behind a UI confirmation widget. By default, it gates `action:bash`.
 
 ```yaml
 plugins:
   - id: approval
     config:
-      actions: [action:shell_exec]
+      actions: [action:bash]
 ```

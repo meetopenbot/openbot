@@ -5,7 +5,7 @@ import { AgentDetails, ConfigSchema, Storage } from './domain.js';
 /**
  * Reference to a plugin from an agent's AGENT.md frontmatter.
  *
- * The `id` is either a built-in plugin id (e.g. `openbot`, `shell`) or an npm
+ * The `id` is either a built-in plugin id (e.g. `openbot`, `bash`) or an npm
  * package name (e.g. `openbot-plugin-codex`, `@scope/openbot-plugin-foo`).
  * Each entry may carry plugin-specific `config`.
  */
@@ -33,6 +33,8 @@ export interface PluginContext {
   config: Record<string, unknown>;
   storage: Storage;
   tools: Record<string, ToolDefinition>;
+  /** Signal that fires when this run is stopped; runtimes should pass it to long-running calls. */
+  abortSignal?: AbortSignal;
 }
 
 /**

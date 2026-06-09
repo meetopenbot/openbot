@@ -3,11 +3,12 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Plugin } from './types.js';
 import { openbotPlugin } from '../../plugins/openbot/index.js';
-import { shellPlugin } from '../../plugins/shell/index.js';
+import { bashPlugin } from '../../plugins/bash/index.js';
 import { storagePlugin } from '../../plugins/storage/index.js';
 import { approvalPlugin } from '../../plugins/approval/index.js';
 import { memoryPlugin } from '../../plugins/memory/index.js';
 import { delegationPlugin } from '../../plugins/delegation/index.js';
+import { uiPlugin } from '../../plugins/ui/index.js';
 import { pluginManagerPlugin } from '../../plugins/plugin-manager/index.js';
 import { DEFAULT_PLUGINS_DIR, DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../../app/config.js';
 import {
@@ -20,11 +21,12 @@ let pluginsDir: string | null = null;
 
 const BUILT_IN: Record<string, Plugin> = {
   [openbotPlugin.id]: openbotPlugin,
-  [shellPlugin.id]: shellPlugin,
+  [bashPlugin.id]: bashPlugin,
   [storagePlugin.id]: storagePlugin,
   [approvalPlugin.id]: approvalPlugin,
   [memoryPlugin.id]: memoryPlugin,
   [delegationPlugin.id]: delegationPlugin,
+  [uiPlugin.id]: uiPlugin,
   [pluginManagerPlugin.id]: pluginManagerPlugin,
 };
 
@@ -77,7 +79,7 @@ export function initPlugins(dir?: string) {
 
 /**
  * Resolve a Plugin by id. The id is either:
- *   - a built-in id (e.g. "openbot", "shell"), or
+ *   - a built-in id (e.g. "openbot", "bash"), or
  *   - an npm package name (e.g. "openbot-plugin-foo" or "@scope/foo"),
  *     in which case the folder layout is `plugins/<id>/dist/index.js`.
  */

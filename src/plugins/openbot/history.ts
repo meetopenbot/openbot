@@ -2,6 +2,57 @@ import { OpenBotEvent } from '../../app/types.js';
 import { ToolResultPart, type ModelMessage } from 'ai';
 
 /**
+ * Ensures every tool-call has a matching tool-result before calling the LLM.
+ * Orphaned calls (interrupted run, missing :result event, etc.) get an empty
+ * result so the conversation can resume instead of failing validation.
+ */
+function fillMissingToolResults(messages: ModelMessage[]): ModelMessage[] {
+  const filled: ModelMessage[] = [];
+  const pending = new Map<string, string>();
+
+  const flushPending = () => {
+    if (pending.size === 0) return;
+    filled.push({
+      role: 'tool',
+      content: [...pending.entries()].map(([toolCallId, toolName]) => ({
+        type: 'tool-result' as const,
+        toolCallId,
+        toolName,
+        output: { type: 'text' as const, value: '' },
+      })),
+    });
+    pending.clear();
+  };
+
+  for (const message of messages) {
+    if (message.role === 'tool' && Array.isArray(message.content)) {
+      filled.push(message);
+      for (const part of message.content) {
+        if ((part as ToolResultPart).type === 'tool-result') {
+          pending.delete((part as ToolResultPart).toolCallId);
+        }
+      }
+      continue;
+    }
+
+    flushPending();
+    filled.push(message);
+
+    if (message.role === 'assistant' && Array.isArray(message.content)) {
+      for (const part of message.content) {
+        if ((part as { type?: string; toolCallId?: string; toolName?: string }).type === 'tool-call') {
+          const toolCall = part as { toolCallId: string; toolName: string };
+          pending.set(toolCall.toolCallId, toolCall.toolName);
+        }
+      }
+    }
+  }
+
+  flushPending();
+  return filled;
+}
+
+/**
  * Converts a raw event log into a valid chain of ModelMessages for the AI SDK.
  * 
  * This is a basic implementation that maps events to messages and filters out
@@ -103,5 +154,5 @@ export function eventsToModelMessages(events: OpenBotEvent[]): ModelMessage[] {
     }
   }
 
-  return messages;
+  return fillMissingToolResults(messages);
 }

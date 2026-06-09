@@ -5,7 +5,7 @@ import { OpenBotEvent } from '../../app/types.js';
 /**
  * `approval` — gates protected tool calls behind a UI confirmation widget.
  * 
- * This is a simplified version that intercepts specified actions (default: shell_exec)
+ * This is a simplified version that intercepts specified actions (default: bash)
  * and requires user approval before they are allowed to proceed.
  */
 
@@ -17,9 +17,9 @@ export const approvalPlugin: Plugin = {
   id: 'approval',
   name: 'Approval',
   description: 'Gate protected tool calls behind a UI confirmation widget.',
-  factory: ({ config }) => (builder) => {
-    // Actions that require approval. Defaults to shell_exec.
-    const actionsToApprove = (config.actions as string[]) || ['action:shell_exec'];
+  factory: ({ config, storage }) => (builder) => {
+    // Actions that require approval. Defaults to bash.
+    const actionsToApprove = (config.actions as string[]) || ['action:bash'];
 
     for (const action of actionsToApprove) {
       builder.intercept(action as OpenBotEvent['type'], (event, context) => {
@@ -27,9 +27,7 @@ export const approvalPlugin: Plugin = {
         if (event.meta?.approvalStatus === 'approved') return event;
 
         // Otherwise, intercept and ask for approval via a UI widget
-        const displayData = action === 'action:shell_exec'
-          ? `\`\`\`bash\n${(event as any).data.command}\n\`\`\``
-          : `\`\`\`json\n${JSON.stringify((event as any).data, null, 2)}\n\`\`\``;
+        const displayData = JSON.stringify((event as any)?.data) || '';
 
         const widgetId = randomUUID();
         pendingApprovals.set(widgetId, Date.now());
@@ -80,6 +78,8 @@ export const approvalPlugin: Plugin = {
       const originalEvent = metadata.originalEvent as OpenBotEvent;
       const approved = actionId === 'approve';
 
+      const displayData = JSON.stringify((event as any)?.data) || '';
+
       // Yield a "responded" widget update to the UI
       yield {
         type: 'client:ui:widget',
@@ -87,7 +87,7 @@ export const approvalPlugin: Plugin = {
           widgetId,
           kind: 'message',
           title: `Action ${approved ? 'Approved' : 'Denied'}`,
-          body: `The request for \`${originalEvent.type}\` was ${approved ? 'approved' : 'denied'}.`,
+          body: displayData,
           state: approved ? 'submitted' : 'cancelled',
           display: 'collapsed',
           disabled: true,
@@ -106,6 +106,22 @@ export const approvalPlugin: Plugin = {
           },
         };
       } else {
+        // Manually store the original event with denied status so it's recorded in history
+        // but NOT re-emitted to the pipeline (to avoid actual execution).
+        if (storage) {
+          await storage.storeEvent({
+            channelId: context.state.channelId,
+            threadId: context.state.threadId,
+            event: {
+              ...originalEvent,
+              meta: {
+                ...(originalEvent.meta || {}),
+                approvalStatus: 'denied',
+              },
+            },
+          });
+        }
+
         // Emit a failure result event for the denied action to clear the pending tool batch
         yield {
           type: `${originalEvent.type}:result` as OpenBotEvent['type'],
@@ -113,6 +129,7 @@ export const approvalPlugin: Plugin = {
             success: false,
             error: 'Action denied by user.',
             stderr: 'Action denied by user.',
+            output: 'Action denied by user.',
           },
           meta: originalEvent.meta,
         } as OpenBotEvent;

@@ -115,13 +115,13 @@ const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
     config: {
       model: 'openai/gpt-5.4-mini',
       approval: {
-        actions: ['action:shell_exec', 'action:create_channel', 'action:delete_channel'],
+        actions: ['action:bash', 'action:create_channel', 'action:delete_channel'],
       },
     },
   },
 ];
 
-/** No `openbot` / `shell` — storage-side effects and infra plugins only. */
+/** No `openbot` / `bash` — storage-side effects and infra plugins only. */
 const STATE_DEFAULT_PLUGINS: PluginRef[] = [
   { id: 'storage' },
   { id: 'plugin-manager' },

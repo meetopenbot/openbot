@@ -5,6 +5,7 @@ import { storageService } from '../plugins/storage/service.js';
 import { STATE_AGENT_ID, ORCHESTRATOR_AGENT_ID } from '../app/agent-ids.js';
 import { resolvePlugin } from '../services/plugins/registry.js';
 import { ToolDefinition } from '../services/plugins/types.js';
+import { abortRegistry, abortKey } from '../services/abort.js';
 
 export { STATE_AGENT_ID, ORCHESTRATOR_AGENT_ID };
 
@@ -80,6 +81,11 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
     event,
   });
 
+  // Shared per-thread abort signal so a stop request cancels this run and any
+  // delegated sub-agent runs (which execute in the same channel/thread).
+  const runKey = abortKey(channelId, threadId);
+  const abortSignal = abortRegistry.acquire(runKey);
+
   await emitEvent(
     {
       type: 'agent:run:start',
@@ -113,6 +119,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
           config: ref.config ?? {},
           storage: storageService,
           tools,
+          abortSignal,
         }),
       );
     }
@@ -121,6 +128,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
     const generator = runtime.run(event, { runId, state });
 
     for await (const outputEvent of generator) {
+      if (abortSignal.aborted) break;
       await emitEvent(outputEvent, state, {
         persistEvents,
         channelId,
@@ -133,6 +141,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
   } catch (error) {
     console.error(`[harness] Error running agent ${agentId}:`, error);
   } finally {
+    abortRegistry.release(runKey);
     await emitEvent(
       {
         type: 'agent:run:end',

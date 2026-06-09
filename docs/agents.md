@@ -36,13 +36,13 @@ A runtime plugin is one that handles `agent:invoke` (the LLM loop). Without
 one, the agent will not respond to user input. Built-in runtime plugins:
 
 - `openbot` — the standard, opinionated OpenBot agent runtime. It is
-  **batteries-included** and provides inbuilt tools (shell, memory, storage,
+  **batteries-included** and provides inbuilt tools (bash, memory, storage,
   delegation, and approval).
 - `claude-code` — runs Claude inside the Claude Agent SDK with its own tools.
 - `gemini-cli` — spawns Google's `gemini` CLI in headless mode.
 
 `claude-code` and `gemini-cli` own their own tool loops, so attaching tool
-plugins like `shell` to them has no effect.
+plugins like `bash` to them has no effect.
 
 ## Built-in agents
 

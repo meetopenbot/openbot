@@ -9,11 +9,11 @@ description: One-line description shown in agent pickers and lists.
 
 # Plugins compose the agent. Order matters for tool collisions (first wins).
 # At least one plugin must handle `agent:invoke` (a "runtime" plugin like
-# `openbot`, `claude-code`, or `gemini-cli`). Tool plugins like `shell`,
+# `openbot`, `claude-code`, or `gemini-cli`). Tool plugins like `bash`,
 # `delegation`, and `storage-tools` contribute tools to whichever runtime
 # plugin can consume them.
 #
-# Built-in plugin ids: openbot, claude-code, gemini-cli, shell, delegation,
+# Built-in plugin ids: openbot, claude-code, gemini-cli, bash, delegation,
 # storage-tools, approval.
 #
 # Community plugins are referenced by their npm package name (e.g.
@@ -23,12 +23,12 @@ plugins:
   - id: openbot
     config:
       model: openai/gpt-4o-mini
-  - id: shell
+  - id: bash
   - id: delegation
   - id: storage
   - id: approval
     config:
-      actions: [action:shell_exec]
+      actions: [action:bash]
 ---
 
 <!--

@@ -44,7 +44,12 @@ export async function buildContext(state: OpenBotState, storage?: Storage): Prom
 
   const sections: string[] = [];
 
-  // 1. Environment
+  // 1. User
+  if (state.currentUser?.userName) {
+    sections.push(`## HUMAN\n- Name: ${state.currentUser.userName}`);
+  }
+
+  // 2. Environment
   let env = '## ENVIRONMENT\n';
   if (isDm) {
     env += '- Mode: Direct Message (Solo)\n';
@@ -64,14 +69,29 @@ export async function buildContext(state: OpenBotState, storage?: Storage): Prom
   }
   sections.push(env);
 
-  // 2. Channel Spec
+  // 2.5 Installed Agents
+  if (storage?.getAgents) {
+    try {
+      const allAgents = await storage.getAgents();
+      if (allAgents.length > 0) {
+        const formatted = allAgents
+          .map((a) => `- ${a.id}: ${a.name}${a.description ? ` - ${a.description}` : ''}`)
+          .join('\n');
+        sections.push(`## INSTALLED AGENTS\n${formatted}`);
+      }
+    } catch (error) {
+      console.warn('[context] Failed to fetch installed agents:', error);
+    }
+  }
+
+  // 3. Channel Spec
   const spec = channelDetails?.spec?.trim();
   if (spec) {
     sections.push(`## CHANNEL SPECIFICATION\n${spec}`);
   }
 
-  // 3. Files
-  if (storage?.listFiles && channelId) {
+  // 4. Files
+  if (storage?.listFiles && channelId && channelDetails?.cwd) {
     try {
       const files = await storage.listFiles({ channelId });
       if (files.length > 0) {
@@ -92,7 +112,7 @@ export async function buildContext(state: OpenBotState, storage?: Storage): Prom
     }
   }
 
-  // 4. Agent Instructions
+  // 5. Agent Instructions
   const rawInstructions = agentDetails?.instructions?.trim();
   if (
     rawInstructions &&
@@ -101,7 +121,7 @@ export async function buildContext(state: OpenBotState, storage?: Storage): Prom
     sections.push(`## Instructions\n${rawInstructions}`);
   }
 
-  // 5. Memories
+  // 6. Memories
   if (storage?.listMemories) {
     try {
       const scopes = ['global', `agent:${agentId}`];

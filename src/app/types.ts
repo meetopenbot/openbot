@@ -23,6 +23,10 @@ export interface OpenBotState {
   model?: string;
   /** Persisted tool call IDs waiting for results. */
   pendingToolCallIds?: string[];
+  /** Current user information if available. */
+  currentUser?: {
+    userName?: string;
+  };
 }
 
 export type BaseEvent = {
@@ -611,13 +615,11 @@ export type UIWidgetResponseEvent = BaseEvent & {
   };
 };
 
-export type ShellExecEvent = BaseEvent & {
-  type: 'action:shell_exec';
+export type BashEvent = BaseEvent & {
+  type: 'action:bash';
   data: {
     command: string;
-    cwd?: string;
-    shell?: string;
-    timeoutMs?: number;
+    restart?: boolean;
   };
   meta?: {
     toolCallId?: string;
@@ -627,8 +629,8 @@ export type ShellExecEvent = BaseEvent & {
   };
 };
 
-export type ShellExecResultEvent = BaseEvent & {
-  type: 'action:shell_exec:result';
+export type BashResultEvent = BaseEvent & {
+  type: 'action:bash:result';
   data: {
     success: boolean;
     approved?: boolean;
@@ -637,6 +639,37 @@ export type ShellExecResultEvent = BaseEvent & {
     stderr: string;
     timedOut: boolean;
     error?: string;
+  };
+};
+
+export type BashStopEvent = BaseEvent & {
+  type: 'action:bash_stop';
+  data: {
+    channelId?: string;
+  };
+};
+
+export type BashStopResultEvent = BaseEvent & {
+  type: 'action:bash_stop:result';
+  data: {
+    success: boolean;
+  };
+};
+
+export type BashListSessionsEvent = BaseEvent & {
+  type: 'action:bash_list_sessions';
+  data: {};
+};
+
+export type BashListSessionsResultEvent = BaseEvent & {
+  type: 'action:bash_list_sessions:result';
+  data: {
+    success: boolean;
+    sessions: Array<{
+      channelId: string;
+      cwd: string;
+      lastActivity: number;
+    }>;
   };
 };
 
@@ -832,6 +865,33 @@ export type DelegateTaskResultEvent = BaseEvent & {
   };
 };
 
+export type RenderWidgetEvent = BaseEvent & {
+  type: 'action:render_widget';
+  data: {
+    kind: 'message' | 'choice' | 'form' | 'list';
+    title: string;
+    description?: string;
+    fields?: UIWidgetField[];
+    actions?: UIWidgetAction[];
+    items?: UIWidgetListItem[];
+    submitLabel?: string;
+  };
+  meta?: {
+    toolCallId?: string;
+    threadId?: string;
+    [key: string]: any;
+  };
+};
+
+export type RenderWidgetResultEvent = BaseEvent & {
+  type: 'action:render_widget:result';
+  data: {
+    success: boolean;
+    actionId: string;
+    values?: Record<string, unknown>;
+  };
+};
+
 /**
  * Internal message representation to decouple harness history from specific AI SDKs.
  */
@@ -909,8 +969,12 @@ export type OpenBotEvent =
   | DeleteChannelToolResultEvent
   | UIWidgetEvent
   | UIWidgetResponseEvent
-  | ShellExecEvent
-  | ShellExecResultEvent
+  | BashEvent
+  | BashResultEvent
+  | BashStopEvent
+  | BashStopResultEvent
+  | BashListSessionsEvent
+  | BashListSessionsResultEvent
   | InstallPluginEvent
   | InstallPluginResultEvent
   | UninstallPluginEvent
@@ -928,4 +992,6 @@ export type OpenBotEvent =
   | ForgetEvent
   | ForgetResultEvent
   | DelegateTaskEvent
-  | DelegateTaskResultEvent;
+  | DelegateTaskResultEvent
+  | RenderWidgetEvent
+  | RenderWidgetResultEvent;

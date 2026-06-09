@@ -47,10 +47,20 @@ const storageToolDefinitions = {
             'Markdown content for the channel specification (SPEC.md). Use for goals and rules.',
           ),
         cwd: z.string().optional().describe('Current working directory for the channel.'),
+        participants: z
+          .array(z.string())
+          .optional()
+          .describe(
+            'List of agent IDs that are participants in this channel. When a user tags an agent (e.g. @agent-id), you should ensure they are added to this list if they are not already there.',
+          ),
       })
       .refine(
-        (value) => value.state !== undefined || value.spec !== undefined || value.cwd !== undefined,
-        { message: 'Provide at least one of state, spec, or cwd.' },
+        (value) =>
+          value.state !== undefined ||
+          value.spec !== undefined ||
+          value.cwd !== undefined ||
+          value.participants !== undefined,
+        { message: 'Provide at least one of state, spec, cwd, or participants.' },
       ),
   },
   patch_thread_details: {
@@ -349,7 +359,8 @@ export const storagePlugin: Plugin = {
             widgetId: "patch-channel-details-result" + Date.now(),
             kind: "message",
             title: "Channel details updated.",
-            body: "The channel details have been updated.",
+            body: `The channel details have been updated. ${updatedFields.join(', ')}`,
+            display: "collapsed",
           },
           meta: resultMeta,
         }

@@ -14,6 +14,7 @@ import { processService } from '../services/process.js';
 import { runAgent, STATE_AGENT_ID, ORCHESTRATOR_AGENT_ID } from '../harness/index.js';
 import { initPlugins } from '../services/plugins/registry.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
+import { abortRegistry, abortKey } from '../services/abort.js';
 
 type Bucket = { channelId: string; threadId?: string; activeCount: number; agentIds: Set<string> };
 
@@ -130,6 +131,20 @@ export async function startServer(options: ServerOptions = {}) {
     };
   };
 
+  // Drop every tracked run for a channel/thread. A stop aborts the whole
+  // chain (parent + delegated sub-agents), but the sub-agents' `agent:run:end`
+  // events can be swallowed when the parent run loop breaks on abort, leaving
+  // orphaned entries that keep a channel falsely "active". Purging by
+  // channel/thread guarantees the snapshot self-heals after a stop.
+  const purgeActiveRunsForThread = (channelId: string, threadId?: string): void => {
+    const target = threadId || undefined;
+    for (const [key, run] of activeRuns) {
+      if (run.channelId === channelId && (run.threadId || undefined) === target) {
+        activeRuns.delete(key);
+      }
+    }
+  };
+
   app.use(cors());
   app.use(express.json({ limit: '20mb' }));
 
@@ -210,6 +225,39 @@ export async function startServer(options: ServerOptions = {}) {
       return;
     }
 
+    // Stop request: cancel the in-flight run (and any delegated sub-agents in the
+    // same thread) instead of spinning up a new agent turn.
+    if (event.type === 'action:agent_run_stop') {
+      const data = (event.data ?? {}) as {
+        runId?: string;
+        agentId?: string;
+        channelId?: string;
+        threadId?: string;
+        reason?: string;
+      };
+      const targetChannelId = data.channelId || channelId;
+      const targetThreadId = data.threadId || threadId;
+      const stopped = abortRegistry.abort(abortKey(targetChannelId, targetThreadId));
+      purgeActiveRunsForThread(targetChannelId, targetThreadId);
+
+      const stoppedEvent: OpenBotEvent = {
+        type: 'agent:run:stopped',
+        data: {
+          runId: data.runId || runId,
+          agentId: data.agentId || agentId || ORCHESTRATOR_AGENT_ID,
+          channelId: targetChannelId,
+          threadId: targetThreadId,
+          reason: data.reason,
+        },
+      } as OpenBotEvent;
+      ensureEventId(stoppedEvent);
+      sendToClientKey(getClientKey(targetChannelId, targetThreadId), stoppedEvent);
+      sendToClientKey(GLOBAL_CHANNEL_ID, stoppedEvent);
+
+      res.json({ success: stopped });
+      return;
+    }
+
     const onEvent = async (chunk: OpenBotEvent, state?: OpenBotState) => {
       const targetChannelId = state?.channelId || channelId;
       const targetThreadId = state?.threadId || threadId;
@@ -229,6 +277,8 @@ export async function startServer(options: ServerOptions = {}) {
         activeRuns.delete(
           getRunKey(chunk.data.runId, chunk.data.agentId, chunk.data.channelId, chunk.data.threadId),
         );
+      } else if (chunk.type === 'agent:run:stopped') {
+        purgeActiveRunsForThread(chunk.data.channelId, chunk.data.threadId);
       }
 
       sendToClientKey(targetClientKey, chunk);

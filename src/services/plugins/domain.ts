@@ -146,6 +146,11 @@ export interface Storage {
   /** For `system` / `state`, removes only `AGENT.md` (reverts to code defaults). */
   deleteAgent: (args: { agentId: string }) => Promise<void>;
   getEvents: (args: { channelId: string; threadId?: string }) => Promise<OpenBotEvent[]>;
+  storeEvent: (args: {
+    channelId: string;
+    threadId?: string;
+    event: OpenBotEvent;
+  }) => Promise<void>;
   getChannelDetails: (args: { channelId: string }) => Promise<ChannelDetails>;
   patchChannelState: (args: { channelId: string; state: unknown }) => Promise<void>;
   patchThreadState: (args: {

@@ -1,10 +1,11 @@
 import type { Plugin } from '../../services/plugins/types.js';
 import { openbotRuntime } from './runtime.js';
-import { shellPlugin } from '../shell/index.js';
+import { bashPlugin } from '../bash/index.js';
 import { memoryPlugin } from '../memory/index.js';
 import { approvalPlugin } from '../approval/index.js';
 import { storagePlugin } from '../storage/index.js';
 import { delegationPlugin } from '../delegation/index.js';
+import { uiPlugin } from '../ui/index.js';
 
 /**
  * `openbot` — the standard, opinionated OpenBot agent runtime.
@@ -13,14 +14,14 @@ import { delegationPlugin } from '../delegation/index.js';
  * `agent:invoke`, manages short-term memory, assembles context, and
  * orchestrates tool calls.
  * 
- * It comes with a "batteries-included" set of inbuilt tools: shell, memory,
+ * It comes with a "batteries-included" set of inbuilt tools: bash, memory,
  * storage, delegation, and approval.
  */
 export const openbotPlugin: Plugin = {
   id: 'openbot',
   name: 'OpenBot Agent',
   description:
-    'The standard OpenBot agent runtime with inbuilt tools (shell, memory, storage, delegation, and approval).',
+    'The standard OpenBot agent runtime with inbuilt tools (bash, memory, storage, delegation, and approval).',
   configSchema: {
     type: 'object',
     properties: {
@@ -44,23 +45,25 @@ export const openbotPlugin: Plugin = {
     },
   },
   toolDefinitions: {
-    ...shellPlugin.toolDefinitions,
+    ...bashPlugin.toolDefinitions,
     ...memoryPlugin.toolDefinitions,
     ...storagePlugin.toolDefinitions,
     ...delegationPlugin.toolDefinitions,
+    ...uiPlugin.toolDefinitions,
   },
   factory: (context) => (builder) => {
-    const { config, storage, tools } = context;
+    const { config, storage, tools, abortSignal } = context;
 
     // Register inbuilt plugins
-    shellPlugin.factory(context)(builder);
+    bashPlugin.factory(context)(builder);
     memoryPlugin.factory(context)(builder);
     storagePlugin.factory(context)(builder);
     delegationPlugin.factory(context)(builder);
+    uiPlugin.factory(context)(builder);
 
     // Approval plugin configuration
     const approvalConfig = (config?.approval as any) || {
-      actions: ['action:shell_exec', 'action:create_channel', 'action:delete_channel'],
+      actions: ['action:bash', 'action:create_channel', 'action:delete_channel'],
     };
     approvalPlugin.factory({ ...context, config: approvalConfig })(builder);
 
@@ -68,6 +71,7 @@ export const openbotPlugin: Plugin = {
       model: config?.model as string,
       storage,
       toolDefinitions: tools,
+      abortSignal,
     })(builder);
   },
 };
