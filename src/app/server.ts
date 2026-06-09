@@ -13,6 +13,7 @@ import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js'
 import { processService } from '../services/process.js';
 import { runAgent, STATE_AGENT_ID, ORCHESTRATOR_AGENT_ID } from '../harness/index.js';
 import { initPlugins } from '../services/plugins/registry.js';
+import { storageService } from '../plugins/storage/service.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
 import { abortRegistry, abortKey } from '../services/abort.js';
 
@@ -87,7 +88,16 @@ export async function startServer(options: ServerOptions = {}) {
 
   const sendToClientKey = (clientKey: string, chunk: OpenBotEvent) => {
     const threadClients = clients.get(clientKey);
-    if (!threadClients) return;
+    if (!threadClients || threadClients.length === 0) return;
+
+    // Auto-detect "read" state: if someone is listening, they just "read" this event.
+    if (chunk.id && clientKey !== GLOBAL_CHANNEL_ID) {
+      const parts = clientKey.split(':');
+      const channelId = parts[0];
+      const threadId = parts[1]; // undefined if no ":"
+      storageService.setLastRead({ channelId, threadId, lastReadEventId: chunk.id }).catch(() => {});
+    }
+
     threadClients.forEach((client) => {
       if (!client.writableEnded) {
         client.write(`data: ${JSON.stringify(chunk)}\n\n`);
@@ -175,6 +185,19 @@ export async function startServer(options: ServerOptions = {}) {
       clients.set(clientKey, []);
     }
     clients.get(clientKey)!.push(res);
+
+    // Auto-detect "read" state on connection: mark the latest event as seen.
+    if (channelId !== GLOBAL_CHANNEL_ID) {
+      storageService
+        .getEvents({ channelId, threadId })
+        .then((events) => {
+          const latestId = events[events.length - 1]?.id;
+          if (latestId) {
+            return storageService.setLastRead({ channelId, threadId, lastReadEventId: latestId });
+          }
+        })
+        .catch(() => {});
+    }
 
     if (channelId === GLOBAL_CHANNEL_ID) {
       const snapshot = buildActiveRunsSnapshot();

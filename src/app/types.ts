@@ -69,6 +69,23 @@ export type GetThreadsResultEvent = BaseEvent & {
   };
 };
 
+export type SetLastReadEvent = BaseEvent & {
+  type: 'action:storage:set-last-read';
+  data: {
+    channelId?: string;
+    threadId?: string;
+    lastReadEventId: string;
+  };
+};
+
+export type SetLastReadResultEvent = BaseEvent & {
+  type: 'action:storage:set-last-read-result';
+  data: {
+    success: boolean;
+    error?: string;
+  };
+};
+
 export type GetChannelDetailsEvent = BaseEvent & {
   type: 'action:storage:get-channel-details';
 };
@@ -920,6 +937,8 @@ export type OpenBotEvent =
   | GetChannelsResultEvent
   | GetThreadsEvent
   | GetThreadsResultEvent
+  | SetLastReadEvent
+  | SetLastReadResultEvent
   | GetChannelDetailsEvent
   | GetChannelDetailsResultEvent
   | GetThreadDetailsEvent

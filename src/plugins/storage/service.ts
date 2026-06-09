@@ -235,6 +235,25 @@ const getAgentsRootDir = () => path.join(resolveBaseDir(), DEFAULT_AGENTS_DIR);
 const getLastReadFilePath = () =>
   path.join(resolvePath(resolveBaseDir() + '/' + DEFAULT_CHANNELS_DIR), '_meta', 'last-read.json');
 
+/** Sentinel key for channel-root events (no threadId). */
+export const ROOT_THREAD_KEY = '__root__';
+
+export type LastReadMap = Record<string, Record<string, string>>;
+
+const readLastReadMap = async (): Promise<LastReadMap> => {
+  const raw = await readJsonFile<Record<string, any>>(getLastReadFilePath(), {});
+  const map: LastReadMap = {};
+  for (const [channelId, value] of Object.entries(raw)) {
+    if (typeof value === 'string') {
+      // Migrate old format
+      map[channelId] = { [ROOT_THREAD_KEY]: value };
+    } else if (value && typeof value === 'object') {
+      map[channelId] = value as Record<string, string>;
+    }
+  }
+  return map;
+};
+
 const THREAD_TITLE_MAX_LENGTH = 80;
 
 const buildThreadTitleFromEvent = (event: OpenBotEvent): string | undefined => {
@@ -429,21 +448,24 @@ const serializePluginRefs = (refs: PluginRef[]): unknown[] =>
   refs.map((ref) => (ref.config ? { id: ref.id, config: ref.config } : { id: ref.id }));
 
 export const storageService = {
-  getLastReadByChannel: async (): Promise<Record<string, string>> => {
-    return readJsonFile(getLastReadFilePath(), {});
+  getLastReadMap: async (): Promise<LastReadMap> => {
+    return readLastReadMap();
   },
 
-  setLastReadForChannel: async ({
+  setLastRead: async ({
     channelId,
+    threadId,
     lastReadEventId,
   }: {
     channelId: string;
+    threadId?: string;
     lastReadEventId: string;
   }): Promise<void> => {
     const p = getLastReadFilePath();
     await fs.mkdir(path.dirname(p), { recursive: true });
-    const map = await readJsonFile<Record<string, string>>(p, {});
-    map[channelId] = lastReadEventId;
+    const map = await readLastReadMap();
+    if (!map[channelId]) map[channelId] = {};
+    map[channelId][threadId || ROOT_THREAD_KEY] = lastReadEventId;
     await fs.writeFile(p, JSON.stringify(map, null, 2), 'utf-8');
   },
 
@@ -458,7 +480,7 @@ export const storageService = {
     const channelNames = (await fs.readdir(channelsDir)).filter(
       (name) => !name.startsWith('.') && name !== '_meta',
     );
-    const lastReadByChannel = await storageService.getLastReadByChannel();
+    const lastReadMap = await storageService.getLastReadMap();
 
     const channels = await Promise.all(
       channelNames.map(async (name) => {
@@ -489,21 +511,25 @@ export const storageService = {
           createdAt: stats.birthtime,
           updatedAt: stats.mtime,
         };
-        const rid = lastReadByChannel[name];
-        try {
-          const events = await storageService.getEvents({ channelId: name });
-          const latestId = events[events.length - 1]?.id;
-          channel.hasUnseenMessages = !!(latestId && latestId !== rid);
-        } catch {
-          channel.hasUnseenMessages = false;
-        }
 
+        const channelLastRead = lastReadMap[name] || {};
+        
         try {
+          // Check root unread
+          const rootEvents = await storageService.getEvents({ channelId: name });
+          const rootLatestId = rootEvents[rootEvents.length - 1]?.id;
+          const rootUnseen = !!(rootLatestId && rootLatestId !== channelLastRead[ROOT_THREAD_KEY]);
+
+          // Check threads unread
           const allThreads = await storageService.getThreads({ channelId: name });
           channel.recentThreads = allThreads
             .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
             .slice(0, 5);
+          
+          const threadsUnseen = allThreads.some(t => t.hasUnseenMessages);
+          channel.hasUnseenMessages = rootUnseen || threadsUnseen;
         } catch {
+          channel.hasUnseenMessages = false;
           channel.recentThreads = [];
         }
 
@@ -648,6 +674,8 @@ export const storageService = {
       return [];
     }
 
+    const lastReadMap = await storageService.getLastReadMap();
+    const channelLastRead = lastReadMap[channelId] || {};
     const threadNames = (await fs.readdir(threadsDir)).filter((name) => !name.startsWith('.'));
 
     const threads = await Promise.all(
@@ -674,12 +702,22 @@ export const storageService = {
           }
         }
 
+        let hasUnseen = false;
+        try {
+          const events = await storageService.getEvents({ channelId, threadId: name });
+          const latestId = events[events.length - 1]?.id;
+          hasUnseen = !!(latestId && latestId !== channelLastRead[name]);
+        } catch {
+          // ignore
+        }
+
         return {
           id: name,
           name: threadDisplayName,
           channelId,
           createdAt: stats.birthtime,
           updatedAt: stats.mtime,
+          hasUnseenMessages: hasUnseen,
         };
       }),
     );

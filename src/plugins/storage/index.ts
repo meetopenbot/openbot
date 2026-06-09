@@ -453,6 +453,26 @@ export const storagePlugin: Plugin = {
       yield { type: 'action:storage:get-threads-result', data: { threads } };
     });
 
+    builder.on('action:storage:set-last-read', async function* (event, context) {
+      const { channelId, threadId, lastReadEventId } = event.data;
+      try {
+        await storage.setLastRead({
+          channelId: channelId || context.state.channelId,
+          threadId: threadId || context.state.threadId,
+          lastReadEventId,
+        });
+        yield { type: 'action:storage:set-last-read-result', data: { success: true } };
+      } catch (error) {
+        yield {
+          type: 'action:storage:set-last-read-result',
+          data: {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    });
+
     builder.on('action:storage:get-channel-details', async function* (_, state) {
       const channelDetails = await storage.getChannelDetails({
         channelId: state.state.channelId,

@@ -78,6 +78,7 @@ export type Thread = {
   channelId: string;
   createdAt: Date;
   updatedAt: Date;
+  hasUnseenMessages?: boolean;
 };
 
 export type ThreadDetails = {
@@ -116,6 +117,7 @@ export interface Storage {
   }) => Promise<void>;
   getThreads: (args: { channelId: string }) => Promise<Thread[]>;
   getThreadDetails: (args: { channelId: string; threadId: string }) => Promise<ThreadDetails>;
+  setLastRead: (args: { channelId: string; threadId?: string; lastReadEventId: string }) => Promise<void>;
   /** User-facing agent list; excludes agents with `hidden: true` (e.g. built-in `state`). */
   getAgents: () => Promise<Agent[]>;
   getPlugins: () => Promise<PluginDescriptor[]>;
