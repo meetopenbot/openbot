@@ -313,16 +313,60 @@ export const openbotRuntime =
           };
         }
 
+        const threadId = event.meta?.threadId || context.state.threadId;
+
+        // Auto-add participants if tagged in the prompt
+        const content = (event as AgentInvokeEvent).data?.content;
+        if (content && storage) {
+          try {
+            const allAgents = await storage.getAgents();
+            const tags = content.match(/@([\w-]+)/g);
+            if (tags) {
+              const taggedAgentIds = tags.map((t) => t.slice(1));
+              const validAgentIds = taggedAgentIds.filter((id) =>
+                allAgents.some((a) => a.id === id),
+              );
+
+              const currentParticipants = context.state.channelDetails?.participants || [];
+              const newParticipants = [...new Set([...currentParticipants, ...validAgentIds])];
+
+              if (newParticipants.length > currentParticipants.length) {
+                // Update storage
+                await storage.patchChannelState({
+                  channelId: context.state.channelId,
+                  state: { participants: newParticipants },
+                });
+
+                // Refresh local state
+                context.state.channelDetails = await storage.getChannelDetails({
+                  channelId: context.state.channelId,
+                });
+
+                // Notify UI/others about the change
+                yield {
+                  type: 'action:patch_channel_details:result',
+                  data: { success: true, updatedFields: ['participants'] },
+                  meta: {
+                    agentId: context.state.agentId,
+                    threadId,
+                  },
+                } as OpenBotEvent;
+              }
+            }
+          } catch (error) {
+            console.warn('[openbot] Failed to auto-add participants from tags:', error);
+          }
+        }
+
         // clear the tool batch if the agent is invoked
         // this is to prevent the tool batch from being used for a new agent invocation
         await createToolBatchTracker(
           context.state,
           storage,
           context.state.channelId,
-          event.meta?.threadId || context.state.threadId,
+          threadId,
         ).clear();
 
-        const threadId = event.meta?.threadId || context.state.threadId;
         yield* runLLM(context, threadId, event as AgentInvokeEvent);
       });
 

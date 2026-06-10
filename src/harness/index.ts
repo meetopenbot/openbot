@@ -6,6 +6,8 @@ import { STATE_AGENT_ID, ORCHESTRATOR_AGENT_ID } from '../app/agent-ids.js';
 import { resolvePlugin } from '../services/plugins/registry.js';
 import { ToolDefinition } from '../services/plugins/types.js';
 import { abortRegistry, abortKey } from '../services/abort.js';
+import { loadConfig } from '../app/config.js';
+import { getPublicBaseUrl } from '../plugins/storage/files.js';
 
 export { STATE_AGENT_ID, ORCHESTRATOR_AGENT_ID };
 
@@ -16,6 +18,8 @@ export interface RunAgentOptions {
   channelId: string;
   threadId?: string;
   persistEvents?: boolean;
+  /** Resolved public base URL for the server. */
+  publicBaseUrl?: string;
   onEvent: (event: OpenBotEvent, state?: OpenBotState) => Promise<void>;
 }
 
@@ -68,6 +72,13 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
   const { runId, agentId, event, channelId, threadId, onEvent } = options;
   const persistEvents = options.persistEvents !== false;
 
+  let publicBaseUrl = options.publicBaseUrl;
+  if (!publicBaseUrl) {
+    const config = loadConfig();
+    const port = Number(config.port ?? process.env.PORT ?? 4132);
+    publicBaseUrl = getPublicBaseUrl(port, config.publicUrl);
+  }
+
   const parentAgentId = event.meta?.parentAgentId;
   const parentToolCallId = event.meta?.parentToolCallId;
 
@@ -119,6 +130,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
           config: ref.config ?? {},
           storage: storageService,
           tools,
+          publicBaseUrl,
           abortSignal,
         }),
       );

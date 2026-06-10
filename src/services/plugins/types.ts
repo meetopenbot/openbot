@@ -33,6 +33,8 @@ export interface PluginContext {
   config: Record<string, unknown>;
   storage: Storage;
   tools: Record<string, ToolDefinition>;
+  /** Resolved public base URL for the server (e.g. https://my-host.example or http://localhost:4132). */
+  publicBaseUrl: string;
   /** Signal that fires when this run is stopped; runtimes should pass it to long-running calls. */
   abortSignal?: AbortSignal;
 }

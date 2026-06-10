@@ -29,7 +29,7 @@ export const delegationPlugin: Plugin = {
   name: 'Delegation',
   description: 'Allows agents to call upon other agents to solve sub-tasks.',
   toolDefinitions: delegationToolDefinitions,
-  factory: () => (builder) => {
+  factory: (pluginContext) => (builder) => {
 
     // Handle the tool execution
     builder.on('action:delegate_task', async function* (event, context) {
@@ -84,6 +84,7 @@ export const delegationPlugin: Plugin = {
         } as OpenBotEvent,
         channelId: context.state.channelId,
         threadId: context.state.threadId,
+        publicBaseUrl: pluginContext.publicBaseUrl,
         onEvent: async (outEvent) => {
           // Enrich events with parent metadata so the UI can track the hierarchy
           const enrichedEvent = {

@@ -14,6 +14,11 @@ import { processService } from '../services/process.js';
 import { runAgent, STATE_AGENT_ID, ORCHESTRATOR_AGENT_ID } from '../harness/index.js';
 import { initPlugins } from '../services/plugins/registry.js';
 import { storageService } from '../plugins/storage/service.js';
+import {
+  buildWorkspaceFileUrl,
+  getPublicBaseUrl,
+  openChannelFileStream,
+} from '../plugins/storage/files.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
 import { abortRegistry, abortKey } from '../services/abort.js';
 
@@ -54,6 +59,10 @@ export async function startServer(options: ServerOptions = {}) {
   await fs.mkdir(pluginsDir, { recursive: true });
 
   initPlugins(pluginsDir);
+
+  // Pre-warm caches for agents and plugins to speed up first UI load
+  storageService.getAgents().catch((err) => console.warn('[server] Failed to pre-warm agents cache', err));
+  storageService.getPlugins().catch((err) => console.warn('[server] Failed to pre-warm plugins cache', err));
 
   const getContext = (req: express.Request) => {
     const channelId =
@@ -156,7 +165,22 @@ export async function startServer(options: ServerOptions = {}) {
   };
 
   app.use(cors());
-  app.use(express.json({ limit: '20mb' }));
+
+  const resolvePublicBaseUrl = () => getPublicBaseUrl(PORT, config.publicUrl);
+
+  app.use((req, res, next) => {
+    const isWorkspaceUpload =
+      req.method === 'POST' &&
+      req.path === '/api/publish' &&
+      req.get('x-openbot-event-type') === 'action:storage:upload-file';
+
+    if (isWorkspaceUpload) {
+      express.raw({ type: () => true, limit: '100mb' })(req, res, next);
+      return;
+    }
+
+    express.json({ limit: '20mb' })(req, res, next);
+  });
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', version: pkg.version });
@@ -230,6 +254,57 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.post('/api/publish', async (req, res) => {
+    if (req.get('x-openbot-event-type') === 'action:storage:upload-file') {
+      const channelId =
+        req.get('x-openbot-channel-id') ||
+        (typeof req.query.channelId === 'string' ? req.query.channelId : undefined);
+      const filePath = req.get('x-openbot-file-path');
+      const overwrite = req.get('x-openbot-file-overwrite') === 'true';
+
+      if (!channelId?.trim()) {
+        res.status(400).json({ error: 'channelId is required' });
+        return;
+      }
+      if (!filePath?.trim()) {
+        res.status(400).json({ error: 'x-openbot-file-path header is required' });
+        return;
+      }
+
+      const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      if (body.length === 0) {
+        res.status(400).json({ error: 'Request body is empty' });
+        return;
+      }
+
+      try {
+        const result = await storageService.uploadChannelFile({
+          channelId: channelId.trim(),
+          path: filePath.trim(),
+          body,
+          overwrite,
+        });
+        const url = buildWorkspaceFileUrl({
+          baseUrl: resolvePublicBaseUrl(),
+          channelId: channelId.trim(),
+          filePath: result.path,
+        });
+        res.json({
+          type: 'action:storage:upload-file:result',
+          data: { success: true, ...result, url },
+        });
+      } catch (error) {
+        res.status(400).json({
+          type: 'action:storage:upload-file:result',
+          data: {
+            success: false,
+            path: filePath,
+            error: error instanceof Error ? error.message : 'Upload failed',
+          },
+        });
+      }
+      return;
+    }
+
     const parseResult = publishEventSchema.safeParse(req.body);
     if (!parseResult.success) {
       res.status(400).json({
@@ -245,6 +320,59 @@ export async function startServer(options: ServerOptions = {}) {
 
     if (!channelId || !channelId.trim()) {
       res.status(400).json({ error: 'channelId is required' });
+      return;
+    }
+
+    if (event.type === 'action:storage:write-file') {
+      const data = (event.data ?? {}) as {
+        path?: string;
+        content?: string;
+        encoding?: 'utf8' | 'base64';
+        overwrite?: boolean;
+      };
+
+      if (!data.path?.trim()) {
+        res.status(400).json({
+          type: 'action:storage:write-file:result',
+          data: { success: false, path: '', error: 'path is required' },
+        });
+        return;
+      }
+      if (typeof data.content !== 'string') {
+        res.status(400).json({
+          type: 'action:storage:write-file:result',
+          data: { success: false, path: data.path, error: 'content is required' },
+        });
+        return;
+      }
+
+      try {
+        const result = await storageService.writeChannelFile({
+          channelId,
+          path: data.path.trim(),
+          content: data.content,
+          encoding: data.encoding ?? 'utf8',
+          overwrite: data.overwrite ?? false,
+        });
+        const url = buildWorkspaceFileUrl({
+          baseUrl: resolvePublicBaseUrl(),
+          channelId,
+          filePath: result.path,
+        });
+        res.json({
+          type: 'action:storage:write-file:result',
+          data: { success: true, ...result, url },
+        });
+      } catch (error) {
+        res.status(400).json({
+          type: 'action:storage:write-file:result',
+          data: {
+            success: false,
+            path: data.path,
+            error: error instanceof Error ? error.message : 'Write failed',
+          },
+        });
+      }
       return;
     }
 
@@ -324,6 +452,7 @@ export async function startServer(options: ServerOptions = {}) {
         event,
         channelId,
         threadId,
+        publicBaseUrl: resolvePublicBaseUrl(),
         onEvent,
       });
       res.sendStatus(200);
@@ -350,6 +479,35 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     const { channelId, threadId, agentId, runId } = getContext(req);
+
+    if (event.type === 'action:storage:serve-file') {
+      const filePath = (event.data as { path?: string })?.path;
+      if (!channelId?.trim()) {
+        res.status(400).json({ error: 'channelId is required' });
+        return;
+      }
+      if (!filePath?.trim()) {
+        res.status(400).json({ error: 'path is required' });
+        return;
+      }
+
+      try {
+        const { abs, size, mimeType } = await storageService.getChannelFileStat({
+          channelId,
+          path: filePath.trim(),
+        });
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Length', String(size));
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        openChannelFileStream(abs).pipe(res);
+      } catch (error) {
+        res.status(404).json({
+          error: error instanceof Error ? error.message : 'File not found',
+        });
+      }
+      return;
+    }
+
     const events: OpenBotEvent[] = [];
 
     const onEvent = async (chunk: OpenBotEvent) => {
@@ -366,6 +524,7 @@ export async function startServer(options: ServerOptions = {}) {
         channelId,
         threadId,
         persistEvents: false,
+        publicBaseUrl: resolvePublicBaseUrl(),
         onEvent,
       });
       res.json({ events });

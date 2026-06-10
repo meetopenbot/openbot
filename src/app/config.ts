@@ -14,6 +14,8 @@ export interface OpenBotconfig {
    * {@link DEFAULT_MARKETPLACE_REGISTRY_URL} is used.
    */
   marketplaceRegistryUrl?: string;
+  /** Public base URL for workspace file links (e.g. https://my-host.example). Falls back to OPENBOT_PUBLIC_URL env or http://localhost:{port}. */
+  publicUrl?: string;
 }
 
 export interface StoredVariable {

@@ -44,6 +44,9 @@ export async function buildContext(state: OpenBotState, storage?: Storage): Prom
 
   const sections: string[] = [];
 
+  // Fetch agents once if storage is available
+  const allAgents = storage?.getAgents ? await storage.getAgents().catch(() => []) : [];
+
   // 1. User
   if (state.currentUser?.userName) {
     sections.push(`## HUMAN\n- Name: ${state.currentUser.userName}`);
@@ -63,25 +66,20 @@ export async function buildContext(state: OpenBotState, storage?: Storage): Prom
       env += `- Thread: ${threadDetails?.name || threadId}\n`;
     }
     const peerIds = participants.filter((id: string) => id !== agentId);
-    if (peerIds.length > 0) {
-      env += `- Participants: ${peerIds.join(', ')}\n`;
-    }
+    const participantLabels = peerIds.map((id) => {
+      const agent = allAgents.find((a) => a.id === id);
+      return agent ? `${agent.name} (${id})` : id;
+    });
+    env += `- Participants: ${participantLabels.length > 0 ? participantLabels.join(', ') : 'None'}\n`;
   }
   sections.push(env);
 
   // 2.5 Installed Agents
-  if (storage?.getAgents) {
-    try {
-      const allAgents = await storage.getAgents();
-      if (allAgents.length > 0) {
-        const formatted = allAgents
-          .map((a) => `- ${a.id}: ${a.name}${a.description ? ` - ${a.description}` : ''}`)
-          .join('\n');
-        sections.push(`## INSTALLED AGENTS\n${formatted}`);
-      }
-    } catch (error) {
-      console.warn('[context] Failed to fetch installed agents:', error);
-    }
+  if (allAgents.length > 0) {
+    const formatted = allAgents
+      .map((a) => `- ${a.id}: ${a.name}${a.description ? ` - ${a.description}` : ''}`)
+      .join('\n');
+    sections.push(`## INSTALLED AGENTS\n${formatted}`);
   }
 
   // 3. Channel Spec

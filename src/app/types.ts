@@ -345,6 +345,7 @@ export type ReadFileEvent = BaseEvent & {
   type: 'action:storage:read-file';
   data: {
     path: string;
+    encoding?: 'utf8' | 'base64';
   };
 };
 
@@ -354,6 +355,107 @@ export type ReadFileResultEvent = BaseEvent & {
     success: boolean;
     content?: string;
     path: string;
+    encoding?: 'utf8' | 'base64';
+    mimeType?: string;
+    size?: number;
+    error?: string;
+  };
+};
+
+export type ServeFileEvent = BaseEvent & {
+  type: 'action:storage:serve-file';
+  data: {
+    path: string;
+  };
+};
+
+export type WriteFileEvent = BaseEvent & {
+  type: 'action:storage:write-file';
+  data: {
+    path: string;
+    content: string;
+    encoding?: 'utf8' | 'base64';
+    overwrite?: boolean;
+  };
+};
+
+export type WriteFileResultEvent = BaseEvent & {
+  type: 'action:storage:write-file:result';
+  data: {
+    success: boolean;
+    path: string;
+    url?: string;
+    mimeType?: string;
+    size?: number;
+    error?: string;
+  };
+};
+
+export type GetFileUrlEvent = BaseEvent & {
+  type: 'action:storage:get-file-url';
+  data: {
+    path: string;
+  };
+};
+
+export type GetFileUrlResultEvent = BaseEvent & {
+  type: 'action:storage:get-file-url:result';
+  data: {
+    success: boolean;
+    path: string;
+    url?: string;
+    mimeType?: string;
+    size?: number;
+    error?: string;
+  };
+};
+
+export type GetWorkspaceFileUrlEvent = BaseEvent & {
+  type: 'action:get_workspace_file_url';
+  data: {
+    path: string;
+  };
+  meta?: {
+    toolCallId?: string;
+    agentId?: string;
+    threadId?: string;
+  };
+};
+
+export type GetWorkspaceFileUrlResultEvent = BaseEvent & {
+  type: 'action:get_workspace_file_url:result';
+  data: {
+    success: boolean;
+    path: string;
+    url?: string;
+    mimeType?: string;
+    size?: number;
+    output?: string;
+    error?: string;
+  };
+  meta?: {
+    toolCallId?: string;
+    agentId?: string;
+    threadId?: string;
+  };
+};
+
+export type UploadFileEvent = BaseEvent & {
+  type: 'action:storage:upload-file';
+  data: {
+    path: string;
+    overwrite?: boolean;
+  };
+};
+
+export type UploadFileResultEvent = BaseEvent & {
+  type: 'action:storage:upload-file:result';
+  data: {
+    success: boolean;
+    path: string;
+    url?: string;
+    mimeType?: string;
+    size?: number;
     error?: string;
   };
 };
@@ -976,6 +1078,15 @@ export type OpenBotEvent =
   | ListFilesResultEvent
   | ReadFileEvent
   | ReadFileResultEvent
+  | ServeFileEvent
+  | WriteFileEvent
+  | WriteFileResultEvent
+  | GetFileUrlEvent
+  | GetFileUrlResultEvent
+  | GetWorkspaceFileUrlEvent
+  | GetWorkspaceFileUrlResultEvent
+  | UploadFileEvent
+  | UploadFileResultEvent
   | CreateThreadEvent
   | CreateThreadResultEvent
   | CreateChannelEvent

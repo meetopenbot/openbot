@@ -1,6 +1,7 @@
 import z from 'zod';
 import type { Plugin } from '../../services/plugins/types.js';
 import { OpenBotEvent } from '../../app/types.js';
+import { buildWorkspaceFileUrl } from './files.js';
 
 /**
  * `storage` — exposes channel/thread/variable mutation tools and provides
@@ -94,6 +95,15 @@ const storageToolDefinitions = {
       channelId: z.string().describe('The channel ID to delete.'),
     }),
   },
+  get_workspace_file_url: {
+    description:
+      'Get a fetchable HTTP URL for a file in the current channel workspace (images, video, audio, documents).',
+    inputSchema: z.object({
+      path: z
+        .string()
+        .describe('Path relative to the channel working directory, e.g. "uploads/clip.mp4".'),
+    }),
+  },
 };
 
 export const storagePlugin: Plugin = {
@@ -101,7 +111,9 @@ export const storagePlugin: Plugin = {
   name: 'Storage',
   description: 'Tools for creating channels, patching state, and managing workspace variables.',
   toolDefinitions: storageToolDefinitions,
-  factory: ({ storage }) => (builder) => {
+  factory: ({ storage, publicBaseUrl }) => (builder) => {
+    const resolvePublicBaseUrl = () => publicBaseUrl;
+
     builder.on('action:create_thread', async function* (event, context) {
       const threadId = event.meta?.threadId;
       const channelId = context.state.channelId;
@@ -695,7 +707,9 @@ export const storagePlugin: Plugin = {
 
     builder.on('action:storage:read-file', async function* (event, context) {
       const channelId = context.state.channelId;
-      const filePath = (event.data as any)?.path;
+      const data = event.data as { path?: string; encoding?: 'utf8' | 'base64' };
+      const filePath = data?.path;
+      const encoding = data?.encoding ?? 'utf8';
       if (!filePath) {
         yield {
           type: 'action:storage:read-file:result',
@@ -704,10 +718,23 @@ export const storagePlugin: Plugin = {
         return;
       }
       try {
-        const content = await storage.readFile({ channelId, path: filePath });
+        if (encoding === 'utf8') {
+          const content = await storage.readFile({ channelId, path: filePath });
+          yield {
+            type: 'action:storage:read-file:result',
+            data: { success: true, content, path: filePath, encoding },
+          };
+          return;
+        }
+
+        const { content, mimeType, size } = await storage.readChannelFile({
+          channelId,
+          path: filePath,
+          encoding,
+        });
         yield {
           type: 'action:storage:read-file:result',
-          data: { success: true, content, path: filePath },
+          data: { success: true, content, path: filePath, encoding, mimeType, size },
         };
       } catch (error) {
         yield {
@@ -717,6 +744,76 @@ export const storagePlugin: Plugin = {
             path: filePath,
             error: error instanceof Error ? error.message : 'Unknown error',
           },
+        };
+      }
+    });
+
+    builder.on('action:storage:get-file-url', async function* (event, context) {
+      const channelId = context.state.channelId;
+      const filePath = (event.data as { path?: string })?.path;
+      if (!filePath) {
+        yield {
+          type: 'action:storage:get-file-url:result',
+          data: { success: false, path: '', error: 'Path is required' },
+        };
+        return;
+      }
+      try {
+        const { size, mimeType } = await storage.getChannelFileStat({ channelId, path: filePath });
+        const url = buildWorkspaceFileUrl({
+          baseUrl: resolvePublicBaseUrl(),
+          channelId,
+          filePath,
+        });
+        yield {
+          type: 'action:storage:get-file-url:result',
+          data: { success: true, path: filePath, url, mimeType, size },
+        };
+      } catch (error) {
+        yield {
+          type: 'action:storage:get-file-url:result',
+          data: {
+            success: false,
+            path: filePath,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        };
+      }
+    });
+
+    builder.on('action:get_workspace_file_url', async function* (event, context) {
+      const channelId = context.state.channelId;
+      const filePath = (event.data as { path?: string })?.path;
+      const toolCallId = event.meta?.toolCallId;
+
+      if (!filePath) {
+        yield {
+          type: 'action:get_workspace_file_url:result',
+          data: { success: false, path: '', error: 'Path is required', output: 'Path is required' },
+          meta: { ...(event.meta || {}), toolCallId },
+        };
+        return;
+      }
+
+      try {
+        const { size, mimeType } = await storage.getChannelFileStat({ channelId, path: filePath });
+        const url = buildWorkspaceFileUrl({
+          baseUrl: resolvePublicBaseUrl(),
+          channelId,
+          filePath,
+        });
+        const output = JSON.stringify({ path: filePath, url, mimeType, size });
+        yield {
+          type: 'action:get_workspace_file_url:result',
+          data: { success: true, path: filePath, url, mimeType, size, output },
+          meta: { ...(event.meta || {}), toolCallId },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        yield {
+          type: 'action:get_workspace_file_url:result',
+          data: { success: false, path: filePath, error: message, output: message },
+          meta: { ...(event.meta || {}), toolCallId },
         };
       }
     });

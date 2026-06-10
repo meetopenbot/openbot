@@ -31,6 +31,11 @@ import { listBuiltInPlugins, parsePluginModule } from '../../services/plugins/re
 import { OpenBotEvent, OpenBotState } from '../../app/types.js';
 import { processService } from '../../services/process.js';
 import { memoryService } from '../memory/service.js';
+import {
+  guessMimeType,
+  resolveChannelFile,
+  statChannelFile,
+} from './files.js';
 
 const resolveBaseDir = () => {
   const config = loadConfig();
@@ -279,9 +284,12 @@ const buildThreadTitleFromEvent = (event: OpenBotEvent): string | undefined => {
 
 const readJsonFile = async <T>(filePath: string, fallback: T): Promise<T> => {
   try {
-    return JSON.parse(await fs.readFile(filePath, 'utf-8')) as T;
+    const content = (await fs.readFile(filePath, 'utf-8')).trim();
+    if (!content) return fallback;
+    return JSON.parse(content) as T;
   } catch (e: unknown) {
     if ((e as { code?: string })?.code === 'ENOENT') return fallback;
+    if (e instanceof SyntaxError) return fallback;
     throw e;
   }
 };
@@ -466,7 +474,9 @@ export const storageService = {
     const map = await readLastReadMap();
     if (!map[channelId]) map[channelId] = {};
     map[channelId][threadId || ROOT_THREAD_KEY] = lastReadEventId;
-    await fs.writeFile(p, JSON.stringify(map, null, 2), 'utf-8');
+    const tmp = `${p}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(map, null, 2), 'utf-8');
+    await fs.rename(tmp, p);
   },
 
   getChannels: async (): Promise<Channel[]> => {
@@ -618,7 +628,9 @@ export const storageService = {
       if (normalizedChannelId in map) {
         delete map[normalizedChannelId];
         await fs.mkdir(path.dirname(lastReadPath), { recursive: true });
-        await fs.writeFile(lastReadPath, JSON.stringify(map, null, 2), 'utf-8');
+        const tmp = `${lastReadPath}.tmp`;
+        await fs.writeFile(tmp, JSON.stringify(map, null, 2), 'utf-8');
+        await fs.rename(tmp, lastReadPath);
       }
     } catch {
       // ignore last-read cleanup failures
@@ -1438,12 +1450,9 @@ export const storageService = {
       throw new Error('Channel has no CWD configured');
     }
 
-    const resolvedBase = resolvePath(baseCwd);
-    const targetDir = path.resolve(resolvedBase, subPath);
-
-    if (!targetDir.startsWith(resolvedBase)) {
-      throw new Error('Access denied: directory escape');
-    }
+    const targetDir = subPath
+      ? resolveChannelFile(baseCwd, subPath)
+      : resolvePath(baseCwd);
 
     const entries = await fs.readdir(targetDir, { withFileTypes: true });
     return entries
@@ -1468,14 +1477,142 @@ export const storageService = {
       throw new Error('Channel has no CWD configured');
     }
 
-    const resolvedBase = resolvePath(baseCwd);
-    const targetFile = path.resolve(resolvedBase, filePath);
+    const targetFile = resolveChannelFile(baseCwd, filePath);
+    return fs.readFile(targetFile, 'utf-8');
+  },
 
-    if (!targetFile.startsWith(resolvedBase)) {
-      throw new Error('Access denied: directory escape');
+  readChannelFile: async ({
+    channelId,
+    path: filePath,
+    encoding = 'utf8',
+  }: {
+    channelId: string;
+    path: string;
+    encoding?: 'utf8' | 'base64';
+  }): Promise<{ content: string; mimeType: string; size: number }> => {
+    const details = await storageService.getChannelDetails({ channelId });
+    const baseCwd = details.cwd;
+
+    if (!baseCwd) {
+      throw new Error('Channel has no CWD configured');
     }
 
-    return fs.readFile(targetFile, 'utf-8');
+    const targetFile = resolveChannelFile(baseCwd, filePath);
+    const buf = await fs.readFile(targetFile);
+    const content =
+      encoding === 'base64' ? buf.toString('base64') : buf.toString('utf-8');
+
+    return {
+      content,
+      mimeType: guessMimeType(targetFile),
+      size: buf.length,
+    };
+  },
+
+  writeChannelFile: async ({
+    channelId,
+    path: filePath,
+    content,
+    encoding = 'utf8',
+    overwrite = false,
+  }: {
+    channelId: string;
+    path: string;
+    content: string;
+    encoding?: 'utf8' | 'base64';
+    overwrite?: boolean;
+  }): Promise<{ path: string; size: number; mimeType: string }> => {
+    const details = await storageService.getChannelDetails({ channelId });
+    const baseCwd = details.cwd;
+
+    if (!baseCwd) {
+      throw new Error('Channel has no CWD configured');
+    }
+
+    const abs = resolveChannelFile(baseCwd, filePath);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+
+    if (!overwrite) {
+      try {
+        await fs.access(abs);
+        throw new Error('File already exists');
+      } catch (error: unknown) {
+        const code = (error as NodeJS.ErrnoException)?.code;
+        if (code !== 'ENOENT') {
+          throw error;
+        }
+      }
+    }
+
+    const buf =
+      encoding === 'base64' ? Buffer.from(content, 'base64') : Buffer.from(content, 'utf8');
+    await fs.writeFile(abs, buf);
+
+    return {
+      path: filePath,
+      size: buf.length,
+      mimeType: guessMimeType(abs),
+    };
+  },
+
+  uploadChannelFile: async ({
+    channelId,
+    path: filePath,
+    body,
+    overwrite = false,
+  }: {
+    channelId: string;
+    path: string;
+    body: Buffer;
+    overwrite?: boolean;
+  }): Promise<{ path: string; size: number; mimeType: string }> => {
+    const details = await storageService.getChannelDetails({ channelId });
+    const baseCwd = details.cwd;
+
+    if (!baseCwd) {
+      throw new Error('Channel has no CWD configured');
+    }
+
+    const abs = resolveChannelFile(baseCwd, filePath);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+
+    if (!overwrite) {
+      try {
+        await fs.access(abs);
+        throw new Error('File already exists');
+      } catch (error: unknown) {
+        const code = (error as NodeJS.ErrnoException)?.code;
+        if (code !== 'ENOENT') {
+          throw error;
+        }
+      }
+    }
+
+    await fs.writeFile(abs, body);
+
+    return {
+      path: filePath,
+      size: body.length,
+      mimeType: guessMimeType(abs),
+    };
+  },
+
+  getChannelFileStat: async ({
+    channelId,
+    path: filePath,
+  }: {
+    channelId: string;
+    path: string;
+  }): Promise<{ abs: string; size: number; mimeType: string }> => {
+    const details = await storageService.getChannelDetails({ channelId });
+    const baseCwd = details.cwd;
+
+    if (!baseCwd) {
+      throw new Error('Channel has no CWD configured');
+    }
+
+    const { abs, size } = await statChannelFile(baseCwd, filePath);
+    return { abs, size, mimeType: guessMimeType(abs) };
   },
 
   appendMemory: memoryService.appendMemory,

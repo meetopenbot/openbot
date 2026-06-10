@@ -169,6 +169,28 @@ export interface Storage {
     path?: string;
   }) => Promise<Array<{ name: string; isDirectory: boolean }>>;
   readFile: (args: { channelId: string; path: string }) => Promise<string>;
+  readChannelFile: (args: {
+    channelId: string;
+    path: string;
+    encoding?: 'utf8' | 'base64';
+  }) => Promise<{ content: string; mimeType: string; size: number }>;
+  writeChannelFile: (args: {
+    channelId: string;
+    path: string;
+    content: string;
+    encoding?: 'utf8' | 'base64';
+    overwrite?: boolean;
+  }) => Promise<{ path: string; size: number; mimeType: string }>;
+  uploadChannelFile: (args: {
+    channelId: string;
+    path: string;
+    body: Buffer;
+    overwrite?: boolean;
+  }) => Promise<{ path: string; size: number; mimeType: string }>;
+  getChannelFileStat: (args: {
+    channelId: string;
+    path: string;
+  }) => Promise<{ abs: string; size: number; mimeType: string }>;
   /** Persist a memory record into the global memory log. */
   appendMemory: (args: {
     scope: string;
