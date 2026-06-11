@@ -85,6 +85,8 @@ export const delegationPlugin: Plugin = {
         channelId: context.state.channelId,
         threadId: context.state.threadId,
         publicBaseUrl: pluginContext.publicBaseUrl,
+        // Child events are re-yielded to the parent harness, which persists them once.
+        persistEvents: false,
         onEvent: async (outEvent) => {
           // Enrich events with parent metadata so the UI can track the hierarchy
           const enrichedEvent = {

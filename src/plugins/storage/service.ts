@@ -294,6 +294,13 @@ const readJsonFile = async <T>(filePath: string, fallback: T): Promise<T> => {
   }
 };
 
+const writeJsonFileAtomically = async (filePath: string, data: unknown): Promise<void> => {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const tmp = `${filePath}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf-8');
+  await fs.rename(tmp, filePath);
+};
+
 const toVariablesRecord = (raw: unknown): Record<string, string> => {
   if (!raw || typeof raw !== 'object') {
     return {};
@@ -502,8 +509,7 @@ export const storageService = {
         let participants: string[] = [];
 
         try {
-          const stateContent = await fs.readFile(statePath, 'utf-8');
-          const parsed = JSON.parse(stateContent);
+          const parsed = await readJsonFile(statePath, {});
           const fields = readChannelStateFileFields(parsed);
           cwd = fields.cwd;
           displayName = fields.name ?? name;
@@ -597,7 +603,7 @@ export const storageService = {
       spec?.trim() ||
       `# ${normalizedChannelId}\n\n`,
     );
-    await fs.writeFile(statePath, JSON.stringify(finalState, null, 2));
+    await writeJsonFileAtomically(statePath, finalState);
   },
   deleteChannel: async ({ channelId }: { channelId: string }): Promise<void> => {
     const normalizedChannelId = channelId.trim();
@@ -673,8 +679,7 @@ export const storageService = {
       baseState.name = threadTitle.trim();
     }
 
-    await fs.mkdir(threadDir, { recursive: true });
-    await fs.writeFile(statePath, JSON.stringify(baseState, null, 2));
+    await writeJsonFileAtomically(statePath, baseState);
   },
   getThreads: async ({ channelId }: { channelId: string }): Promise<Thread[]> => {
     const threadsDir = resolvePath(
@@ -698,8 +703,7 @@ export const storageService = {
         let threadDisplayName = name;
 
         try {
-          const threadStateRaw = await fs.readFile(threadStatePath, 'utf-8');
-          const threadState = JSON.parse(threadStateRaw) as Record<string, unknown>;
+          const threadState = await readJsonFile<Record<string, unknown>>(threadStatePath, {});
           const threadName =
             typeof threadState.name === 'string' ? threadState.name.trim() : '';
           if (threadName) {
@@ -748,8 +752,7 @@ export const storageService = {
 
     let state: unknown = {};
     try {
-      const stateContent = await fs.readFile(statePath, 'utf-8');
-      state = JSON.parse(stateContent);
+      state = await readJsonFile(statePath, {});
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
         console.error(
@@ -787,8 +790,7 @@ export const storageService = {
 
     let state: unknown = {};
     try {
-      const stateContent = await fs.readFile(statePath, 'utf-8');
-      state = JSON.parse(stateContent);
+      state = await readJsonFile(statePath, {});
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
         console.error(`Failed to read state file for channel ${channelId}`, error);
@@ -831,8 +833,7 @@ export const storageService = {
         ...(patch as Record<string, unknown>),
       };
 
-      await fs.mkdir(channelDir, { recursive: true });
-      await fs.writeFile(statePath, JSON.stringify(newState, null, 2));
+      await writeJsonFileAtomically(statePath, newState);
     } catch (error) {
       console.error(`Failed to patch channel state for channel ${channelId}`, error);
       throw error;
@@ -859,8 +860,7 @@ export const storageService = {
         ...(patch as Record<string, unknown>),
       };
 
-      await fs.mkdir(threadDir, { recursive: true });
-      await fs.writeFile(statePath, JSON.stringify(newState, null, 2));
+      await writeJsonFileAtomically(statePath, newState);
     } catch (error) {
       console.error(
         `Failed to patch thread state for channel ${channelId} thread ${threadId}`,
