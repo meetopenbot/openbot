@@ -164,6 +164,19 @@ export async function startServer(options: ServerOptions = {}) {
     }
   };
 
+  // Support for Chrome's Private Network Access (PNA)
+  // https://developer.chrome.com/blog/private-network-access-preflight/
+  app.use((req, res, next) => {
+    if (req.headers['access-control-request-private-network'] === 'true') {
+      res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    }
+    // If it's a preflight request, we should also ensure the Vary header is set
+    if (req.method === 'OPTIONS') {
+      res.setHeader('Vary', 'Access-Control-Request-Private-Network');
+    }
+    next();
+  });
+
   app.use(cors());
 
   const resolvePublicBaseUrl = () => getPublicBaseUrl(PORT, config.publicUrl);
