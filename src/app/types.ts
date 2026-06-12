@@ -141,6 +141,10 @@ export type GetEventsResultEvent = BaseEvent & {
   };
 };
 
+export type GetActiveRunsEvent = BaseEvent & {
+  type: 'action:storage:get-active-runs';
+};
+
 export type GetAgentDetailsEvent = BaseEvent & {
   type: 'action:storage:get-agent-details';
   data: {
@@ -1059,6 +1063,7 @@ export type OpenBotEvent =
   | DeleteAgentResultEvent
   | GetEventsEvent
   | GetEventsResultEvent
+  | GetActiveRunsEvent
   | StreamThreadEvent
   | GetVariablesEvent
   | GetVariablesResultEvent

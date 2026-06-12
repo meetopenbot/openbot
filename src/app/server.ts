@@ -150,17 +150,70 @@ export async function startServer(options: ServerOptions = {}) {
     };
   };
 
+  const broadcastActiveRunsSnapshot = (): void => {
+    const snapshot = buildActiveRunsSnapshot();
+    ensureEventId(snapshot);
+    sendToClientKey(GLOBAL_CHANNEL_ID, snapshot);
+  };
+
+  const persistLifecycleEvent = (
+    event: OpenBotEvent,
+    targetChannelId: string,
+    targetThreadId?: string,
+  ): void => {
+    ensureEventId(event);
+    storageService
+      .storeEvent({
+        channelId: targetChannelId,
+        threadId: targetThreadId,
+        event,
+      })
+      .catch((error) => {
+        console.error('[server] Failed to persist lifecycle event', {
+          type: event.type,
+          channelId: targetChannelId,
+          threadId: targetThreadId,
+          error,
+        });
+      });
+  };
+
   // Drop every tracked run for a channel/thread. A stop aborts the whole
   // chain (parent + delegated sub-agents), but the sub-agents' `agent:run:end`
   // events can be swallowed when the parent run loop breaks on abort, leaving
-  // orphaned entries that keep a channel falsely "active". Purging by
-  // channel/thread guarantees the snapshot self-heals after a stop.
+  // orphaned entries that keep a channel falsely "active". Emit explicit
+  // `agent:run:end` for each purged run and refresh the global snapshot so
+  // clients stay in sync even when the parent harness stops yielding.
   const purgeActiveRunsForThread = (channelId: string, threadId?: string): void => {
     const target = threadId || undefined;
+    const removed: Array<{
+      runId: string;
+      channelId: string;
+      threadId?: string;
+      agentId: string;
+    }> = [];
+
     for (const [key, run] of activeRuns) {
       if (run.channelId === channelId && (run.threadId || undefined) === target) {
+        removed.push(run);
         activeRuns.delete(key);
       }
+    }
+
+    for (const run of removed) {
+      const endEvent: OpenBotEvent = {
+        type: 'agent:run:end',
+        data: {
+          runId: run.runId,
+          agentId: run.agentId,
+          channelId: run.channelId,
+          threadId: run.threadId,
+        },
+      } as OpenBotEvent;
+      ensureEventId(endEvent);
+      persistLifecycleEvent(endEvent, run.channelId, run.threadId);
+      sendToClientKey(getClientKey(run.channelId, run.threadId), endEvent);
+      sendToClientKey(GLOBAL_CHANNEL_ID, endEvent);
     }
   };
 
@@ -403,6 +456,8 @@ export async function startServer(options: ServerOptions = {}) {
       const targetThreadId = data.threadId || threadId;
       const stopped = abortRegistry.abort(abortKey(targetChannelId, targetThreadId));
       purgeActiveRunsForThread(targetChannelId, targetThreadId);
+      // Resync global clients even when nothing was tracked server-side.
+      broadcastActiveRunsSnapshot();
 
       const stoppedEvent: OpenBotEvent = {
         type: 'agent:run:stopped',
@@ -415,6 +470,7 @@ export async function startServer(options: ServerOptions = {}) {
         },
       } as OpenBotEvent;
       ensureEventId(stoppedEvent);
+      persistLifecycleEvent(stoppedEvent, targetChannelId, targetThreadId);
       sendToClientKey(getClientKey(targetChannelId, targetThreadId), stoppedEvent);
       sendToClientKey(GLOBAL_CHANNEL_ID, stoppedEvent);
 
@@ -443,6 +499,7 @@ export async function startServer(options: ServerOptions = {}) {
         );
       } else if (chunk.type === 'agent:run:stopped') {
         purgeActiveRunsForThread(chunk.data.channelId, chunk.data.threadId);
+        broadcastActiveRunsSnapshot();
       }
 
       sendToClientKey(targetClientKey, chunk);
@@ -492,6 +549,14 @@ export async function startServer(options: ServerOptions = {}) {
     }
 
     const { channelId, threadId, agentId, runId } = getContext(req);
+
+    // In-memory active runs (not persisted). Mirrors the initial SSE frame on __global__.
+    if (channelId === GLOBAL_CHANNEL_ID && event.type === 'action:storage:get-active-runs') {
+      const snapshot = buildActiveRunsSnapshot();
+      ensureEventId(snapshot);
+      res.json({ events: [snapshot] });
+      return;
+    }
 
     if (event.type === 'action:storage:serve-file') {
       const filePath = (event.data as { path?: string })?.path;
