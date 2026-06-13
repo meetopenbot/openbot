@@ -21,6 +21,7 @@ import {
 } from '../plugins/storage/files.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
 import { abortRegistry, abortKey } from '../services/abort.js';
+import { resolveRespondingAgentId } from './responding-agent.js';
 
 type Bucket = { channelId: string; threadId?: string; activeCount: number; agentIds: Set<string> };
 
@@ -454,6 +455,21 @@ export async function startServer(options: ServerOptions = {}) {
       };
       const targetChannelId = data.channelId || channelId;
       const targetThreadId = data.threadId || threadId;
+      let resolvedStopAgentId = data.agentId || agentId || ORCHESTRATOR_AGENT_ID;
+      try {
+        const resolved = await resolveRespondingAgentId({
+          channelId: targetChannelId,
+          threadId: targetThreadId,
+          requestedAgentId: data.agentId || agentId,
+        });
+        resolvedStopAgentId = resolved.agentId;
+      } catch (error) {
+        console.warn('[publish] Failed to resolve responding agent for stop request', {
+          channelId: targetChannelId,
+          threadId: targetThreadId,
+          error,
+        });
+      }
       const stopped = abortRegistry.abort(abortKey(targetChannelId, targetThreadId));
       purgeActiveRunsForThread(targetChannelId, targetThreadId);
       // Resync global clients even when nothing was tracked server-side.
@@ -463,7 +479,7 @@ export async function startServer(options: ServerOptions = {}) {
         type: 'agent:run:stopped',
         data: {
           runId: data.runId || runId,
-          agentId: data.agentId || agentId || ORCHESTRATOR_AGENT_ID,
+          agentId: resolvedStopAgentId,
           channelId: targetChannelId,
           threadId: targetThreadId,
           reason: data.reason,
@@ -516,9 +532,17 @@ export async function startServer(options: ServerOptions = {}) {
     try {
       ensureEventId(event);
 
+      const bindIfUnbound = event.type === 'agent:invoke';
+      const resolved = await resolveRespondingAgentId({
+        channelId,
+        threadId,
+        requestedAgentId: agentId,
+        bindIfUnbound,
+      });
+
       await runAgent({
         runId,
-        agentId: agentId || ORCHESTRATOR_AGENT_ID,
+        agentId: resolved.agentId,
         event,
         channelId,
         threadId,
@@ -527,6 +551,13 @@ export async function startServer(options: ServerOptions = {}) {
       });
       res.sendStatus(200);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isUnknownAgent =
+        (error instanceof Error &&
+          ((error as Error & { code?: string }).code === 'AGENT_NOT_FOUND' ||
+            error.message.includes('does not exist'))) ||
+        message.includes('does not exist');
+
       console.error('[publish] Failed to dispatch event', {
         runId,
         channelId,
@@ -534,6 +565,12 @@ export async function startServer(options: ServerOptions = {}) {
         eventType: event.type,
         error,
       });
+
+      if (isUnknownAgent) {
+        res.status(400).json({ error: message });
+        return;
+      }
+
       res.status(500).json({ error: 'Failed to process publish event' });
     }
   });

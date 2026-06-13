@@ -81,11 +81,25 @@ export type Thread = {
   hasUnseenMessages?: boolean;
 };
 
+/** Persisted thread `state.json` fields (additional keys are allowed). */
+export type ThreadState = {
+  name?: string;
+  /** Sticky agent id for this thread (`system` = orchestrator). Set once, then enforced on publish. */
+  respondingAgentId?: string;
+  pendingToolCallIds?: string[];
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+  };
+  [key: string]: unknown;
+};
+
 export type ThreadDetails = {
   id: string;
   name: string;
   channelId: string;
-  state: unknown;
+  state: ThreadState;
 };
 
 export type ChannelDetails = {

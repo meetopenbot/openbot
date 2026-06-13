@@ -24,6 +24,7 @@ import {
   PluginDescriptor,
   Thread,
   ThreadDetails,
+  ThreadState,
 } from '../../services/plugins/domain.js';
 import type { PluginRef } from '../../services/plugins/types.js';
 import { openbotPlugin } from '../openbot/index.js';
@@ -771,7 +772,7 @@ export const storageService = {
       id: threadId,
       name: threadName || threadId,
       channelId,
-      state,
+      state: (isRecord(state) ? state : {}) as ThreadState,
     };
   },
   getChannelDetails: async ({ channelId }: { channelId: string }): Promise<ChannelDetails> => {
