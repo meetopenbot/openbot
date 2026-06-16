@@ -117,6 +117,13 @@ export interface Storage {
     initialState?: Record<string, unknown>;
     cwd?: string;
   }) => Promise<void>;
+  /** Idempotent channel setup; repairs partial dirs missing cwd/state. */
+  ensureChannel: (args: {
+    channelId: string;
+    spec?: string;
+    initialState?: Record<string, unknown>;
+    cwd?: string;
+  }) => Promise<void>;
   /** Removes the channel directory and cleans up `_meta/last-read.json`. */
   deleteChannel: (args: { channelId: string }) => Promise<void>;
   createThread: (args: {

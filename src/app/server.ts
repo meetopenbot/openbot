@@ -22,6 +22,10 @@ import {
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
 import { abortRegistry, abortKey } from '../services/abort.js';
 import { resolveRespondingAgentId } from './responding-agent.js';
+import {
+  DEFAULT_UNCATEGORIZED_SPEC,
+  UNCATEGORIZED_CHANNEL_ID,
+} from './channel-ids.js';
 
 type Bucket = { channelId: string; threadId?: string; activeCount: number; agentIds: Set<string> };
 
@@ -65,9 +69,18 @@ export async function startServer(options: ServerOptions = {}) {
   storageService.getAgents().catch((err) => console.warn('[server] Failed to pre-warm agents cache', err));
   storageService.getPlugins().catch((err) => console.warn('[server] Failed to pre-warm plugins cache', err));
 
+  const getRawChannelId = (req: express.Request): string | undefined => {
+    const raw =
+      req.get('x-openbot-channel-id') ||
+      req.query.channelId ||
+      (req.body && req.body.channelId);
+    if (typeof raw !== 'string') return undefined;
+    const trimmed = raw.trim();
+    return trimmed || undefined;
+  };
+
   const getContext = (req: express.Request) => {
-    const channelId =
-      req.get('x-openbot-channel-id') || req.query.channelId || (req.body && req.body.channelId);
+    const rawChannelId = getRawChannelId(req);
     const threadId =
       req.get('x-openbot-thread-id') || req.query.threadId || (req.body && req.body.threadId);
     const agentId =
@@ -83,7 +96,8 @@ export async function startServer(options: ServerOptions = {}) {
       (req.body && req.body.responseType);
 
     return {
-      channelId: (channelId || (threadId ? 'uncategorized' : 'uncategorized')) as string, // Default to uncategorized if none
+      channelId: (rawChannelId || UNCATEGORIZED_CHANNEL_ID) as string,
+      rawChannelId,
       threadId: threadId as string | undefined,
       agentId: agentId as string | undefined,
       runId: runId as string,
@@ -531,6 +545,20 @@ export async function startServer(options: ServerOptions = {}) {
 
     try {
       ensureEventId(event);
+
+      const isUserConversationStart =
+        event.type === 'agent:invoke' &&
+        event.data?.role === 'user' &&
+        typeof event.data.content === 'string' &&
+        event.data.content.trim().length > 0;
+
+      if (isUserConversationStart && channelId === UNCATEGORIZED_CHANNEL_ID) {
+        await storageService.ensureChannel({
+          channelId: UNCATEGORIZED_CHANNEL_ID,
+          spec: DEFAULT_UNCATEGORIZED_SPEC,
+          initialState: { name: 'Uncategorized' },
+        });
+      }
 
       const bindIfUnbound = event.type === 'agent:invoke';
       const resolved = await resolveRespondingAgentId({

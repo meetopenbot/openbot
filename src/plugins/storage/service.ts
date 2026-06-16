@@ -428,6 +428,12 @@ const readChannelStateFileFields = (
   return { name, cwd };
 };
 
+const isChannelProvisioned = async (channelId: string): Promise<boolean> => {
+  const statePath = `${getConversationDir(channelId)}/state.json`;
+  const state = await readJsonFile(statePath, {});
+  return !!readChannelStateFileFields(state).cwd;
+};
+
 /**
  * Parse the `plugins:` array from AGENT.md frontmatter. Each entry must have an
  * `id`; `config` is optional. Strings are accepted as a shorthand for `{ id }`.
@@ -511,6 +517,10 @@ export const storageService = {
           // ignore
         }
 
+        if (!cwd) {
+          return null;
+        }
+
         const channel: Channel = {
           id: name,
           name: displayName,
@@ -545,7 +555,9 @@ export const storageService = {
       }),
     );
 
-    return channels.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return channels
+      .filter((channel): channel is Channel => channel !== null)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   },
   createChannel: async ({
     channelId,
@@ -595,6 +607,64 @@ export const storageService = {
       spec?.trim() ||
       `# ${normalizedChannelId}\n\n`,
     );
+    await writeJsonFileAtomically(statePath, finalState);
+  },
+  ensureChannel: async ({
+    channelId,
+    spec,
+    initialState,
+    cwd,
+  }: {
+    channelId: string;
+    spec?: string;
+    initialState?: Record<string, unknown>;
+    cwd?: string;
+  }): Promise<void> => {
+    const normalizedChannelId = channelId.trim();
+    if (!normalizedChannelId) {
+      throw new Error('channelId is required');
+    }
+
+    const channelDir = getConversationDir(normalizedChannelId);
+    const specPath = `${channelDir}/SPEC.md`;
+    const statePath = `${channelDir}/state.json`;
+
+    const existingState = await readJsonFile<Record<string, unknown>>(statePath, {});
+    const existingFields = readChannelStateFileFields(existingState);
+    if (existingFields.cwd) {
+      await fs.mkdir(resolvePath(existingFields.cwd), { recursive: true });
+      return;
+    }
+
+    const finalState: Record<string, unknown> = {
+      ...existingState,
+      ...(initialState || {}),
+    };
+
+    const rawCwd =
+      (typeof cwd === 'string' && cwd.trim()) ||
+      (typeof finalState.cwd === 'string' && finalState.cwd.trim()) ||
+      getDefaultChannelCwd(normalizedChannelId);
+
+    const resolvedCwd = resolvePath(rawCwd);
+    finalState.cwd = resolvedCwd;
+
+    await fs.mkdir(resolvedCwd, { recursive: true });
+    await fs.mkdir(channelDir, { recursive: true });
+
+    try {
+      await fs.access(specPath);
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        await fs.writeFile(
+          specPath,
+          spec?.trim() || `# ${normalizedChannelId}\n\n`,
+        );
+      } else {
+        throw error;
+      }
+    }
+
     await writeJsonFileAtomically(statePath, finalState);
   },
   deleteChannel: async ({ channelId }: { channelId: string }): Promise<void> => {
@@ -1280,6 +1350,10 @@ export const storageService = {
     event: OpenBotEvent;
   }): Promise<void> => {
     try {
+      if (!(await isChannelProvisioned(channelId))) {
+        return;
+      }
+
       const threadDir = getConversationDir(channelId, threadId);
       if (threadId) {
         let exists = false;
