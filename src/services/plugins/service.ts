@@ -49,8 +49,6 @@ export type MarketplaceChannelListing = {
   image?: string;
   spec?: string;
   initialState?: Record<string, unknown>;
-  /** List of agent IDs that should be participants in the channel. */
-  participants: string[];
   /** Starter prompts for the channel. */
   starterPrompts?: StarterPrompt[];
 };
@@ -133,21 +131,17 @@ export function parseMarketplaceRegistryJson(data: unknown): MarketplaceRegistry
       const id = item.id;
       const name = item.name;
       const description = item.description;
-      const participants = item.participants;
 
       if (typeof id !== 'string' || !id)
         throw new Error(`channels[${i}].id must be a non-empty string`);
       if (typeof name !== 'string') throw new Error(`channels[${i}].name must be a string`);
       if (typeof description !== 'string')
         throw new Error(`channels[${i}].description must be a string`);
-      if (!Array.isArray(participants))
-        throw new Error(`channels[${i}].participants must be an array`);
 
       const listing: MarketplaceChannelListing = {
         id,
         name,
         description,
-        participants: participants.filter((p): p is string => typeof p === 'string'),
       };
 
       if (typeof item.image === 'string') listing.image = item.image;

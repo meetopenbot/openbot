@@ -2,6 +2,7 @@ import { MelonyPlugin, RuntimeContext } from 'melony';
 import { generateText, type LanguageModel } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
+import { google } from '@ai-sdk/google';
 import { OpenBotEvent, OpenBotState, AgentInvokeEvent } from '../../app/types.js';
 import { eventsToModelMessages } from './history.js';
 import { Storage } from '../../services/plugins/domain.js';
@@ -10,8 +11,33 @@ import {
   ORCHESTRATOR_AGENT_ID,
   buildContext,
 } from './context.js';
-import { saveConfig } from '../../app/config.js';
-import { API_KEY_SETUP_MESSAGE, OPENBOT_SYSTEM_PROMPT } from './system-prompt.js';
+import { saveConfig, DEFAULT_MARKETPLACE_REGISTRY_URL } from '../../app/config.js';
+import { OPENBOT_SYSTEM_PROMPT } from './system-prompt.js';
+
+interface ModelRegistry {
+  providers: Record<
+    string,
+    {
+      label: string;
+      models: Array<{ id: string; label: string; description: string }>;
+    }
+  >;
+}
+
+let cachedRegistry: ModelRegistry | null = null;
+
+async function fetchRegistry(): Promise<ModelRegistry | null> {
+  if (cachedRegistry) return cachedRegistry;
+  try {
+    const response = await fetch(DEFAULT_MARKETPLACE_REGISTRY_URL);
+    if (!response.ok) throw new Error(`Failed to fetch registry: ${response.statusText}`);
+    cachedRegistry = (await response.json()) as ModelRegistry;
+    return cachedRegistry;
+  } catch (error) {
+    console.error('[openbot] Failed to fetch model registry:', error);
+    return null;
+  }
+}
 
 export interface OpenBotRuntimeOptions {
   /** Provider model string (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20240620`). */
@@ -34,6 +60,8 @@ function resolveModel(modelString: string): LanguageModel {
       return openai(modelId);
     case 'anthropic':
       return anthropic(modelId);
+    case 'google':
+      return google(modelId);
     default:
       throw new Error(`Unsupported AI provider: "${provider}"`);
   }
@@ -246,49 +274,20 @@ export const openbotRuntime =
             errorMessage.includes('authentication');
 
           if (isApiKeyError) {
-            const [currentProvider, ...rest] = currentModelString.split('/');
-            const currentModelId = rest.join('/');
-
             yield {
               type: 'client:ui:widget',
               data: {
-                kind: 'form',
-                widgetId: `api_key_request_${Date.now()}`,
-                title: `AI Provider API Key Required`,
-                description: API_KEY_SETUP_MESSAGE,
-                fields: [
-                  {
-                    id: 'provider',
-                    label: 'Provider',
-                    type: 'select',
-                    required: true,
-                    options: [
-                      { label: 'OpenAI', value: 'openai' },
-                      { label: 'Anthropic', value: 'anthropic' },
-                    ],
-                    defaultValue: currentProvider === 'anthropic' ? 'anthropic' : 'openai',
-                  },
-                  {
-                    id: 'model',
-                    label: 'Model',
-                    type: 'text',
-                    description:
-                      'Model name without the provider prefix (e.g. `gpt-4o-mini` or `claude-3-5-sonnet-20240620`).',
-                    placeholder: 'gpt-4o-mini',
-                    required: true,
-                    defaultValue: currentModelId,
-                  },
-                  {
-                    id: 'apiKey',
-                    label: 'API Key',
-                    type: 'text',
-                    placeholder: `sk-...`,
-                    required: true,
-                  },
+                kind: 'choice',
+                widgetId: `api_provider_selection_${Date.now()}`,
+                title: `Setup AI Provider`,
+                description: `Select a provider to continue.`,
+                actions: [
+                  { id: 'openai', label: 'OpenAI', variant: 'primary' },
+                  { id: 'anthropic', label: 'Anthropic', variant: 'primary' },
+                  { id: 'google', label: 'Google', variant: 'primary' },
                 ],
-                submitLabel: 'Save & Continue',
                 metadata: {
-                  type: 'api_key_request',
+                  type: 'api_provider_selection',
                 },
               },
               meta: { agentId: context.state.agentId, threadId },
@@ -314,49 +313,6 @@ export const openbotRuntime =
         }
 
         const threadId = event.meta?.threadId || context.state.threadId;
-
-        // Auto-add participants if tagged in the prompt
-        const content = (event as AgentInvokeEvent).data?.content;
-        if (content && storage) {
-          try {
-            const allAgents = await storage.getAgents();
-            const tags = content.match(/@([\w-]+)/g);
-            if (tags) {
-              const taggedAgentIds = tags.map((t) => t.slice(1));
-              const validAgentIds = taggedAgentIds.filter((id) =>
-                allAgents.some((a) => a.id === id),
-              );
-
-              const currentParticipants = context.state.channelDetails?.participants || [];
-              const newParticipants = [...new Set([...currentParticipants, ...validAgentIds])];
-
-              if (newParticipants.length > currentParticipants.length) {
-                // Update storage
-                await storage.patchChannelState({
-                  channelId: context.state.channelId,
-                  state: { participants: newParticipants },
-                });
-
-                // Refresh local state
-                context.state.channelDetails = await storage.getChannelDetails({
-                  channelId: context.state.channelId,
-                });
-
-                // Notify UI/others about the change
-                yield {
-                  type: 'action:patch_channel_details:result',
-                  data: { success: true, updatedFields: ['participants'] },
-                  meta: {
-                    agentId: context.state.agentId,
-                    threadId,
-                  },
-                } as OpenBotEvent;
-              }
-            }
-          } catch (error) {
-            console.warn('[openbot] Failed to auto-add participants from tags:', error);
-          }
-        }
 
         // clear the tool batch if the agent is invoked
         // this is to prevent the tool batch from being used for a new agent invocation
@@ -394,15 +350,98 @@ export const openbotRuntime =
       });
 
       builder.on('client:ui:widget:response', async function* (event, context) {
-        const { metadata, values } = event.data;
-        if (metadata?.type !== 'api_key_request') return;
-        if (!values?.apiKey || !values?.provider || !values?.model) return;
+        const { metadata, values, actionId } = event.data;
+        const threadId = event.meta?.threadId || context.state.threadId;
 
-        const provider = String(values.provider);
+        if (metadata?.type === 'api_provider_selection') {
+          const provider = actionId;
+          const [_, ...rest] = currentModelString.split('/');
+          const currentModelId = rest.join('/');
+
+          const registry = await fetchRegistry();
+          const providerData = registry?.providers[provider as string];
+
+          const providerLinks: Record<string, string> = {
+            openai: 'https://platform.openai.com/api-keys',
+            anthropic: 'https://console.anthropic.com/settings/keys',
+            google: 'https://aistudio.google.com/app/apikey',
+          };
+
+          const label = providerData?.label || (provider as string);
+          const link = providerLinks[provider as string] || '';
+
+          const modelOptions = providerData?.models.map((m) => ({
+            label: m.label,
+            value: m.id,
+          }));
+
+          const defaultModel = modelOptions?.[0]?.value || 'gpt-4o-mini';
+          const defaultValue =
+            modelOptions?.find((m) => m.value === currentModelId)?.value ||
+            currentModelId ||
+            defaultModel;
+
+          yield {
+            type: 'client:ui:widget',
+            data: {
+              widgetId: event.data.widgetId,
+              kind: 'message',
+              title: 'Provider Selected',
+              body: `${label} provider was selected.`,
+              state: 'submitted',
+              display: 'collapsed',
+              disabled: true,
+              actions: [],
+            },
+            meta: { agentId: context.state.agentId, threadId },
+          } as OpenBotEvent;
+
+          yield {
+            type: 'client:ui:widget',
+            data: {
+              kind: 'form',
+              widgetId: `api_key_request_${Date.now()}`,
+              title: `${label} Setup`,
+              description: `Enter your API key and select a model.`,
+              fields: [
+                {
+                  id: 'model',
+                  label: 'Model',
+                  type: modelOptions ? 'select' : 'text',
+                  description: modelOptions ? undefined : `Model name (e.g. \`${defaultModel}\`).`,
+                  options: modelOptions,
+                  placeholder: defaultModel,
+                  required: true,
+                  defaultValue,
+                },
+                {
+                  id: 'apiKey',
+                  label: 'API Key',
+                  type: 'password',
+                  description: `Get your key here: [${link}](${link})`,
+                  placeholder: `sk-...`,
+                  required: true,
+                },
+              ],
+              submitLabel: 'Save & Continue',
+              metadata: {
+                type: 'api_key_request',
+                provider,
+              },
+            },
+            meta: { agentId: context.state.agentId, threadId },
+          } as OpenBotEvent;
+          return;
+        }
+
+        if (metadata?.type !== 'api_key_request') return;
+        if (!values?.apiKey || !values?.model) return;
+
+        const provider = String(values.provider || metadata.provider);
         const modelId = String(values.model).trim();
         const apiKey = String(values.apiKey);
 
-        if (provider !== 'openai' && provider !== 'anthropic') {
+        if (provider !== 'openai' && provider !== 'anthropic' && provider !== 'google') {
           yield {
             type: 'agent:output',
             data: { content: `Unsupported provider: ${provider}` },
@@ -411,7 +450,12 @@ export const openbotRuntime =
           return;
         }
 
-        const envVar = provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+        const envVar =
+          provider === 'openai'
+            ? 'OPENAI_API_KEY'
+            : provider === 'anthropic'
+              ? 'ANTHROPIC_API_KEY'
+              : 'GOOGLE_GENERATIVE_AI_API_KEY';
         const newModelString = `${provider}/${modelId}`;
 
         if (!storage) return;
@@ -460,10 +504,14 @@ export const openbotRuntime =
               title: 'API Key Saved',
               body: `Successfully saved ${provider} API key and selected model \`${newModelString}\`. You can now continue your conversation.`,
               state: 'submitted',
-              actions: [{ id: 'ok', label: 'Got it', variant: 'primary' }],
+              display: 'collapsed',
+              disabled: true,
+              actions: [],
             },
             meta: { agentId: context.state.agentId },
           };
+
+          yield* runLLM(context, threadId);
         } catch (error) {
           yield {
             type: 'agent:output',

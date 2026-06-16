@@ -67,10 +67,9 @@ export const pluginManagerPlugin: Plugin = {
           const {
             channelId: instanceId,
             name: templateName,
-            participants: customParticipants,
             initialState: customInitialState,
           } = event.data;
-          const { agents: marketplaceAgents, channels } = await resolveMarketplaceRegistry();
+          const { channels } = await resolveMarketplaceRegistry();
 
           // Try to find the template by ID or Name
           const channelListing =
@@ -78,64 +77,17 @@ export const pluginManagerPlugin: Plugin = {
             channels.find((c) => c.name === templateName);
 
           const channelId = instanceId;
-          const participants = customParticipants || channelListing?.participants || [];
           const initialState = {
             ...(channelListing?.initialState || {}),
             ...(customInitialState || {}),
           };
           const spec = channelListing?.spec || '';
 
-          // 1. Auto-install participant agents if missing
-          for (const agentId of participants) {
-            const existingAgents = await storage.getAgents();
-            if (existingAgents.some((a) => a.id === agentId)) {
-              continue;
-            }
-
-            // Not found locally, look in marketplace
-            const agentListing = marketplaceAgents.find((a) => a.id === agentId);
-            if (agentListing) {
-              console.log(`[plugin-manager] Auto-installing agent ${agentId} for channel ${channelId}`);
-
-              // Install plugins for this agent
-              for (const ref of agentListing.plugins) {
-                const installed = await pluginService.isInstalled(ref.id);
-                if (
-                  !installed &&
-                  ref.id.includes('/') === false &&
-                  ref.id.includes('-plugin-') === false
-                ) {
-                  continue;
-                }
-                if (!installed) {
-                  try {
-                    await pluginService.install({ packageName: ref.id });
-                  } catch (err) {
-                    console.warn(`[plugins] Failed to pre-install plugin ${ref.id}`, err);
-                  }
-                }
-              }
-
-              // Create the agent
-              await storage.createAgent({
-                agentId: agentListing.id,
-                name: agentListing.name,
-                description: agentListing.description,
-                image: agentListing.image,
-                instructions: agentListing.instructions,
-                plugins: agentListing.plugins,
-              });
-            }
-          }
-
           // 2. Create the channel
           await storage.createChannel({
             channelId,
             spec,
-            initialState: {
-              ...initialState,
-              participants,
-            },
+            initialState,
           });
 
           const channelUrl = `/channels/${channelId}`;

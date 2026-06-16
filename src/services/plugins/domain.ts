@@ -64,8 +64,6 @@ export type Channel = {
   name: string;
   description: string;
   cwd?: string;
-  /** Agent ids associated with this channel (from `state.json`). */
-  participants: string[];
   createdAt: Date;
   updatedAt: Date;
   hasUnseenMessages?: boolean;
@@ -108,8 +106,6 @@ export type ChannelDetails = {
   spec: string;
   state: unknown;
   cwd?: string;
-  /** Agent ids for this channel (from `state.json`). */
-  participants: string[];
   threads?: Thread[];
 };
 

@@ -418,20 +418,14 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /** Display-oriented fields persisted in a channel's `state.json`. */
 const readChannelStateFileFields = (
   parsed: unknown,
-): { name?: string; cwd?: string; participants: string[] } => {
+): { name?: string; cwd?: string } => {
   if (!isRecord(parsed)) {
-    return { participants: [] };
+    return {};
   }
   const name =
     typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : undefined;
   const cwd = typeof parsed.cwd === 'string' ? parsed.cwd : undefined;
-  const participants: string[] = [];
-  if (Array.isArray(parsed.participants)) {
-    for (const x of parsed.participants) {
-      if (typeof x === 'string' && x.trim()) participants.push(x.trim());
-    }
-  }
-  return { name, cwd, participants };
+  return { name, cwd };
 };
 
 /**
@@ -507,14 +501,12 @@ export const storageService = {
         const statePath = path.join(channelDir, 'state.json');
         let cwd: string | undefined;
         let displayName = name;
-        let participants: string[] = [];
 
         try {
           const parsed = await readJsonFile(statePath, {});
           const fields = readChannelStateFileFields(parsed);
           cwd = fields.cwd;
           displayName = fields.name ?? name;
-          participants = fields.participants;
         } catch {
           // ignore
         }
@@ -524,7 +516,6 @@ export const storageService = {
           name: displayName,
           description: '',
           cwd,
-          participants,
           createdAt: stats.birthtime,
           updatedAt: stats.mtime,
         };
@@ -808,7 +799,6 @@ export const storageService = {
       spec,
       state,
       cwd,
-      participants: diskFields.participants,
     };
 
     details.threads = await storageService.getThreads({ channelId });

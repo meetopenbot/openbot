@@ -301,8 +301,6 @@ export type PatchChannelDetailsEvent = BaseEvent & {
     state?: Record<string, unknown>;
     spec?: string;
     cwd?: string;
-    /** When set, replaces `state.json` `participants` (merged after `state` if both are sent). */
-    participants?: string[];
   };
 };
 
@@ -310,7 +308,7 @@ export type PatchChannelDetailsResultEvent = BaseEvent & {
   type: 'action:patch_channel_details:result';
   data: {
     success: boolean;
-    updatedFields: ('state' | 'spec' | 'cwd' | 'participants')[];
+    updatedFields: ('state' | 'spec' | 'cwd')[];
   };
 };
 
@@ -569,8 +567,6 @@ export type CreateChannelEvent = BaseEvent & {
     spec?: string;
     initialState?: Record<string, unknown>;
     cwd?: string;
-    /** Initial channel agent ids; written into `state.json` (overrides `initialState.participants` if both are set). */
-    participants?: string[];
   };
   meta?: {
     toolCallId?: string;
@@ -594,8 +590,6 @@ export type UpdateChannelEvent = BaseEvent & {
     channelId?: string;
     name?: string;
     cwd?: string;
-    /** Replaces the channel participant list when provided. */
-    participants?: string[];
   };
 };
 
@@ -655,7 +649,7 @@ export type UIWidgetAction = {
 export type UIWidgetField = {
   id: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'date';
+  type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'date' | 'password';
   description?: string;
   placeholder?: string;
   required?: boolean;
@@ -851,7 +845,6 @@ export type ListMarketplaceRegistryResultEvent = BaseEvent & {
       image?: string;
       spec?: string;
       initialState?: Record<string, unknown>;
-      participants: string[];
       starterPrompts?: Array<{ label: string; prompt: string }>;
     }>;
     error?: string;
@@ -863,7 +856,6 @@ export type InstallChannelEvent = BaseEvent & {
   data: {
     channelId: string;
     name?: string;
-    participants?: string[];
     initialState?: Record<string, unknown>;
   };
 };

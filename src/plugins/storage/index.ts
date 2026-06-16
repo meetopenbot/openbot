@@ -48,20 +48,13 @@ const storageToolDefinitions = {
             'Markdown content for the channel specification (SPEC.md). Use for goals and rules.',
           ),
         cwd: z.string().optional().describe('Current working directory for the channel.'),
-        participants: z
-          .array(z.string())
-          .optional()
-          .describe(
-            'List of agent IDs that are participants in this channel. When a user tags an agent (e.g. @agent-id), you should ensure they are added to this list if they are not already there.',
-          ),
       })
       .refine(
         (value) =>
           value.state !== undefined ||
           value.spec !== undefined ||
-          value.cwd !== undefined ||
-          value.participants !== undefined,
-        { message: 'Provide at least one of state, spec, cwd, or participants.' },
+          value.cwd !== undefined,
+        { message: 'Provide at least one of state, spec, or cwd.' },
       ),
   },
   patch_thread_details: {
@@ -155,7 +148,7 @@ export const storagePlugin: Plugin = {
     });
 
     builder.on('action:create_channel', async function* (event, context) {
-      const { channelId, spec, initialState, cwd, participants } = (event as any).data;
+      const { channelId, spec, initialState, cwd } = (event as any).data;
       const rawChannelId = (channelId || '').trim();
       const channelSpec = typeof spec === 'string' ? spec : '';
 
@@ -173,15 +166,6 @@ export const storagePlugin: Plugin = {
       const channelUrl = `/channels/${rawChannelId}`;
 
       const mergedInitial: Record<string, unknown> = { ...(initialState || {}) };
-      if (participants !== undefined) {
-        const normalized = Array.isArray(participants)
-          ? participants
-            .filter((x: unknown): x is string => typeof x === 'string')
-            .map((s: string) => s.trim())
-            .filter(Boolean)
-          : [];
-        mergedInitial.participants = normalized;
-      }
 
       try {
         await storage.createChannel({
@@ -254,7 +238,6 @@ export const storagePlugin: Plugin = {
         channelId?: string;
         name?: string;
         cwd?: string;
-        participants?: string[];
       };
       const targetChannelId = (data.channelId || context.state.channelId || '').trim();
       const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
@@ -278,17 +261,6 @@ export const storagePlugin: Plugin = {
       if (typeof data.cwd === 'string' && data.cwd.trim()) {
         patch.cwd = data.cwd.trim();
         updatedFields.push('cwd');
-      }
-      if (data.participants !== undefined) {
-        if (Array.isArray(data.participants)) {
-          patch.participants = data.participants
-            .filter((x): x is string => typeof x === 'string')
-            .map((s) => s.trim())
-            .filter(Boolean);
-        } else {
-          patch.participants = [];
-        }
-        updatedFields.push('participants');
       }
 
       try {
@@ -317,13 +289,12 @@ export const storagePlugin: Plugin = {
     });
 
     builder.on('action:patch_channel_details', async function* (event, context) {
-      const updatedFields: ('state' | 'spec' | 'cwd' | 'participants')[] = [];
+      const updatedFields: ('state' | 'spec' | 'cwd')[] = [];
       const resultMeta = { ...(event.meta || {}), agentId: context.state.agentId };
       const data = (event.data || {}) as {
         state?: Record<string, unknown>;
         spec?: string;
         cwd?: string;
-        participants?: string[];
       };
       try {
         if (data.state !== undefined) {
@@ -346,19 +317,6 @@ export const storagePlugin: Plugin = {
             state: { cwd: data.cwd },
           });
           updatedFields.push('cwd');
-        }
-        if (data.participants !== undefined) {
-          const normalized = Array.isArray(data.participants)
-            ? data.participants
-              .filter((x): x is string => typeof x === 'string')
-              .map((s) => s.trim())
-              .filter(Boolean)
-            : [];
-          await storage.patchChannelState({
-            channelId: context.state.channelId,
-            state: { participants: normalized },
-          });
-          updatedFields.push('participants');
         }
 
         context.state.channelDetails = await storage.getChannelDetails({

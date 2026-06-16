@@ -28,19 +28,10 @@ export const getContextBudgetForModel = (modelString: string): number => {
 export const ORCHESTRATOR_AGENT_ID = 'system';
 
 /**
- * Check if a channel is a solo DM (only the agent is present).
- */
-export function isDmSoloChannel(participants: string[], agentId: string): boolean {
-  return participants.length === 0 || (participants.length === 1 && participants[0] === agentId);
-}
-
-/**
  * Simplified context builder for MVP.
  */
 export async function buildContext(state: OpenBotState, storage?: Storage): Promise<string> {
   const { channelId, threadId, channelDetails, agentId, threadDetails, agentDetails } = state;
-  const participants = channelDetails?.participants || [];
-  const isDm = isDmSoloChannel(participants, agentId);
 
   const sections: string[] = [];
 
@@ -54,23 +45,13 @@ export async function buildContext(state: OpenBotState, storage?: Storage): Prom
 
   // 2. Environment
   let env = '## ENVIRONMENT\n';
-  if (isDm) {
-    env += '- Mode: Direct Message (Solo)\n';
-  } else {
-    const channelName = channelDetails?.name || channelId;
-    env += `- Mode: Channel (#${channelName})\n`;
-    if (channelDetails?.cwd) {
-      env += `- Workspace: ${channelDetails.cwd}\n`;
-    }
-    if (threadId) {
-      env += `- Thread: ${threadDetails?.name || threadId}\n`;
-    }
-    const peerIds = participants.filter((id: string) => id !== agentId);
-    const participantLabels = peerIds.map((id) => {
-      const agent = allAgents.find((a) => a.id === id);
-      return agent ? `${agent.name} (${id})` : id;
-    });
-    env += `- Participants: ${participantLabels.length > 0 ? participantLabels.join(', ') : 'None'}\n`;
+  const channelName = channelDetails?.name || channelId;
+  env += `- Mode: Channel (#${channelName})\n`;
+  if (channelDetails?.cwd) {
+    env += `- Workspace: ${channelDetails.cwd}\n`;
+  }
+  if (threadId) {
+    env += `- Thread: ${threadDetails?.name || threadId}\n`;
   }
   sections.push(env);
 
