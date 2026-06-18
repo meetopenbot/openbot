@@ -4,6 +4,9 @@ import { storageService } from '../plugins/storage/service.js';
 /** Thread `state.json` key for the sticky responding agent id. */
 export const THREAD_RESPONDING_AGENT_ID_KEY = 'respondingAgentId';
 
+/** Publish events that continue a pending UI interaction rather than a new user turn. */
+export const CONTINUATION_EVENT_TYPES = new Set(['client:ui:widget:response']);
+
 export type ResolveRespondingAgentOptions = {
   channelId: string;
   threadId?: string;
@@ -18,6 +21,14 @@ export type ResolveRespondingAgentResult = {
   bound: boolean;
   /** True when the request asked for a different agent than the bound one. */
   overridden: boolean;
+};
+
+const readMetaAgentId = (meta: unknown): string | undefined => {
+  if (!meta || typeof meta !== 'object') return undefined;
+  const value = (meta as Record<string, unknown>).agentId;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
 };
 
 const readBoundAgentId = (state: unknown): string | undefined => {
@@ -71,4 +82,39 @@ export async function resolveRespondingAgentId(
   });
 
   return { agentId: fallback, bound: true, overridden: false };
+}
+
+export type ResolvePublishTargetAgentOptions = {
+  eventType: string;
+  channelId: string;
+  threadId?: string;
+  requestedAgentId?: string;
+  eventMeta?: unknown;
+  bindIfUnbound?: boolean;
+};
+
+/**
+ * Resolves the agent that should handle a publish event.
+ * UI continuations route to the widget origin agent; everything else uses sticky thread binding.
+ */
+export async function resolvePublishTargetAgentId(
+  options: ResolvePublishTargetAgentOptions,
+): Promise<{ agentId: string } | { error: 'agentId_required' }> {
+  const { eventType, channelId, threadId, requestedAgentId, eventMeta, bindIfUnbound } = options;
+
+  if (CONTINUATION_EVENT_TYPES.has(eventType)) {
+    const originAgentId = readMetaAgentId(eventMeta) || requestedAgentId?.trim();
+    if (!originAgentId) {
+      return { error: 'agentId_required' };
+    }
+    return { agentId: originAgentId };
+  }
+
+  const resolved = await resolveRespondingAgentId({
+    channelId,
+    threadId,
+    requestedAgentId,
+    bindIfUnbound,
+  });
+  return { agentId: resolved.agentId };
 }

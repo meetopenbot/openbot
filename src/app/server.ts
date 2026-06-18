@@ -21,7 +21,7 @@ import {
 } from '../plugins/storage/files.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
 import { abortRegistry, abortKey } from '../services/abort.js';
-import { resolveRespondingAgentId } from './responding-agent.js';
+import { resolvePublishTargetAgentId, resolveRespondingAgentId } from './responding-agent.js';
 import {
   DEFAULT_UNCATEGORIZED_SPEC,
   UNCATEGORIZED_CHANNEL_ID,
@@ -561,16 +561,23 @@ export async function startServer(options: ServerOptions = {}) {
       }
 
       const bindIfUnbound = event.type === 'agent:invoke';
-      const resolved = await resolveRespondingAgentId({
+      const target = await resolvePublishTargetAgentId({
+        eventType: event.type,
         channelId,
         threadId,
         requestedAgentId: agentId,
+        eventMeta: event.meta,
         bindIfUnbound,
       });
 
+      if ('error' in target) {
+        res.status(400).json({ error: 'agentId is required for widget response' });
+        return;
+      }
+
       await runAgent({
         runId,
-        agentId: resolved.agentId,
+        agentId: target.agentId,
         event,
         channelId,
         threadId,

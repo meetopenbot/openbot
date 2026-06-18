@@ -730,6 +730,11 @@ export type UIWidgetResponseEvent = BaseEvent & {
     values?: Record<string, unknown>;
     metadata?: Record<string, unknown>;
   };
+  meta?: {
+    agentId?: string;
+    threadId?: string;
+    [key: string]: unknown;
+  };
 };
 
 export type BashEvent = BaseEvent & {

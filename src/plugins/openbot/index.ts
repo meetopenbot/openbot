@@ -49,7 +49,8 @@ export const openbotPlugin: Plugin = {
     ...memoryPlugin.toolDefinitions,
     ...storagePlugin.toolDefinitions,
     ...delegationPlugin.toolDefinitions,
-    ...uiPlugin.toolDefinitions,
+    // this is the capability to render UI widgets to the user. We dont need it for now.
+    // ...uiPlugin.toolDefinitions,
   },
   factory: (context) => (builder) => {
     const { config, storage, tools, abortSignal } = context;
