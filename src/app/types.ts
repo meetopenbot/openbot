@@ -741,7 +741,8 @@ export type BashEvent = BaseEvent & {
   type: 'action:bash';
   data: {
     command: string;
-    restart?: boolean;
+    cwd?: string;
+    timeoutMs?: number;
   };
   meta?: {
     toolCallId?: string;
@@ -761,12 +762,41 @@ export type BashResultEvent = BaseEvent & {
     stderr: string;
     timedOut: boolean;
     error?: string;
+    output?: string;
+  };
+};
+
+export type BashStartEvent = BaseEvent & {
+  type: 'action:bash_start';
+  data: {
+    command: string;
+    cwd?: string;
+  };
+  meta?: {
+    toolCallId?: string;
+    approvalId?: string;
+    approvalStatus?: 'approved' | 'denied';
+    [key: string]: any;
+  };
+};
+
+export type BashStartResultEvent = BaseEvent & {
+  type: 'action:bash_start:result';
+  data: {
+    success: boolean;
+    jobId?: string;
+    pid?: number | null;
+    command?: string;
+    cwd?: string;
+    error?: string;
+    output?: string;
   };
 };
 
 export type BashStopEvent = BaseEvent & {
   type: 'action:bash_stop';
   data: {
+    jobId?: string;
     channelId?: string;
   };
 };
@@ -775,23 +805,36 @@ export type BashStopResultEvent = BaseEvent & {
   type: 'action:bash_stop:result';
   data: {
     success: boolean;
+    stopped?: number;
+    output?: string;
   };
 };
 
-export type BashListSessionsEvent = BaseEvent & {
-  type: 'action:bash_list_sessions';
-  data: {};
+export type BashListJobsEvent = BaseEvent & {
+  type: 'action:bash_list_jobs';
+  data: {
+    channelId?: string;
+  };
 };
 
-export type BashListSessionsResultEvent = BaseEvent & {
-  type: 'action:bash_list_sessions:result';
+export type BashJobSummary = {
+  id: string;
+  channelId: string;
+  command: string;
+  cwd: string;
+  pid: number | null;
+  startedAt: number;
+  status: 'running' | 'exited';
+  exitCode: number | null;
+  logTail: string;
+};
+
+export type BashListJobsResultEvent = BaseEvent & {
+  type: 'action:bash_list_jobs:result';
   data: {
     success: boolean;
-    sessions: Array<{
-      channelId: string;
-      cwd: string;
-      lastActivity: number;
-    }>;
+    jobs: BashJobSummary[];
+    output?: string;
   };
 };
 
@@ -1103,10 +1146,12 @@ export type OpenBotEvent =
   | UIWidgetResponseEvent
   | BashEvent
   | BashResultEvent
+  | BashStartEvent
+  | BashStartResultEvent
   | BashStopEvent
   | BashStopResultEvent
-  | BashListSessionsEvent
-  | BashListSessionsResultEvent
+  | BashListJobsEvent
+  | BashListJobsResultEvent
   | InstallPluginEvent
   | InstallPluginResultEvent
   | UninstallPluginEvent

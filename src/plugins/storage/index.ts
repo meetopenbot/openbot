@@ -39,7 +39,7 @@ const storageToolDefinitions = {
           .record(z.string(), z.unknown())
           .optional()
           .describe(
-            'JSON state object for the channel. Use for structured metadata.',
+            'JSON state object for the channel. Use for structured metadata like previewUrl (e.g., "http://localhost:3000") when starting a dev server.',
           ),
         spec: z
           .string()
@@ -297,6 +297,10 @@ export const storagePlugin: Plugin = {
         cwd?: string;
       };
       try {
+        const previousPreviewUrl = (
+          await storage.getChannelDetails({ channelId: context.state.channelId })
+        ).previewUrl;
+
         if (data.state !== undefined) {
           await storage.patchChannelState({
             channelId: context.state.channelId,
@@ -323,16 +327,42 @@ export const storagePlugin: Plugin = {
           channelId: context.state.channelId,
         });
 
-        yield {
-          type: "client:ui:widget",
-          data: {
-            widgetId: "patch-channel-details-result" + Date.now(),
-            kind: "message",
-            title: "Channel details updated.",
-            body: `The channel details have been updated. ${updatedFields.join(', ')}`,
-            display: "collapsed",
-          },
-          meta: resultMeta,
+        const newPreviewUrl = context.state.channelDetails.previewUrl;
+        const previewUrlChanged =
+          typeof newPreviewUrl === 'string' &&
+          newPreviewUrl.trim() !== '' &&
+          newPreviewUrl !== previousPreviewUrl;
+
+        if (previewUrlChanged) {
+          yield {
+            type: 'client:ui:widget',
+            data: {
+              widgetId: `preview-ready-${Date.now()}`,
+              kind: 'message',
+              title: 'Preview ready',
+              description: `Dev server is running at ${newPreviewUrl}.`,
+              display: 'collapsed',
+              actions: [{ id: 'open_preview', label: 'Open preview', variant: 'primary' }],
+              metadata: {
+                type: 'preview:ready',
+                previewUrl: newPreviewUrl,
+                autoOpen: true,
+              },
+            },
+            meta: resultMeta,
+          } as OpenBotEvent;
+        } else {
+          yield {
+            type: "client:ui:widget",
+            data: {
+              widgetId: "patch-channel-details-result" + Date.now(),
+              kind: "message",
+              title: "Channel details updated.",
+              body: `The channel details have been updated. ${updatedFields.join(', ')}`,
+              display: "collapsed",
+            },
+            meta: resultMeta,
+          }
         }
 
         yield {

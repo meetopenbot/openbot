@@ -6,134 +6,252 @@ import type { Plugin } from '../../services/plugins/types.js';
 import { OpenBotEvent, OpenBotState } from '../../app/types.js';
 import { resolvePath } from '../../app/config.js';
 
+const DEFAULT_TIMEOUT_MS = 60_000;
+const MAX_LOG_CHARS = 32_000;
+
 const bashToolDefinitions = {
   bash: {
     description:
-      'Execute a bash command in a stateful session. The working directory and environment variables persist between calls. Use this for all system tasks, file operations, and running development servers.',
+      'Run a one-shot shell command and wait for it to finish. Use for installs, builds, git, file operations, and quick checks.',
     inputSchema: z.object({
-      command: z.string().describe('The bash command to execute.'),
-      restart: z
-        .boolean()
+      command: z.string().describe('The shell command to execute.'),
+      cwd: z
+        .string()
         .optional()
-        .describe('Restart the bash session before running the command.'),
+        .describe('Working directory. Defaults to the channel workspace.'),
+      timeoutMs: z
+        .number()
+        .optional()
+        .describe(`Max wait time in ms. Defaults to ${DEFAULT_TIMEOUT_MS}.`),
+    }),
+  },
+  bash_start: {
+    description:
+      'Start a long-running background command (e.g. a dev server). Returns a job id immediately; use bash_list_jobs to read logs and bash_stop to end it.',
+    inputSchema: z.object({
+      command: z.string().describe('The shell command to start in the background.'),
+      cwd: z
+        .string()
+        .optional()
+        .describe('Working directory. Defaults to the channel workspace.'),
     }),
   },
   bash_stop: {
-    description: 'Stop the bash session for the current or specified channel.',
+    description: 'Stop one background job by id, or all jobs for a channel.',
     inputSchema: z.object({
-      channelId: z.string().optional().describe('The channel ID to stop the session for.'),
+      jobId: z.string().optional().describe('Specific job id to stop.'),
+      channelId: z
+        .string()
+        .optional()
+        .describe('Stop all jobs for this channel. Defaults to the current channel.'),
     }),
   },
-  bash_list_sessions: {
-    description: 'List all active bash sessions.',
-    inputSchema: z.object({}),
+  bash_list_jobs: {
+    description: 'List background jobs and recent log output.',
+    inputSchema: z.object({
+      channelId: z
+        .string()
+        .optional()
+        .describe('Filter jobs to this channel. Defaults to the current channel.'),
+    }),
   },
 };
 
-interface BashSession {
-  process: ChildProcess;
+interface BashJob {
+  id: string;
+  channelId: string;
+  command: string;
   cwd: string;
-  lastActivity: number;
+  process: ChildProcess;
+  startedAt: number;
+  status: 'running' | 'exited';
+  exitCode: number | null;
+  logs: string;
 }
 
-const sessions = new Map<string, BashSession>();
+const jobs = new Map<string, BashJob>();
 
-const getSession = (channelId: string, initialCwd: string): BashSession => {
-  let session = sessions.get(channelId);
-  if (!session) {
-    const childProcess = spawn('bash', ['--login'], {
-      cwd: initialCwd,
-      env: { ...process.env, PS1: '' },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    session = {
-      process: childProcess,
-      cwd: initialCwd,
-      lastActivity: Date.now(),
-    };
-    sessions.set(channelId, session);
-
-    // Basic error handling for the process
-    childProcess.on('error', (err: Error) => {
-      console.error(`[bash] Session error for channel ${channelId}:`, err);
-      sessions.delete(channelId);
-    });
-
-    childProcess.on('exit', () => {
-      sessions.delete(channelId);
-    });
-  }
-  return session;
+const resolveCwd = (context: { state: OpenBotState }, cwd?: string): string => {
+  const raw =
+    (typeof cwd === 'string' && cwd.trim()) ||
+    context.state.channelDetails?.cwd ||
+    process.cwd();
+  return resolvePath(raw);
 };
+
+const appendLog = (job: BashJob, chunk: string) => {
+  job.logs += chunk;
+  if (job.logs.length > MAX_LOG_CHARS) {
+    job.logs = job.logs.slice(-MAX_LOG_CHARS);
+  }
+};
+
+const killJob = (job: BashJob) => {
+  const { process: child } = job;
+  if (!child.pid) {
+    try {
+      child.kill();
+    } catch (_) { }
+    return;
+  }
+
+  try {
+    if (process.platform === 'win32') {
+      child.kill();
+    } else {
+      process.kill(-child.pid, 'SIGTERM');
+    }
+  } catch (_) {
+    try {
+      child.kill();
+    } catch (_) { }
+  }
+};
+
+const removeJob = (jobId: string) => {
+  jobs.delete(jobId);
+};
+
+const killJobsForChannel = (channelId: string): number => {
+  let stopped = 0;
+  for (const [jobId, job] of jobs.entries()) {
+    if (job.channelId === channelId) {
+      killJob(job);
+      jobs.delete(jobId);
+      stopped++;
+    }
+  }
+  return stopped;
+};
+
+const runCommand = (
+  command: string,
+  cwd: string,
+  timeoutMs: number,
+): Promise<{
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+}> =>
+  new Promise((resolve) => {
+    const child = spawn('bash', ['-lc', command], {
+      cwd,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    let settled = false;
+
+    const finish = (result: {
+      exitCode: number | null;
+      stdout: string;
+      stderr: string;
+      timedOut: boolean;
+    }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        child.kill('SIGTERM');
+      } catch (_) { }
+      finish({ exitCode: null, stdout, stderr, timedOut });
+    }, timeoutMs);
+
+    child.stdout?.on('data', (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    child.stderr?.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    child.on('error', (err) => {
+      finish({
+        exitCode: -1,
+        stdout,
+        stderr: err.message,
+        timedOut: false,
+      });
+    });
+
+    child.on('close', (code) => {
+      finish({ exitCode: code, stdout, stderr, timedOut });
+    });
+  });
+
+const startJob = (channelId: string, command: string, cwd: string): BashJob => {
+  const child = spawn('bash', ['-lc', command], {
+    cwd,
+    env: process.env,
+    detached: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const job: BashJob = {
+    id: randomUUID(),
+    channelId,
+    command,
+    cwd,
+    process: child,
+    startedAt: Date.now(),
+    status: 'running',
+    exitCode: null,
+    logs: '',
+  };
+
+  jobs.set(job.id, job);
+
+  child.stdout?.on('data', (data: Buffer) => appendLog(job, data.toString()));
+  child.stderr?.on('data', (data: Buffer) => appendLog(job, data.toString()));
+
+  child.on('exit', (code) => {
+    job.status = 'exited';
+    job.exitCode = code;
+  });
+
+  child.on('error', (err) => {
+    appendLog(job, `\n[error] ${err.message}\n`);
+    job.status = 'exited';
+    job.exitCode = -1;
+  });
+
+  return job;
+};
+
+const jobToSummary = (job: BashJob) => ({
+  id: job.id,
+  channelId: job.channelId,
+  command: job.command,
+  cwd: job.cwd,
+  pid: job.process.pid ?? null,
+  startedAt: job.startedAt,
+  status: job.status,
+  exitCode: job.exitCode,
+  logTail: job.logs.slice(-4000),
+});
 
 const bashPluginRuntime = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (builder) => {
   builder.on('action:bash', async function* (event, context) {
-    const { command, restart } = event.data;
-    const channelId = context.state.channelId;
-    const initialCwd = resolvePath(context.state.channelDetails?.cwd || process.cwd());
-
-    if (restart) {
-      const oldSession = sessions.get(channelId);
-      if (oldSession) {
-        oldSession.process.kill();
-        sessions.delete(channelId);
-      }
-    }
-
-    const session = getSession(channelId, initialCwd);
-    session.lastActivity = Date.now();
+    const { command, cwd, timeoutMs } = event.data;
+    const resolvedCwd = resolveCwd(context, cwd);
 
     try {
-      const result = await new Promise<{
-        exitCode: number | null;
-        stdout: string;
-        stderr: string;
-        timedOut: boolean;
-      }>((resolve) => {
-        let stdout = '';
-        let stderr = '';
-        let timedOut = false;
-        const sentinel = `__OPENBOT_BASH_DONE_${Math.random().toString(36).substring(7)}__`;
+      const result = await runCommand(
+        command,
+        resolvedCwd,
+        timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      );
 
-        const timeoutMs = 60000; // 1 minute timeout for tool calls
-        const timer = setTimeout(() => {
-          timedOut = true;
-          // We don't kill the session on timeout, just return what we have
-          resolve({ exitCode: null, stdout, stderr, timedOut });
-        }, timeoutMs);
-
-        const onStdout = (data: Buffer) => {
-          const str = data.toString();
-          if (str.includes(sentinel)) {
-            const parts = str.split(sentinel);
-            stdout += parts[0];
-            const exitCodeMatch = parts[1].match(/EXIT:(\d+)/);
-            const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : 0;
-
-            cleanup();
-            resolve({ exitCode, stdout, stderr, timedOut: false });
-          } else {
-            stdout += str;
-          }
-        };
-
-        const onStderr = (data: Buffer) => {
-          stderr += data.toString();
-        };
-
-        const cleanup = () => {
-          clearTimeout(timer);
-          session.process.stdout?.removeListener('data', onStdout);
-          session.process.stderr?.removeListener('data', onStderr);
-        };
-
-        session.process.stdout?.on('data', onStdout);
-        session.process.stderr?.on('data', onStderr);
-
-        // Execute command and then echo the sentinel with exit code
-        session.process.stdin?.write(`${command}\necho "${sentinel}EXIT:$?"\n`);
-      });
+      const output = result.stderr.trim() || result.stdout.trim();
 
       yield {
         type: 'action:bash:result',
@@ -143,7 +261,7 @@ const bashPluginRuntime = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (build
           stdout: result.stdout.trim(),
           stderr: result.stderr.trim(),
           timedOut: result.timedOut,
-          output: result.stderr.trim() ? result.stderr.trim() : result.stdout.trim(),
+          output,
         },
         meta: event.meta,
       } as OpenBotEvent;
@@ -165,66 +283,121 @@ const bashPluginRuntime = (): MelonyPlugin<OpenBotState, OpenBotEvent> => (build
     }
   });
 
-  // Add a tool to stop/kill the session
-  builder.on('action:bash_stop', async function* (event, context) {
-    const channelId = event.data?.channelId || context.state.channelId;
-    const session = sessions.get(channelId);
-    if (session) {
-      session.process.kill();
-      sessions.delete(channelId);
+  builder.on('action:bash_start', async function* (event, context) {
+    const { command, cwd } = event.data;
+    const channelId = context.state.channelId;
+    const resolvedCwd = resolveCwd(context, cwd);
+
+    try {
+      const job = startJob(channelId, command, resolvedCwd);
+
+      yield {
+        type: 'action:bash_start:result',
+        data: {
+          success: true,
+          jobId: job.id,
+          pid: job.process.pid ?? null,
+          command: job.command,
+          cwd: job.cwd,
+          output: `Started job ${job.id}${job.process.pid ? ` (pid ${job.process.pid})` : ''}.`,
+        },
+        meta: event.meta,
+      } as OpenBotEvent;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start job';
+      yield {
+        type: 'action:bash_start:result',
+        data: {
+          success: false,
+          error: message,
+          output: message,
+        },
+        meta: event.meta,
+      } as OpenBotEvent;
     }
+  });
+
+  builder.on('action:bash_stop', async function* (event, context) {
+    const { jobId, channelId } = event.data ?? {};
+    const targetChannelId = channelId || context.state.channelId;
+
+    if (jobId) {
+      const job = jobs.get(jobId);
+      if (job) {
+        killJob(job);
+        removeJob(jobId);
+      }
+      yield {
+        type: 'action:bash_stop:result',
+        data: {
+          success: true,
+          stopped: job ? 1 : 0,
+          output: job ? `Stopped job ${jobId}.` : `Job ${jobId} was not found.`,
+        },
+        meta: event.meta,
+      } as OpenBotEvent;
+      return;
+    }
+
+    const stopped = killJobsForChannel(targetChannelId);
+
     yield {
       type: 'action:bash_stop:result',
-      data: { success: true, output: `Bash session for channel ${channelId} stopped.` },
+      data: {
+        success: true,
+        stopped,
+        output: `Stopped ${stopped} job${stopped === 1 ? '' : 's'} for channel ${targetChannelId}.`,
+      },
       meta: event.meta,
     } as OpenBotEvent;
   });
 
-  // Add a tool to list all active sessions
-  builder.on('action:bash_list_sessions', async function* (event, context) {
-    const activeSessions = Array.from(sessions.entries()).map(([channelId, session]) => ({
-      channelId,
-      cwd: session.cwd,
-      lastActivity: session.lastActivity,
-    }));
+  builder.on('action:bash_list_jobs', async function* (event, context) {
+    const channelId = event.data?.channelId || context.state.channelId;
+    const activeJobs = Array.from(jobs.values())
+      .filter((job) => job.channelId === channelId)
+      .map(jobToSummary);
 
     yield {
       type: 'client:ui:widget',
       data: {
         widgetId: randomUUID(),
         kind: 'list',
-        title: 'Active Bash Sessions',
-        description: `Found ${activeSessions.length} active bash session${activeSessions.length === 1 ? '' : 's'}.`,
-        items: activeSessions.map((s) => ({
-          id: s.channelId,
-          label: s.channelId,
-          description: `CWD: ${s.cwd}`,
-          status: 'done',
-          metadata: {
-            cwd: s.cwd,
-            lastActivity: s.lastActivity,
-          },
-        })),
+        title: 'Background Jobs',
+        items: activeJobs.length > 0 ? activeJobs.map((job) => ({
+          id: job.id,
+          label: job.command,
+          description: `${job.status} · pid ${job.pid ?? 'n/a'} · ${job.cwd}`,
+          status: job.status === 'running' ? 'in_progress' : 'done',
+          metadata: job,
+        })) : [{ id: 'no-jobs', label: 'No jobs found' }],
       },
       meta: event.meta,
     } as OpenBotEvent;
 
     yield {
-      type: 'action:bash_list_sessions:result',
+      type: 'action:bash_list_jobs:result',
       data: {
         success: true,
-        sessions: activeSessions,
-        output: JSON.stringify(activeSessions),
+        jobs: activeJobs,
+        output: JSON.stringify(activeJobs),
       },
       meta: event.meta,
     } as OpenBotEvent;
+  });
+
+  builder.on('action:delete_channel', async function* (event) {
+    const channelId = (event.data as { channelId?: string })?.channelId;
+    if (channelId) {
+      killJobsForChannel(channelId);
+    }
   });
 };
 
 export const bashPlugin: Plugin = {
   id: 'bash',
   name: 'Bash',
-  description: 'Stateful bash session for the channel.',
+  description: 'One-shot commands and background jobs for the channel workspace.',
   toolDefinitions: bashToolDefinitions,
   factory: () => bashPluginRuntime(),
 };

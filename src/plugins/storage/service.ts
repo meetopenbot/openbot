@@ -121,7 +121,7 @@ const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
     config: {
       model: 'openai/gpt-5.4-mini',
       approval: {
-        actions: ['action:bash', 'action:create_channel', 'action:delete_channel'],
+        actions: ['action:bash', 'action:bash_start', 'action:create_channel', 'action:delete_channel'],
       },
     },
   },
@@ -418,14 +418,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /** Display-oriented fields persisted in a channel's `state.json`. */
 const readChannelStateFileFields = (
   parsed: unknown,
-): { name?: string; cwd?: string } => {
+): { name?: string; cwd?: string; previewUrl?: string } => {
   if (!isRecord(parsed)) {
     return {};
   }
   const name =
     typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : undefined;
   const cwd = typeof parsed.cwd === 'string' ? parsed.cwd : undefined;
-  return { name, cwd };
+  const previewUrl = typeof parsed.previewUrl === 'string' ? parsed.previewUrl : undefined;
+  return { name, cwd, previewUrl };
 };
 
 const isChannelProvisioned = async (channelId: string): Promise<boolean> => {
@@ -861,6 +862,7 @@ export const storageService = {
 
     const diskFields = readChannelStateFileFields(state);
     const cwd = diskFields.cwd;
+    const previewUrl = diskFields.previewUrl;
     const displayName = diskFields.name ?? channelId;
 
     const details: ChannelDetails = {
@@ -869,6 +871,7 @@ export const storageService = {
       spec,
       state,
       cwd,
+      previewUrl,
     };
 
     details.threads = await storageService.getThreads({ channelId });

@@ -64,7 +64,7 @@ export const openbotPlugin: Plugin = {
 
     // Approval plugin configuration
     const approvalConfig = (config?.approval as any) || {
-      actions: ['action:bash', 'action:create_channel', 'action:delete_channel'],
+      actions: ['action:bash', 'action:bash_start', 'action:create_channel', 'action:delete_channel'],
     };
     approvalPlugin.factory({ ...context, config: approvalConfig })(builder);
 
