@@ -297,10 +297,6 @@ export const storagePlugin: Plugin = {
         cwd?: string;
       };
       try {
-        const previousPreviewUrl = (
-          await storage.getChannelDetails({ channelId: context.state.channelId })
-        ).previewUrl;
-
         if (data.state !== undefined) {
           await storage.patchChannelState({
             channelId: context.state.channelId,
@@ -328,12 +324,17 @@ export const storagePlugin: Plugin = {
         });
 
         const newPreviewUrl = context.state.channelDetails.previewUrl;
-        const previewUrlChanged =
+        const previewUrlInPatch =
+          data.state !== undefined &&
+          'previewUrl' in data.state &&
+          typeof data.state.previewUrl === 'string' &&
+          data.state.previewUrl.trim() !== '';
+        const previewUrlIsSet =
+          previewUrlInPatch &&
           typeof newPreviewUrl === 'string' &&
-          newPreviewUrl.trim() !== '' &&
-          newPreviewUrl !== previousPreviewUrl;
+          newPreviewUrl.trim() !== '';
 
-        if (previewUrlChanged) {
+        if (previewUrlIsSet) {
           yield {
             type: 'client:ui:widget',
             data: {
@@ -341,8 +342,7 @@ export const storagePlugin: Plugin = {
               kind: 'message',
               title: 'Preview ready',
               description: `Dev server is running at ${newPreviewUrl}.`,
-              display: 'collapsed',
-              actions: [{ id: 'open_preview', label: 'Open preview', variant: 'primary' }],
+              actions: [{ id: 'open_preview', label: 'Open preview', variant: 'primary', value: { previewUrl: newPreviewUrl } }],
               metadata: {
                 type: 'preview:ready',
                 previewUrl: newPreviewUrl,
