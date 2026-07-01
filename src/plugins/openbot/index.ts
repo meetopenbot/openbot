@@ -6,6 +6,7 @@ import { approvalPlugin } from '../approval/index.js';
 import { storagePlugin } from '../storage/index.js';
 import { delegationPlugin } from '../delegation/index.js';
 import { uiPlugin } from '../ui/index.js';
+import { previewPlugin } from '../preview/index.js';
 
 /**
  * `openbot` — the standard, opinionated OpenBot agent runtime.
@@ -49,6 +50,7 @@ export const openbotPlugin: Plugin = {
     ...memoryPlugin.toolDefinitions,
     ...storagePlugin.toolDefinitions,
     ...delegationPlugin.toolDefinitions,
+    ...previewPlugin.toolDefinitions,
     // this is the capability to render UI widgets to the user. We dont need it for now.
     // ...uiPlugin.toolDefinitions,
   },
@@ -61,10 +63,17 @@ export const openbotPlugin: Plugin = {
     storagePlugin.factory(context)(builder);
     delegationPlugin.factory(context)(builder);
     uiPlugin.factory(context)(builder);
+    previewPlugin.factory(context)(builder);
 
     // Approval plugin configuration
     const approvalConfig = (config?.approval as any) || {
-      actions: ['action:bash', 'action:bash_start', 'action:create_channel', 'action:delete_channel'],
+      actions: [
+        'action:bash',
+        'action:bash_start',
+        'action:expose_port',
+        'action:create_channel',
+        'action:delete_channel',
+      ],
     };
     approvalPlugin.factory({ ...context, config: approvalConfig })(builder);
 

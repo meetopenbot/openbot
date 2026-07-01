@@ -106,7 +106,6 @@ export type ChannelDetails = {
   spec: string;
   state: unknown;
   cwd?: string;
-  previewUrl?: string;
   threads?: Thread[];
 };
 

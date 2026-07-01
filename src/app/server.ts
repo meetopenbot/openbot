@@ -8,7 +8,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json');
 import { generateId } from 'melony';
-import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../app/config.js';
+import { getBaseDir, loadConfig } from '../app/config.js';
 import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
 import { processService } from '../services/process.js';
 import { runAgent, STATE_AGENT_ID, ORCHESTRATOR_AGENT_ID } from '../harness/index.js';
@@ -46,8 +46,7 @@ export async function startServer(options: ServerOptions = {}) {
   const config = loadConfig();
   processService.syncWorkspaceVariablesToProcessEnv();
 
-  const baseDir = config.baseDir || DEFAULT_BASE_DIR;
-  const openBotDir = resolvePath(baseDir);
+  const openBotDir = getBaseDir();
   const PORT = Number(options.port ?? config.port ?? process.env.PORT ?? 4132);
   const app = express();
   const clients: Map<string, express.Response[]> = new Map();
@@ -247,6 +246,23 @@ export async function startServer(options: ServerOptions = {}) {
 
   app.use(cors());
 
+  const gatewayToken = process.env.OPENBOT_GATEWAY_TOKEN?.trim();
+  if (gatewayToken) {
+    app.use((req, res, next) => {
+      if (req.path === '/api/health' || req.method === 'OPTIONS') {
+        next();
+        return;
+      }
+
+      const got = req.get('x-openbot-gateway-token');
+      if (got !== gatewayToken) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      next();
+    });
+  }
+
   const resolvePublicBaseUrl = () => getPublicBaseUrl(PORT, config.publicUrl);
 
   app.use((req, res, next) => {
@@ -264,7 +280,7 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', version: pkg.version });
+    res.json({ status: 'ok', version: pkg.version, apiVersion: 1 });
   });
 
   app.get('/api/events', (req, res) => {
@@ -683,10 +699,25 @@ export async function startServer(options: ServerOptions = {}) {
     }
   });
 
-  app.listen(PORT, () => {
-    console.log(`\x1b[32mOpenBot server listening at http://localhost:${PORT}\x1b[0m`);
+  const HOST = process.env.HOST || '0.0.0.0';
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`\x1b[32mOpenBot server listening at http://${HOST}:${PORT}\x1b[0m`);
     console.log(
       `🌐 Visit \x1b[96m\x1b[1mhttps://openbot.one\x1b[0m to connect to this runtime and manage everything from there. ✨`,
     );
   });
+
+  const shutdown = (signal: string) => {
+    console.log(`\n[server] Received ${signal}, shutting down...`);
+    server.close(() => {
+      process.exit(0);
+    });
+    setTimeout(() => {
+      console.error('[server] Forced shutdown after timeout');
+      process.exit(1);
+    }, 10_000).unref();
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }

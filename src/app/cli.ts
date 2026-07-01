@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { bootstrap } from './bootstrap.js';
 import { startServer } from './server.js';
 
 const program = new Command();
@@ -25,13 +26,14 @@ function checkNodeVersion() {
 
 checkNodeVersion();
 
-program.name('openbot').description('OpenBot CLI').version('0.4.7');
+program.name('openbot').description('OpenBot CLI').version('0.5.1');
 
 program
   .command('start')
   .description('Start the OpenBot harness')
   .option('-p, --port <number>', 'Port to listen on')
   .action(async (options) => {
+    await bootstrap();
     await startServer(options);
   });
 

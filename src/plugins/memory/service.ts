@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { DEFAULT_BASE_DIR, loadConfig, resolvePath } from '../../app/config.js';
+import { getBaseDir } from '../../app/config.js';
 
 /**
  * Global memory service.
@@ -60,10 +60,7 @@ type LogEntry = AddEntry | DeleteEntry | UpdateEntry;
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 500;
 
-const getMemoryDir = (): string => {
-  const config = loadConfig();
-  return path.join(resolvePath(config.baseDir || DEFAULT_BASE_DIR), 'memory');
-};
+const getMemoryDir = (): string => path.join(getBaseDir(), 'memory');
 
 const getLogPath = (): string => path.join(getMemoryDir(), 'log.jsonl');
 

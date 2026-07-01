@@ -838,6 +838,44 @@ export type BashListJobsResultEvent = BaseEvent & {
   };
 };
 
+export type ExposePortEvent = BaseEvent & {
+  type: 'action:expose_port';
+  data: {
+    port: number;
+  };
+  meta?: {
+    toolCallId?: string;
+    approvalId?: string;
+    approvalStatus?: 'approved' | 'denied';
+    [key: string]: unknown;
+  };
+};
+
+export type ExposePortResultEvent = BaseEvent & {
+  type: 'action:expose_port:result';
+  data: {
+    success: boolean;
+    previewUrl?: string;
+    port?: number;
+    temporary?: boolean;
+    error?: string;
+    output?: string;
+  };
+};
+
+export type UnexposePortEvent = BaseEvent & {
+  type: 'action:unexpose_port';
+  data?: Record<string, never>;
+};
+
+export type UnexposePortResultEvent = BaseEvent & {
+  type: 'action:unexpose_port:result';
+  data: {
+    success: boolean;
+    output?: string;
+  };
+};
+
 export type InstallPluginEvent = BaseEvent & {
   type: 'action:plugin:install';
   data: {
@@ -1152,6 +1190,10 @@ export type OpenBotEvent =
   | BashStopResultEvent
   | BashListJobsEvent
   | BashListJobsResultEvent
+  | ExposePortEvent
+  | ExposePortResultEvent
+  | UnexposePortEvent
+  | UnexposePortResultEvent
   | InstallPluginEvent
   | InstallPluginResultEvent
   | UninstallPluginEvent

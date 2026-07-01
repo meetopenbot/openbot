@@ -2,10 +2,9 @@ import { ORCHESTRATOR_AGENT_ID, STATE_AGENT_ID } from '../../app/agent-ids.js';
 import {
   DEFAULT_PLUGINS_DIR,
   DEFAULT_AGENTS_DIR,
-  DEFAULT_BASE_DIR,
   DEFAULT_CHANNELS_DIR,
+  getBaseDir,
   getDefaultChannelCwd,
-  loadConfig,
   resolvePath,
   StoredVariable,
   VARIABLES_FILE,
@@ -38,10 +37,7 @@ import {
   statChannelFile,
 } from './files.js';
 
-const resolveBaseDir = () => {
-  const config = loadConfig();
-  return resolvePath(config.baseDir || DEFAULT_BASE_DIR);
-};
+const resolveBaseDir = () => getBaseDir();
 
 const ENTITY_SVG_CANDIDATE_NAMES = ['avatar.svg', 'icon.svg', 'image.svg', 'logo.svg'] as const;
 
@@ -418,15 +414,14 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /** Display-oriented fields persisted in a channel's `state.json`. */
 const readChannelStateFileFields = (
   parsed: unknown,
-): { name?: string; cwd?: string; previewUrl?: string } => {
+): { name?: string; cwd?: string } => {
   if (!isRecord(parsed)) {
     return {};
   }
   const name =
     typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : undefined;
   const cwd = typeof parsed.cwd === 'string' ? parsed.cwd : undefined;
-  const previewUrl = typeof parsed.previewUrl === 'string' ? parsed.previewUrl : undefined;
-  return { name, cwd, previewUrl };
+  return { name, cwd };
 };
 
 const isChannelProvisioned = async (channelId: string): Promise<boolean> => {
@@ -862,7 +857,6 @@ export const storageService = {
 
     const diskFields = readChannelStateFileFields(state);
     const cwd = diskFields.cwd;
-    const previewUrl = diskFields.previewUrl;
     const displayName = diskFields.name ?? channelId;
 
     const details: ChannelDetails = {
@@ -871,7 +865,6 @@ export const storageService = {
       spec,
       state,
       cwd,
-      previewUrl,
     };
 
     details.threads = await storageService.getThreads({ channelId });

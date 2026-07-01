@@ -5,8 +5,8 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
   DEFAULT_PLUGINS_DIR,
-  DEFAULT_BASE_DIR,
   DEFAULT_MARKETPLACE_REGISTRY_URL,
+  getBaseDir,
   loadConfig,
   resolvePath,
 } from '../../app/config.js';
@@ -202,11 +202,7 @@ export async function resolveMarketplaceAgentList(): Promise<MarketplaceAgentLis
   return registry.agents;
 }
 
-const getPluginsDir = (): string => {
-  const config = loadConfig();
-  const baseDir = resolvePath(config.baseDir || DEFAULT_BASE_DIR);
-  return path.join(baseDir, DEFAULT_PLUGINS_DIR);
-};
+const getPluginsDir = (): string => path.join(getBaseDir(), DEFAULT_PLUGINS_DIR);
 
 /**
  * Lifecycle for community-built plugins distributed via npm.
