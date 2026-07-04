@@ -1,18 +1,14 @@
 import { MelonyPlugin, RuntimeContext } from 'melony';
-import { generateText, type LanguageModel } from 'ai';
-import { openai } from '@ai-sdk/openai';
-import { anthropic } from '@ai-sdk/anthropic';
-import { google } from '@ai-sdk/google';
+import { generateText } from 'ai';
 import { OpenBotEvent, OpenBotState, AgentInvokeEvent } from '../../app/types.js';
 import { eventsToModelMessages } from './history.js';
 import { Storage } from '../../services/plugins/domain.js';
 import type { ToolDefinition } from '../../services/plugins/types.js';
-import {
-  ORCHESTRATOR_AGENT_ID,
-  buildContext,
-} from './context.js';
+import { buildContext } from './context.js';
 import { saveConfig, DEFAULT_MARKETPLACE_REGISTRY_URL } from '../../app/config.js';
+import { isCloudSystemAgent } from '../../app/cloud-mode.js';
 import { OPENBOT_SYSTEM_PROMPT } from './system-prompt.js';
+import { resolveModel } from './model.js';
 
 interface ModelRegistry {
   providers: Record<
@@ -42,29 +38,12 @@ async function fetchRegistry(): Promise<ModelRegistry | null> {
 export interface OpenBotRuntimeOptions {
   /** Provider model string (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20240620`). */
   model?: string;
+  agentId?: string;
   storage?: Storage;
   /** Tool definitions merged from all tool plugins attached to this agent. */
   toolDefinitions?: Record<string, ToolDefinition>;
   /** Fires when the run is stopped; cancels the in-flight LLM call. */
   abortSignal?: AbortSignal;
-}
-
-function resolveModel(modelString: string): LanguageModel {
-  const [provider, ...rest] = modelString.split('/');
-  const modelId = rest.join('/');
-  if (!modelId) {
-    throw new Error(`Invalid model string: "${modelString}". Expected "provider/model-id".`);
-  }
-  switch (provider) {
-    case 'openai':
-      return openai(modelId);
-    case 'anthropic':
-      return anthropic(modelId);
-    case 'google':
-      return google(modelId);
-    default:
-      throw new Error(`Unsupported AI provider: "${provider}"`);
-  }
 }
 
 async function buildSystemPrompt(
@@ -149,13 +128,14 @@ export const openbotRuntime =
     (builder) => {
       const {
         model: modelString = 'openai/gpt-4o-mini',
+        agentId,
         storage,
         toolDefinitions = {},
         abortSignal,
       } = options;
 
       let currentModelString = modelString;
-      let model = resolveModel(currentModelString);
+      let model = resolveModel(currentModelString, agentId);
 
       const runLLM = async function* (
         context: RuntimeContext<OpenBotState, OpenBotEvent>,
@@ -273,7 +253,7 @@ export const openbotRuntime =
             errorMessage.includes('Unauthorized') ||
             errorMessage.includes('authentication');
 
-          if (isApiKeyError) {
+          if (isApiKeyError && !isCloudSystemAgent(context.state.agentId)) {
             yield {
               type: 'client:ui:widget',
               data: {
@@ -352,6 +332,8 @@ export const openbotRuntime =
       builder.on('client:ui:widget:response', async function* (event, context) {
         const { metadata, values, actionId } = event.data;
         const threadId = event.meta?.threadId || context.state.threadId;
+
+        if (isCloudSystemAgent(context.state.agentId)) return;
 
         if (metadata?.type === 'api_provider_selection') {
           const provider = actionId;
@@ -464,7 +446,7 @@ export const openbotRuntime =
           process.env[envVar] = apiKey;
 
           currentModelString = newModelString;
-          model = resolveModel(currentModelString);
+          model = resolveModel(currentModelString, agentId);
           try {
             saveConfig({ model: currentModelString });
 

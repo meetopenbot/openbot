@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 const pkg = require('../../package.json');
 import { generateId } from 'melony';
 import { getBaseDir, loadConfig } from '../app/config.js';
+import { isCloudMode, getCloudIntegrationsConfig } from './cloud-mode.js';
 import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
 import { processService } from '../services/process.js';
 import { runAgent, STATE_AGENT_ID, ORCHESTRATOR_AGENT_ID } from '../harness/index.js';
@@ -45,6 +46,13 @@ export async function startServer(options: ServerOptions = {}) {
 
   const config = loadConfig();
   processService.syncWorkspaceVariablesToProcessEnv();
+
+  if (isCloudMode()) {
+    const integrations = getCloudIntegrationsConfig();
+    console.log(
+      `[server] Cloud mode enabled${integrations ? '' : ' (integrations proxy env not set)'}`,
+    );
+  }
 
   const openBotDir = getBaseDir();
   const PORT = Number(options.port ?? config.port ?? process.env.PORT ?? 4132);

@@ -39,6 +39,9 @@ Copy `deploy/fly.toml`, set `app` to your tenant id, and ensure the volume name 
 | `OPENBOT_CHANNELS_WORKSPACE_DIR` | Yes (cloud) | Channel workspace parent, e.g. `/data/workspace` |
 | `OPENBOT_PUBLIC_URL` | Yes (cloud) | Public HTTPS URL for file links |
 | `OPENBOT_GATEWAY_TOKEN` | Yes (cloud) | Per-workspace HMAC token; gateway sends `x-openbot-gateway-token` on proxied requests |
+| `OPENBOT_CLOUD_MODE` | Yes (cloud) | Set to `1` for platform-managed OpenBot (system agent uses integrations proxy) |
+| `OPENBOT_INTEGRATIONS_BASE_URL` | Yes (cloud) | Integrations gateway base URL, e.g. `https://integrations.openbot.one/abc123` |
+| `OPENBOT_INTEGRATIONS_TOKEN` | Yes (cloud) | Per-workspace HMAC token for `x-openbot-integrations-token` on LLM proxy requests |
 | `PORT` | Auto | Set by Fly (`8080`) |
 
 ## Health check
@@ -51,7 +54,7 @@ Your control plane should:
 
 1. `fly apps create openbot-{tenantId}`
 2. `fly volumes create openbot_data --region {region} --size {gb}`
-3. `fly secrets set OPENBOT_PUBLIC_URL=...` (+ API keys)
+3. `fly secrets set OPENBOT_PUBLIC_URL=... OPENBOT_CLOUD_MODE=1 OPENBOT_INTEGRATIONS_BASE_URL=... OPENBOT_INTEGRATIONS_TOKEN=...`
 4. `fly deploy` with a pinned image tag
 5. Poll `/api/health` until `status === 'ok'`
 

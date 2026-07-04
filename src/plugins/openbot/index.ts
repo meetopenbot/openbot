@@ -1,4 +1,5 @@
 import type { Plugin } from '../../services/plugins/types.js';
+import { CLOUD_SYSTEM_MODEL, isCloudSystemAgent } from '../../app/cloud-mode.js';
 import { openbotRuntime } from './runtime.js';
 import { bashPlugin } from '../bash/index.js';
 import { memoryPlugin } from '../memory/index.js';
@@ -55,7 +56,7 @@ export const openbotPlugin: Plugin = {
     // ...uiPlugin.toolDefinitions,
   },
   factory: (context) => (builder) => {
-    const { config, storage, tools, abortSignal } = context;
+    const { agentId, config, storage, tools, abortSignal } = context;
 
     // Register inbuilt plugins
     bashPlugin.factory(context)(builder);
@@ -77,8 +78,13 @@ export const openbotPlugin: Plugin = {
     };
     approvalPlugin.factory({ ...context, config: approvalConfig })(builder);
 
+    const model = isCloudSystemAgent(agentId)
+      ? CLOUD_SYSTEM_MODEL
+      : (config?.model as string);
+
     return openbotRuntime({
-      model: config?.model as string,
+      model,
+      agentId,
       storage,
       toolDefinitions: tools,
       abortSignal,

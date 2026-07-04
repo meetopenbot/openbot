@@ -1,5 +1,10 @@
 import { ORCHESTRATOR_AGENT_ID, STATE_AGENT_ID } from '../../app/agent-ids.js';
 import {
+  assertCloudSystemAgentPluginsMutable,
+  CLOUD_SYSTEM_MODEL,
+  isCloudMode,
+} from '../../app/cloud-mode.js';
+import {
   DEFAULT_PLUGINS_DIR,
   DEFAULT_AGENTS_DIR,
   DEFAULT_CHANNELS_DIR,
@@ -123,6 +128,18 @@ const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
   },
 ];
 
+const CLOUD_SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
+  {
+    id: 'openbot',
+    config: {
+      model: CLOUD_SYSTEM_MODEL,
+      approval: {
+        actions: ['action:bash', 'action:bash_start', 'action:create_channel', 'action:delete_channel'],
+      },
+    },
+  },
+];
+
 /** No `openbot` / `bash` — storage-side effects and infra plugins only. */
 const STATE_DEFAULT_PLUGINS: PluginRef[] = [
   { id: 'storage' },
@@ -133,6 +150,7 @@ const STATE_AGENT_INSTRUCTIONS =
   'Built-in infra agent for deterministic state reads. No conversational model is attached; handle storage, approvals, memory, and plugin marketplace events.';
 
 function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails {
+  const defaultPlugins = isCloudMode() ? CLOUD_SYSTEM_DEFAULT_PLUGINS : SYSTEM_DEFAULT_PLUGINS;
   const defaults: AgentDetails = {
     id: SYSTEM_AGENT_ID,
     name: 'OpenBot',
@@ -140,21 +158,34 @@ function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails 
     description:
       'First-party orchestration agent for OpenBot.',
     instructions: '',
-    plugins: SYSTEM_DEFAULT_PLUGINS.map((ref) => ref.id),
-    pluginRefs: SYSTEM_DEFAULT_PLUGINS,
+    plugins: defaultPlugins.map((ref) => ref.id),
+    pluginRefs: defaultPlugins,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
 
   if (!overrides) return defaults;
 
-  const refs = overrides.pluginRefs && overrides.pluginRefs.length > 0
-    ? overrides.pluginRefs
-    : defaults.pluginRefs;
-
   const diskInstructions = overrides.instructions?.trim();
   const instructions =
     diskInstructions && diskInstructions.length > 0 ? diskInstructions : defaults.instructions;
+
+  if (isCloudMode()) {
+    return {
+      ...defaults,
+      ...overrides,
+      id: SYSTEM_AGENT_ID,
+      instructions,
+      image: overrides.image || defaults.image,
+      plugins: defaults.plugins,
+      pluginRefs: defaults.pluginRefs,
+      updatedAt: new Date(),
+    };
+  }
+
+  const refs = overrides.pluginRefs && overrides.pluginRefs.length > 0
+    ? overrides.pluginRefs
+    : defaults.pluginRefs;
 
   return {
     ...defaults,
@@ -1077,6 +1108,7 @@ export const storageService = {
     plugins: PluginRef[];
   }): Promise<void> => {
     assertAgentIdFormat(agentId);
+    assertCloudSystemAgentPluginsMutable(agentId, plugins);
     const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
     const agentMdPath = path.join(agentDir, 'AGENT.md');
 
@@ -1129,6 +1161,7 @@ export const storageService = {
     plugins?: PluginRef[];
   }): Promise<void> => {
     assertAgentIdFormat(agentId);
+    assertCloudSystemAgentPluginsMutable(agentId, plugins);
     const agentDir = resolvePath(path.join(getAgentsRootDir(), agentId));
     const agentMdPath = path.join(agentDir, 'AGENT.md');
 
