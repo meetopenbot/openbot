@@ -5,35 +5,14 @@ import { eventsToModelMessages } from './history.js';
 import { Storage } from '../../services/plugins/domain.js';
 import type { ToolDefinition } from '../../services/plugins/types.js';
 import { buildContext } from './context.js';
-import { saveConfig, DEFAULT_MARKETPLACE_REGISTRY_URL } from '../../app/config.js';
+import { saveConfig } from '../../app/config.js';
 import { isCloudSystemAgent } from '../../app/cloud-mode.js';
 import { OPENBOT_SYSTEM_PROMPT } from './system-prompt.js';
 import { resolveModel } from './model.js';
-
-interface ModelRegistry {
-  providers: Record<
-    string,
-    {
-      label: string;
-      models: Array<{ id: string; label: string; description: string }>;
-    }
-  >;
-}
-
-let cachedRegistry: ModelRegistry | null = null;
-
-async function fetchRegistry(): Promise<ModelRegistry | null> {
-  if (cachedRegistry) return cachedRegistry;
-  try {
-    const response = await fetch(DEFAULT_MARKETPLACE_REGISTRY_URL);
-    if (!response.ok) throw new Error(`Failed to fetch registry: ${response.statusText}`);
-    cachedRegistry = (await response.json()) as ModelRegistry;
-    return cachedRegistry;
-  } catch (error) {
-    console.error('[openbot] Failed to fetch model registry:', error);
-    return null;
-  }
-}
+import {
+  listApiKeyProvidersFromRegistry,
+  resolveModelRegistry,
+} from '../../services/plugins/model-registry.js';
 
 export interface OpenBotRuntimeOptions {
   /** Provider model string (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3-5-sonnet-20240620`). */
@@ -254,6 +233,13 @@ export const openbotRuntime =
             errorMessage.includes('authentication');
 
           if (isApiKeyError && !isCloudSystemAgent(context.state.agentId)) {
+            const registry = await resolveModelRegistry();
+            const providerActions = listApiKeyProvidersFromRegistry(registry).map((provider) => ({
+              id: provider.id,
+              label: provider.label,
+              variant: 'primary' as const,
+            }));
+
             yield {
               type: 'client:ui:widget',
               data: {
@@ -261,11 +247,14 @@ export const openbotRuntime =
                 widgetId: `api_provider_selection_${Date.now()}`,
                 title: `Setup AI Provider`,
                 description: `Select a provider to continue.`,
-                actions: [
-                  { id: 'openai', label: 'OpenAI', variant: 'primary' },
-                  { id: 'anthropic', label: 'Anthropic', variant: 'primary' },
-                  { id: 'google', label: 'Google', variant: 'primary' },
-                ],
+                actions:
+                  providerActions.length > 0
+                    ? providerActions
+                    : [
+                        { id: 'openai', label: 'OpenAI', variant: 'primary' as const },
+                        { id: 'anthropic', label: 'Anthropic', variant: 'primary' as const },
+                        { id: 'google', label: 'Google', variant: 'primary' as const },
+                      ],
                 metadata: {
                   type: 'api_provider_selection',
                 },
@@ -340,8 +329,8 @@ export const openbotRuntime =
           const [_, ...rest] = currentModelString.split('/');
           const currentModelId = rest.join('/');
 
-          const registry = await fetchRegistry();
-          const providerData = registry?.providers[provider as string];
+          const registry = await resolveModelRegistry();
+          const providerData = registry.providers?.[provider as string];
 
           const providerLinks: Record<string, string> = {
             openai: 'https://platform.openai.com/api-keys',
@@ -357,11 +346,20 @@ export const openbotRuntime =
             value: m.id,
           }));
 
-          const defaultModel = modelOptions?.[0]?.value || 'gpt-4o-mini';
+          if (!modelOptions || modelOptions.length === 0) {
+            yield {
+              type: 'agent:output',
+              data: {
+                content: `No models are listed for **${label}** in the marketplace registry.`,
+              },
+              meta: { agentId: context.state.agentId },
+            };
+            return;
+          }
+
+          const defaultModel = modelOptions[0].value;
           const defaultValue =
-            modelOptions?.find((m) => m.value === currentModelId)?.value ||
-            currentModelId ||
-            defaultModel;
+            modelOptions.find((m) => m.value === currentModelId)?.value || defaultModel;
 
           yield {
             type: 'client:ui:widget',
@@ -389,10 +387,8 @@ export const openbotRuntime =
                 {
                   id: 'model',
                   label: 'Model',
-                  type: modelOptions ? 'select' : 'text',
-                  description: modelOptions ? undefined : `Model name (e.g. \`${defaultModel}\`).`,
+                  type: 'select',
                   options: modelOptions,
-                  placeholder: defaultModel,
                   required: true,
                   defaultValue,
                 },

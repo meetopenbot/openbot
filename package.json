@@ -1,6 +1,6 @@
 {
   "name": "openbot",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "private": false,
   "type": "module",
   "engines": {
@@ -10,7 +10,7 @@
     "dev": "tsx watch src/app/cli.ts start",
     "build": "tsc && mkdir -p dist/assets && cp src/assets/icon.svg dist/assets/icon.svg",
     "start": "node dist/app/cli.js start",
-    "push": "fly deploy --build-only --push --config deploy/fly.toml -a openbot-runtime --image-label v0.5.2"
+    "push": "fly deploy --build-only --push --config deploy/fly.toml -a openbot-runtime --image-label v0.5.3"
   },
   "bin": {
     "openbot": "./dist/app/cli.js"

@@ -3,8 +3,11 @@ import { ORCHESTRATOR_AGENT_ID } from './agent-ids.js';
 /** Platform-managed OpenBot (Fly + integrations proxy). Self-hosted when unset. */
 export const isCloudMode = (): boolean => process.env.OPENBOT_CLOUD_MODE === '1';
 
-/** Hardcoded provider/model for the cloud system agent. */
-export const CLOUD_SYSTEM_MODEL = 'openai/gpt-5.4-nano';
+/** Platform-managed coordinator model for cloud workspaces. */
+export const COORDINATOR_MODEL = 'openbot/coordinator-1';
+
+/** Default cloud system agent model. */
+export const CLOUD_SYSTEM_MODEL = COORDINATOR_MODEL;
 
 export interface CloudIntegrationsConfig {
   baseUrl: string;
@@ -25,10 +28,14 @@ export function isCloudSystemAgent(agentId: string): boolean {
   return isCloudMode() && agentId === ORCHESTRATOR_AGENT_ID;
 }
 
+export function resolveCloudSystemModel(configModel: string | undefined): string {
+  return configModel?.trim() || COORDINATOR_MODEL;
+}
+
 export function assertCloudSystemAgentPluginsMutable(
   agentId: string,
   plugins: unknown,
 ): void {
-  if (!isCloudMode() || agentId !== ORCHESTRATOR_AGENT_ID || plugins === undefined) return;
-  throw new Error('System agent plugin configuration cannot be changed in cloud mode.');
+  void agentId;
+  void plugins;
 }

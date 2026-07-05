@@ -33,6 +33,10 @@ import {
 import type { PluginRef } from '../../services/plugins/types.js';
 import { openbotPlugin } from '../openbot/index.js';
 import { listBuiltInPlugins, parsePluginModule } from '../../services/plugins/registry.js';
+import {
+  enrichOpenbotPluginDescriptor,
+  listRegistryModelOptions,
+} from '../../services/plugins/model-registry.js';
 import { OpenBotEvent, OpenBotState } from '../../app/types.js';
 import { processService } from '../../services/process.js';
 import { memoryService } from '../memory/service.js';
@@ -140,6 +144,26 @@ const CLOUD_SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
   },
 ];
 
+function mergeCloudSystemPluginRefs(
+  defaults: PluginRef[],
+  diskRefs: PluginRef[],
+): PluginRef[] {
+  const defaultOpenbot = defaults.find((ref) => ref.id === 'openbot');
+  const diskOpenbot = diskRefs.find((ref) => ref.id === 'openbot');
+
+  if (!defaultOpenbot) return defaults;
+
+  return [
+    {
+      ...defaultOpenbot,
+      config: {
+        ...defaultOpenbot.config,
+        ...diskOpenbot?.config,
+      },
+    },
+  ];
+}
+
 /** No `openbot` / `bash` — storage-side effects and infra plugins only. */
 const STATE_DEFAULT_PLUGINS: PluginRef[] = [
   { id: 'storage' },
@@ -171,14 +195,20 @@ function getSystemAgentDetails(overrides?: Partial<AgentDetails>): AgentDetails 
     diskInstructions && diskInstructions.length > 0 ? diskInstructions : defaults.instructions;
 
   if (isCloudMode()) {
+    const diskRefs =
+      overrides.pluginRefs && overrides.pluginRefs.length > 0 ? overrides.pluginRefs : undefined;
+    const refs = diskRefs
+      ? mergeCloudSystemPluginRefs(defaults.pluginRefs, diskRefs)
+      : defaults.pluginRefs;
+
     return {
       ...defaults,
       ...overrides,
       id: SYSTEM_AGENT_ID,
       instructions,
       image: overrides.image || defaults.image,
-      plugins: defaults.plugins,
-      pluginRefs: defaults.pluginRefs,
+      plugins: refs.map((ref) => ref.id),
+      pluginRefs: refs,
       updatedAt: new Date(),
     };
   }
@@ -1019,12 +1049,17 @@ export const storageService = {
     return Array.from(deduped.values()).filter((agent) => !agent.hidden);
   },
   getPlugins: async (): Promise<PluginDescriptor[]> => {
-    const [builtIn, fromDisk] = await Promise.all([
+    const [builtIn, fromDisk, modelOptions] = await Promise.all([
       listBuiltInPluginDescriptors(),
       listPluginsFromDisk(),
+      listRegistryModelOptions(),
     ]);
 
-    const merged = [...builtIn, ...fromDisk];
+    const enrichedBuiltIn = builtIn.map((plugin) =>
+      enrichOpenbotPluginDescriptor(plugin, modelOptions),
+    );
+
+    const merged = [...enrichedBuiltIn, ...fromDisk];
     const deduped = new Map<string, PluginDescriptor>();
     for (const plugin of merged) {
       if (!deduped.has(plugin.id)) {

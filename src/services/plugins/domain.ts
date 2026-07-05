@@ -49,6 +49,8 @@ export type ConfigSchema = {
       description?: string;
       default?: unknown;
       enum?: unknown[];
+      /** Labeled select options (preferred over bare `enum` when present). */
+      options?: Array<{ label: string; value: string; description?: string }>;
       minimum?: number;
       maximum?: number;
       format?: 'password' | 'url' | 'email';

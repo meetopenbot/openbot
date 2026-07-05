@@ -1,5 +1,5 @@
 import type { Plugin } from '../../services/plugins/types.js';
-import { CLOUD_SYSTEM_MODEL, isCloudSystemAgent } from '../../app/cloud-mode.js';
+import { isCloudSystemAgent, resolveCloudSystemModel } from '../../app/cloud-mode.js';
 import { openbotRuntime } from './runtime.js';
 import { bashPlugin } from '../bash/index.js';
 import { memoryPlugin } from '../memory/index.js';
@@ -29,9 +29,7 @@ export const openbotPlugin: Plugin = {
     properties: {
       model: {
         type: 'string',
-        description:
-          'Provider model string, e.g. openai/gpt-4o-mini, anthropic/claude-3-5-sonnet-20240620',
-        default: 'openai/gpt-4o-mini',
+        description: 'Model from the hosted marketplace registry.',
       },
       approval: {
         type: 'object',
@@ -79,7 +77,7 @@ export const openbotPlugin: Plugin = {
     approvalPlugin.factory({ ...context, config: approvalConfig })(builder);
 
     const model = isCloudSystemAgent(agentId)
-      ? CLOUD_SYSTEM_MODEL
+      ? resolveCloudSystemModel(config?.model as string | undefined)
       : (config?.model as string);
 
     return openbotRuntime({

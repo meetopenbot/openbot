@@ -2,7 +2,10 @@ import { createOpenAI, openai as defaultOpenai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
-import { getCloudIntegrationsConfig, isCloudSystemAgent } from '../../app/cloud-mode.js';
+import {
+  getCloudIntegrationsConfig,
+  isCloudSystemAgent,
+} from '../../app/cloud-mode.js';
 
 let cloudOpenAIProvider: ReturnType<typeof createOpenAI> | null | undefined;
 
@@ -34,6 +37,23 @@ function getCloudOpenAIProvider(): ReturnType<typeof createOpenAI> | null {
   return cloudOpenAIProvider;
 }
 
+function resolveOpenbotModel(modelId: string, agentId?: string): LanguageModel {
+  if (!agentId || !isCloudSystemAgent(agentId)) {
+    throw new Error(
+      `OpenBot models are only available for the cloud system agent. Use openai/..., anthropic/..., etc.`,
+    );
+  }
+
+  const cloudOpenai = getCloudOpenAIProvider();
+  if (!cloudOpenai) {
+    throw new Error(
+      'OpenBot cloud model requires OPENBOT_INTEGRATIONS_BASE_URL and OPENBOT_INTEGRATIONS_TOKEN.',
+    );
+  }
+
+  return cloudOpenai.chat(modelId);
+}
+
 export function resolveModel(modelString: string, agentId?: string): LanguageModel {
   const [provider, ...rest] = modelString.split('/');
   const modelId = rest.join('/');
@@ -41,17 +61,9 @@ export function resolveModel(modelString: string, agentId?: string): LanguageMod
     throw new Error(`Invalid model string: "${modelString}". Expected "provider/model-id".`);
   }
 
-  if (provider === 'openai' && agentId && isCloudSystemAgent(agentId)) {
-    const cloudOpenai = getCloudOpenAIProvider();
-    if (cloudOpenai) {
-      return cloudOpenai.chat(modelId);
-    }
-    console.warn(
-      '[openbot] Cloud mode: OPENBOT_INTEGRATIONS_BASE_URL / OPENBOT_INTEGRATIONS_TOKEN not set; falling back to direct OpenAI',
-    );
-  }
-
   switch (provider) {
+    case 'openbot':
+      return resolveOpenbotModel(modelId, agentId);
     case 'openai':
       return defaultOpenai(modelId);
     case 'anthropic':
