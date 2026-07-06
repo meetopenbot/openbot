@@ -71,7 +71,7 @@ plugins:
     config:
       model: openai/gpt-4o-mini
       approval:
-        actions: [action:bash, action:create_channel]
+        actions: [action:shell_exec, action:create_channel]
 ```
 
 A community plugin is just an npm package whose default export matches the
@@ -90,11 +90,11 @@ On first use OpenBot installs the package into
 
 ## Approval plugin
 
-The `approval` plugin gates protected tool calls behind a UI confirmation widget. By default, it gates `action:bash`.
+The `approval` plugin gates protected tool calls behind a UI confirmation widget. By default, it gates `action:shell_exec`.
 
 ```yaml
 plugins:
   - id: approval
     config:
-      actions: [action:bash]
+      actions: [action:shell_exec]
 ```

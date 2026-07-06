@@ -16,14 +16,14 @@ import { previewPlugin } from '../preview/index.js';
  * `agent:invoke`, manages short-term memory, assembles context, and
  * orchestrates tool calls.
  * 
- * It comes with a "batteries-included" set of inbuilt tools: bash, memory,
+ * It comes with a "batteries-included" set of inbuilt tools: shell, memory,
  * storage, delegation, and approval.
  */
 export const openbotPlugin: Plugin = {
   id: 'openbot',
   name: 'OpenBot Agent',
   description:
-    'The standard OpenBot agent runtime with inbuilt tools (bash, memory, storage, delegation, and approval).',
+    'The standard OpenBot agent runtime with inbuilt tools (shell, memory, storage, delegation, and approval).',
   configSchema: {
     type: 'object',
     properties: {
@@ -67,8 +67,7 @@ export const openbotPlugin: Plugin = {
     // Approval plugin configuration
     const approvalConfig = (config?.approval as any) || {
       actions: [
-        'action:bash',
-        'action:bash_start',
+        'action:shell_exec',
         'action:expose_port',
         'action:create_channel',
         'action:delete_channel',

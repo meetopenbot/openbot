@@ -13,7 +13,7 @@ const MAX_LOG_CHARS = 8_000;
 const previewToolDefinitions = {
   expose_port: {
     description:
-      'Expose a local dev server port via a temporary public Cloudflare quick tunnel. Returns a previewUrl stored on the channel. Dev servers must listen on 0.0.0.0 or 127.0.0.1. Call after bash_start when the server is ready.',
+      'Expose a local dev server port via a temporary public Cloudflare quick tunnel. Returns a previewUrl stored on the channel. Dev servers must listen on 0.0.0.0 or 127.0.0.1. Call after shell_exec when the server is ready.',
     inputSchema: z.object({
       port: z
         .number()

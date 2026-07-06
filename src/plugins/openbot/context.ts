@@ -55,6 +55,12 @@ export async function buildContext(state: OpenBotState, storage?: Storage): Prom
   }
   sections.push(env);
 
+  const threadState = threadDetails?.state as Record<string, unknown> | undefined;
+  const plan = threadState?.plan;
+  if (plan && typeof plan === 'object') {
+    sections.push(`## THREAD PLAN\n${JSON.stringify(plan, null, 2)}`);
+  }
+
   // 2.5 Installed Agents
   if (allAgents.length > 0) {
     const formatted = allAgents

@@ -28,7 +28,7 @@ plugins:
   - id: storage
   - id: approval
     config:
-      actions: [action:bash]
+      actions: [action:shell_exec]
 ---
 
 <!--

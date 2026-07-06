@@ -737,12 +737,12 @@ export type UIWidgetResponseEvent = BaseEvent & {
   };
 };
 
-export type BashEvent = BaseEvent & {
-  type: 'action:bash';
+export type ShellExecEvent = BaseEvent & {
+  type: 'action:shell_exec';
   data: {
+    id: string;
+    exec_dir: string;
     command: string;
-    cwd?: string;
-    timeoutMs?: number;
   };
   meta?: {
     toolCallId?: string;
@@ -752,88 +752,77 @@ export type BashEvent = BaseEvent & {
   };
 };
 
-export type BashResultEvent = BaseEvent & {
-  type: 'action:bash:result';
+export type ShellExecResultEvent = BaseEvent & {
+  type: 'action:shell_exec:result';
   data: {
     success: boolean;
     approved?: boolean;
-    exitCode: number | null;
-    stdout: string;
-    stderr: string;
-    timedOut: boolean;
+    exitCode?: number;
     error?: string;
     output?: string;
   };
 };
 
-export type BashStartEvent = BaseEvent & {
-  type: 'action:bash_start';
+export type ShellViewEvent = BaseEvent & {
+  type: 'action:shell_view';
   data: {
-    command: string;
-    cwd?: string;
-  };
-  meta?: {
-    toolCallId?: string;
-    approvalId?: string;
-    approvalStatus?: 'approved' | 'denied';
-    [key: string]: any;
+    id: string;
   };
 };
 
-export type BashStartResultEvent = BaseEvent & {
-  type: 'action:bash_start:result';
+export type ShellViewResultEvent = BaseEvent & {
+  type: 'action:shell_view:result';
   data: {
     success: boolean;
-    jobId?: string;
-    pid?: number | null;
-    command?: string;
-    cwd?: string;
-    error?: string;
     output?: string;
   };
 };
 
-export type BashStopEvent = BaseEvent & {
-  type: 'action:bash_stop';
+export type ShellWaitEvent = BaseEvent & {
+  type: 'action:shell_wait';
   data: {
-    jobId?: string;
-    channelId?: string;
+    id: string;
+    seconds: number;
   };
 };
 
-export type BashStopResultEvent = BaseEvent & {
-  type: 'action:bash_stop:result';
+export type ShellWaitResultEvent = BaseEvent & {
+  type: 'action:shell_wait:result';
   data: {
     success: boolean;
-    stopped?: number;
+    waitedSeconds?: number;
     output?: string;
   };
 };
 
-export type BashListJobsEvent = BaseEvent & {
-  type: 'action:bash_list_jobs';
+export type ShellWriteToProcessEvent = BaseEvent & {
+  type: 'action:shell_write_to_process';
   data: {
-    channelId?: string;
+    id: string;
+    input: string;
+    press_enter: boolean;
   };
 };
 
-export type BashJobSummary = {
-  id: string;
-  channelId: string;
-  command: string;
-  cwd: string;
-  pid: number | null;
-  startedAt: number;
-  status: 'running' | 'exited';
-  exitCode: number | null;
-  logTail: string;
-};
-
-export type BashListJobsResultEvent = BaseEvent & {
-  type: 'action:bash_list_jobs:result';
+export type ShellWriteToProcessResultEvent = BaseEvent & {
+  type: 'action:shell_write_to_process:result';
   data: {
     success: boolean;
-    jobs: BashJobSummary[];
+    output?: string;
+  };
+};
+
+export type ShellKillProcessEvent = BaseEvent & {
+  type: 'action:shell_kill_process';
+  data: {
+    id: string;
+  };
+};
+
+export type ShellKillProcessResultEvent = BaseEvent & {
+  type: 'action:shell_kill_process:result';
+  data: {
+    success: boolean;
     output?: string;
   };
 };
@@ -1182,14 +1171,16 @@ export type OpenBotEvent =
   | DeleteChannelToolResultEvent
   | UIWidgetEvent
   | UIWidgetResponseEvent
-  | BashEvent
-  | BashResultEvent
-  | BashStartEvent
-  | BashStartResultEvent
-  | BashStopEvent
-  | BashStopResultEvent
-  | BashListJobsEvent
-  | BashListJobsResultEvent
+  | ShellExecEvent
+  | ShellExecResultEvent
+  | ShellViewEvent
+  | ShellViewResultEvent
+  | ShellWaitEvent
+  | ShellWaitResultEvent
+  | ShellWriteToProcessEvent
+  | ShellWriteToProcessResultEvent
+  | ShellKillProcessEvent
+  | ShellKillProcessResultEvent
   | ExposePortEvent
   | ExposePortResultEvent
   | UnexposePortEvent

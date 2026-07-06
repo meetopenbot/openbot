@@ -126,7 +126,7 @@ const SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
     config: {
       model: 'openai/gpt-5.4-mini',
       approval: {
-        actions: ['action:bash', 'action:bash_start', 'action:create_channel', 'action:delete_channel'],
+        actions: ['action:shell_exec', 'action:create_channel', 'action:delete_channel'],
       },
     },
   },
@@ -138,7 +138,7 @@ const CLOUD_SYSTEM_DEFAULT_PLUGINS: PluginRef[] = [
     config: {
       model: CLOUD_SYSTEM_MODEL,
       approval: {
-        actions: ['action:bash', 'action:bash_start', 'action:create_channel', 'action:delete_channel'],
+        actions: ['action:shell_exec', 'action:create_channel', 'action:delete_channel'],
       },
     },
   },

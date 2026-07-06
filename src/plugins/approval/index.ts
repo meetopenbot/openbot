@@ -19,7 +19,7 @@ export const approvalPlugin: Plugin = {
   description: 'Gate protected tool calls behind a UI confirmation widget.',
   factory: ({ config, storage }) => (builder) => {
     // Actions that require approval. Defaults to bash.
-    const actionsToApprove = (config.actions as string[]) || ['action:bash'];
+    const actionsToApprove = (config.actions as string[]) || ['action:shell_exec'];
 
     for (const action of actionsToApprove) {
       builder.intercept(action as OpenBotEvent['type'], (event, context) => {

@@ -56,12 +56,13 @@ const storageToolDefinitions = {
       ),
   },
   patch_thread_details: {
-    description: 'Patch current thread details (state).',
+    description:
+      'Patch current thread details (state). Use for thread metadata and task planning (e.g. `plan` with objective, currentStep, and steps).',
     inputSchema: z.object({
       state: z
         .record(z.string(), z.unknown())
         .describe(
-          'JSON state object for the thread. Use for structured progress or metadata.',
+          'JSON state object for the thread. Merges with existing state. Use `plan` for multi-step task tracking.',
         ),
     }),
   },
