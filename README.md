@@ -12,23 +12,6 @@
   <a href="https://github.com/meetopenbot/openbot/blob/main/LICENSE"><img src="https://img.shields.io/github/license/meetopenbot/openbot" alt="license" /></a>
 </p>
 
-## Archive notice
-
-**OpenBot is no longer open source.** This repository is archived and read-only.
-
-It preserves the **final MIT release** — a minimal, self-hosted edition you can still run locally. All active development (orchestration, cloud, plugins, and product features) continues **in private**.
-
-| | |
-|---|---|
-| **Last open release** | `v0.5.3` (MIT) |
-| **What’s in this repo** | Local server, event API, basic agent runtime, channel/thread storage |
-| **What’s not here** | Shell tools, delegation, memory, marketplace, cloud deploy, and other platform features |
-| **Contributions** | Not accepted on this repo |
-
-If you need the full product, visit **[openbot.one](https://openbot.one)**.
-
----
-
 OpenBot is a local-first harness for running AI agents. It exposes a small event API, local file storage, and a Melony-powered runtime.
 
 ## What it does
