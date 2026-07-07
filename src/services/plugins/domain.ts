@@ -1,6 +1,5 @@
 import type { OpenBotEvent } from '../../app/types.js';
 import type { PluginRef } from './types.js';
-import type { MemoryRecord, ListMemoriesArgs } from '../../plugins/memory/service.js';
 
 /**
  * Public data types exposed by the OpenBot platform.
@@ -113,21 +112,12 @@ export type ChannelDetails = {
 
 export interface Storage {
   getChannels: () => Promise<Channel[]>;
-  createChannel: (args: {
-    channelId: string;
-    spec?: string;
-    initialState?: Record<string, unknown>;
-    cwd?: string;
-  }) => Promise<void>;
-  /** Idempotent channel setup; repairs partial dirs missing cwd/state. */
   ensureChannel: (args: {
     channelId: string;
     spec?: string;
     initialState?: Record<string, unknown>;
     cwd?: string;
   }) => Promise<void>;
-  /** Removes the channel directory and cleans up `_meta/last-read.json`. */
-  deleteChannel: (args: { channelId: string }) => Promise<void>;
   createThread: (args: {
     channelId: string;
     threadId: string;
@@ -137,35 +127,9 @@ export interface Storage {
   getThreads: (args: { channelId: string }) => Promise<Thread[]>;
   getThreadDetails: (args: { channelId: string; threadId: string }) => Promise<ThreadDetails>;
   setLastRead: (args: { channelId: string; threadId?: string; lastReadEventId: string }) => Promise<void>;
-  /** User-facing agent list; excludes agents with `hidden: true` (e.g. built-in `state`). */
   getAgents: () => Promise<Agent[]>;
   getPlugins: () => Promise<PluginDescriptor[]>;
   getAgentDetails: (args: { agentId: string }) => Promise<AgentDetails>;
-  /** Includes built-in `system` / `state` agents as optional AGENT.md overlays. */
-  createAgent: (args: {
-    agentId: string;
-    name: string;
-    description?: string;
-    /** Avatar/logo URL or data URI; persisted in AGENT.md frontmatter. */
-    image?: string;
-    /** When true, agent is omitted from `getAgents` / `action:storage:get-agents`. */
-    hidden?: boolean;
-    instructions: string;
-    plugins: PluginRef[];
-  }) => Promise<void>;
-  /** Partial update; for `system` / `state`, creates overlay file if missing. */
-  updateAgent: (args: {
-    agentId: string;
-    name?: string;
-    description?: string;
-    /** Omit to leave unchanged; empty string removes stored image. */
-    image?: string;
-    hidden?: boolean;
-    instructions?: string;
-    plugins?: PluginRef[];
-  }) => Promise<void>;
-  /** For `system` / `state`, removes only `AGENT.md` (reverts to code defaults). */
-  deleteAgent: (args: { agentId: string }) => Promise<void>;
   getEvents: (args: { channelId: string; threadId?: string }) => Promise<OpenBotEvent[]>;
   storeEvent: (args: {
     channelId: string;
@@ -180,46 +144,4 @@ export interface Storage {
     state: unknown;
   }) => Promise<void>;
   patchChannelSpec: (args: { channelId: string; spec: string }) => Promise<void>;
-  getVariables: () => Promise<Record<string, string | { value: string; secret: boolean }>>;
-  createVariable: (args: { key: string; value: string; secret?: boolean }) => Promise<void>;
-  deleteVariable: (args: { key: string }) => Promise<void>;
-  listFiles: (args: {
-    channelId: string;
-    path?: string;
-  }) => Promise<Array<{ name: string; isDirectory: boolean }>>;
-  readFile: (args: { channelId: string; path: string }) => Promise<string>;
-  readChannelFile: (args: {
-    channelId: string;
-    path: string;
-    encoding?: 'utf8' | 'base64';
-  }) => Promise<{ content: string; mimeType: string; size: number }>;
-  writeChannelFile: (args: {
-    channelId: string;
-    path: string;
-    content: string;
-    encoding?: 'utf8' | 'base64';
-    overwrite?: boolean;
-  }) => Promise<{ path: string; size: number; mimeType: string }>;
-  uploadChannelFile: (args: {
-    channelId: string;
-    path: string;
-    body: Buffer;
-    overwrite?: boolean;
-  }) => Promise<{ path: string; size: number; mimeType: string }>;
-  getChannelFileStat: (args: {
-    channelId: string;
-    path: string;
-  }) => Promise<{ abs: string; size: number; mimeType: string }>;
-  /** Persist a memory record into the global memory log. */
-  appendMemory: (args: {
-    scope: string;
-    content: string;
-    tags?: string[];
-  }) => Promise<MemoryRecord>;
-  /** Read memories matching the given filter. */
-  listMemories: (args?: ListMemoriesArgs) => Promise<MemoryRecord[]>;
-  /** Soft-delete a memory by id. Returns true if a record was deleted. */
-  deleteMemory: (args: { id: string }) => Promise<boolean>;
-  /** Update a memory's content/tags by id. Returns true if a record was updated. */
-  updateMemory: (args: { id: string; content?: string; tags?: string[] }) => Promise<boolean>;
 }

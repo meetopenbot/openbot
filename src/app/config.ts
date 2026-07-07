@@ -11,19 +11,8 @@ export interface OpenBotconfig {
   /** Parent directory for per-channel working directories (user-facing workspace). */
   channelsWorkspaceDir?: string;
   port?: number;
-  /**
-   * Overrides the default public marketplace registry URL. If omitted or blank,
-   * {@link DEFAULT_MARKETPLACE_REGISTRY_URL} is used.
-   */
-  marketplaceRegistryUrl?: string;
   /** Public base URL for workspace file links (e.g. https://my-host.example). Falls back to OPENBOT_PUBLIC_URL env or http://localhost:{port}. */
   publicUrl?: string;
-}
-
-export interface StoredVariable {
-  key: string;
-  value: string;
-  secret: boolean;
 }
 
 export const DEFAULT_BASE_DIR = '~/.openbot';
@@ -33,11 +22,6 @@ export const DEFAULT_PLUGINS_DIR = 'plugins';
 export const DEFAULT_AGENTS_DIR = 'agents';
 export const DEFAULT_CHANNELS_DIR = 'channels';
 export const CONFIG_FILE = 'config.json';
-export const VARIABLES_FILE = 'variables.json';
-
-/** Public agent registry used when `marketplaceRegistryUrl` is not set. */
-export const DEFAULT_MARKETPLACE_REGISTRY_URL =
-  'https://raw.githubusercontent.com/meetopenbot/openbot-registry/main/registry.json';
 
 export function resolvePath(p: string) {
   return p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : path.resolve(p);
@@ -64,7 +48,7 @@ export function getConfigDir(): string {
   return path.join(os.homedir(), '.openbot');
 }
 
-/** Resolved OpenBot data root (agents, channels, plugins, variables). */
+/** Resolved OpenBot data root (agents, channels, plugins). */
 export function getBaseDir(): string {
   const envBase = process.env.OPENBOT_BASE_DIR?.trim();
   if (envBase) {
@@ -135,15 +119,4 @@ export function saveConfig(config: Partial<OpenBotconfig>) {
 
 export function isConfigured(): boolean {
   return fs.existsSync(path.join(getConfigDir(), CONFIG_FILE));
-}
-
-export function loadVariables(): { version: number; variables: StoredVariable[] } {
-  const variablesPath = path.join(getBaseDir(), VARIABLES_FILE);
-  if (fs.existsSync(variablesPath)) {
-    return JSON.parse(fs.readFileSync(variablesPath, 'utf-8')) as {
-      version: number;
-      variables: StoredVariable[];
-    };
-  }
-  return { version: 1, variables: [] };
 }

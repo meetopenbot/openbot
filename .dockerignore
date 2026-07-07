@@ -1,9 +1,0 @@
-node_modules
-dist
-.git
-.jules
-.pnpm-store
-*.md
-!deploy/*.md
-.env
-.env.*

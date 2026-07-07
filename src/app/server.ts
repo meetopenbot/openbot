@@ -9,17 +9,11 @@ const require = createRequire(import.meta.url);
 const pkg = require('../../package.json');
 import { generateId } from 'melony';
 import { getBaseDir, loadConfig } from '../app/config.js';
-import { isCloudMode, getCloudIntegrationsConfig } from './cloud-mode.js';
 import { ActiveRunsSnapshotEvent, OpenBotEvent, OpenBotState } from './types.js';
-import { processService } from '../services/process.js';
 import { runAgent, STATE_AGENT_ID, ORCHESTRATOR_AGENT_ID } from '../harness/index.js';
 import { initPlugins } from '../services/plugins/registry.js';
 import { storageService } from '../plugins/storage/service.js';
-import {
-  buildWorkspaceFileUrl,
-  getPublicBaseUrl,
-  openChannelFileStream,
-} from '../plugins/storage/files.js';
+import { getPublicBaseUrl } from '../plugins/storage/files.js';
 import { ensureEventId, openBotEventFromQuery } from './utils.js';
 import { abortRegistry, abortKey } from '../services/abort.js';
 import { resolvePublishTargetAgentId, resolveRespondingAgentId } from './responding-agent.js';
@@ -45,14 +39,6 @@ export async function startServer(options: ServerOptions = {}) {
     .passthrough();
 
   const config = loadConfig();
-  processService.syncWorkspaceVariablesToProcessEnv();
-
-  if (isCloudMode()) {
-    const integrations = getCloudIntegrationsConfig();
-    console.log(
-      `[server] Cloud mode enabled${integrations ? '' : ' (integrations proxy env not set)'}`,
-    );
-  }
 
   const openBotDir = getBaseDir();
   const PORT = Number(options.port ?? config.port ?? process.env.PORT ?? 4132);
@@ -273,19 +259,7 @@ export async function startServer(options: ServerOptions = {}) {
 
   const resolvePublicBaseUrl = () => getPublicBaseUrl(PORT, config.publicUrl);
 
-  app.use((req, res, next) => {
-    const isWorkspaceUpload =
-      req.method === 'POST' &&
-      req.path === '/api/publish' &&
-      req.get('x-openbot-event-type') === 'action:storage:upload-file';
-
-    if (isWorkspaceUpload) {
-      express.raw({ type: () => true, limit: '100mb' })(req, res, next);
-      return;
-    }
-
-    express.json({ limit: '20mb' })(req, res, next);
-  });
+  app.use(express.json({ limit: '20mb' }));
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', version: pkg.version, apiVersion: 1 });
@@ -359,57 +333,6 @@ export async function startServer(options: ServerOptions = {}) {
   });
 
   app.post('/api/publish', async (req, res) => {
-    if (req.get('x-openbot-event-type') === 'action:storage:upload-file') {
-      const channelId =
-        req.get('x-openbot-channel-id') ||
-        (typeof req.query.channelId === 'string' ? req.query.channelId : undefined);
-      const filePath = req.get('x-openbot-file-path');
-      const overwrite = req.get('x-openbot-file-overwrite') === 'true';
-
-      if (!channelId?.trim()) {
-        res.status(400).json({ error: 'channelId is required' });
-        return;
-      }
-      if (!filePath?.trim()) {
-        res.status(400).json({ error: 'x-openbot-file-path header is required' });
-        return;
-      }
-
-      const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-      if (body.length === 0) {
-        res.status(400).json({ error: 'Request body is empty' });
-        return;
-      }
-
-      try {
-        const result = await storageService.uploadChannelFile({
-          channelId: channelId.trim(),
-          path: filePath.trim(),
-          body,
-          overwrite,
-        });
-        const url = buildWorkspaceFileUrl({
-          baseUrl: resolvePublicBaseUrl(),
-          channelId: channelId.trim(),
-          filePath: result.path,
-        });
-        res.json({
-          type: 'action:storage:upload-file:result',
-          data: { success: true, ...result, url },
-        });
-      } catch (error) {
-        res.status(400).json({
-          type: 'action:storage:upload-file:result',
-          data: {
-            success: false,
-            path: filePath,
-            error: error instanceof Error ? error.message : 'Upload failed',
-          },
-        });
-      }
-      return;
-    }
-
     const parseResult = publishEventSchema.safeParse(req.body);
     if (!parseResult.success) {
       res.status(400).json({
@@ -428,61 +351,7 @@ export async function startServer(options: ServerOptions = {}) {
       return;
     }
 
-    if (event.type === 'action:storage:write-file') {
-      const data = (event.data ?? {}) as {
-        path?: string;
-        content?: string;
-        encoding?: 'utf8' | 'base64';
-        overwrite?: boolean;
-      };
-
-      if (!data.path?.trim()) {
-        res.status(400).json({
-          type: 'action:storage:write-file:result',
-          data: { success: false, path: '', error: 'path is required' },
-        });
-        return;
-      }
-      if (typeof data.content !== 'string') {
-        res.status(400).json({
-          type: 'action:storage:write-file:result',
-          data: { success: false, path: data.path, error: 'content is required' },
-        });
-        return;
-      }
-
-      try {
-        const result = await storageService.writeChannelFile({
-          channelId,
-          path: data.path.trim(),
-          content: data.content,
-          encoding: data.encoding ?? 'utf8',
-          overwrite: data.overwrite ?? false,
-        });
-        const url = buildWorkspaceFileUrl({
-          baseUrl: resolvePublicBaseUrl(),
-          channelId,
-          filePath: result.path,
-        });
-        res.json({
-          type: 'action:storage:write-file:result',
-          data: { success: true, ...result, url },
-        });
-      } catch (error) {
-        res.status(400).json({
-          type: 'action:storage:write-file:result',
-          data: {
-            success: false,
-            path: data.path,
-            error: error instanceof Error ? error.message : 'Write failed',
-          },
-        });
-      }
-      return;
-    }
-
-    // Stop request: cancel the in-flight run (and any delegated sub-agents in the
-    // same thread) instead of spinning up a new agent turn.
+    // Stop request: cancel the in-flight run
     if (event.type === 'action:agent_run_stop') {
       const data = (event.data ?? {}) as {
         runId?: string;
@@ -651,34 +520,6 @@ export async function startServer(options: ServerOptions = {}) {
       const snapshot = buildActiveRunsSnapshot();
       ensureEventId(snapshot);
       res.json({ events: [snapshot] });
-      return;
-    }
-
-    if (event.type === 'action:storage:serve-file') {
-      const filePath = (event.data as { path?: string })?.path;
-      if (!channelId?.trim()) {
-        res.status(400).json({ error: 'channelId is required' });
-        return;
-      }
-      if (!filePath?.trim()) {
-        res.status(400).json({ error: 'path is required' });
-        return;
-      }
-
-      try {
-        const { abs, size, mimeType } = await storageService.getChannelFileStat({
-          channelId,
-          path: filePath.trim(),
-        });
-        res.setHeader('Content-Type', mimeType);
-        res.setHeader('Content-Length', String(size));
-        res.setHeader('Cache-Control', 'private, max-age=3600');
-        openChannelFileStream(abs).pipe(res);
-      } catch (error) {
-        res.status(404).json({
-          error: error instanceof Error ? error.message : 'File not found',
-        });
-      }
       return;
     }
 

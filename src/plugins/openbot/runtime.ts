@@ -6,7 +6,6 @@ import { Storage } from '../../services/plugins/domain.js';
 import type { ToolDefinition } from '../../services/plugins/types.js';
 import { buildContext } from './context.js';
 import { saveConfig } from '../../app/config.js';
-import { isCloudSystemAgent } from '../../app/cloud-mode.js';
 import { OPENBOT_SYSTEM_PROMPT } from './system-prompt.js';
 import { resolveModel } from './model.js';
 import {
@@ -114,7 +113,7 @@ export const openbotRuntime =
       } = options;
 
       let currentModelString = modelString;
-      let model = resolveModel(currentModelString, agentId);
+      let model = resolveModel(currentModelString);
 
       const runLLM = async function* (
         context: RuntimeContext<OpenBotState, OpenBotEvent>,
@@ -232,7 +231,7 @@ export const openbotRuntime =
             errorMessage.includes('Unauthorized') ||
             errorMessage.includes('authentication');
 
-          if (isApiKeyError && !isCloudSystemAgent(context.state.agentId)) {
+          if (isApiKeyError) {
             const registry = await resolveModelRegistry();
             const providerActions = listApiKeyProvidersFromRegistry(registry).map((provider) => ({
               id: provider.id,
@@ -321,8 +320,6 @@ export const openbotRuntime =
       builder.on('client:ui:widget:response', async function* (event, context) {
         const { metadata, values, actionId } = event.data;
         const threadId = event.meta?.threadId || context.state.threadId;
-
-        if (isCloudSystemAgent(context.state.agentId)) return;
 
         if (metadata?.type === 'api_provider_selection') {
           const provider = actionId;
@@ -436,69 +433,38 @@ export const openbotRuntime =
               : 'GOOGLE_GENERATIVE_AI_API_KEY';
         const newModelString = `${provider}/${modelId}`;
 
-        if (!storage) return;
+        process.env[envVar] = apiKey;
+        currentModelString = newModelString;
+        model = resolveModel(currentModelString);
         try {
-          await storage.createVariable({ key: envVar, value: apiKey, secret: true });
-          process.env[envVar] = apiKey;
-
-          currentModelString = newModelString;
-          model = resolveModel(currentModelString, agentId);
-          try {
-            saveConfig({ model: currentModelString });
-
-            // Also update the agent's AGENT.md if it has an openbot plugin config
-            const details = await storage.getAgentDetails({ agentId: context.state.agentId });
-            const updatedPlugins = details.pluginRefs.map((ref) => {
-              if (ref.id === 'openbot') {
-                return {
-                  ...ref,
-                  config: { ...ref.config, model: currentModelString },
-                };
-              }
-              return ref;
-            });
-
-            await storage.updateAgent({
-              agentId: context.state.agentId,
-              plugins: updatedPlugins,
-            });
-          } catch {
-            // best-effort: config persistence failure shouldn't block the conversation
-          }
-
-          yield {
-            type: 'agent:output',
-            data: {
-              content: `Saved ${provider} API key and set model to \`${newModelString}\`.`,
-            },
-            meta: { agentId: context.state.agentId },
-          };
-
-          yield {
-            type: 'client:ui:widget',
-            data: {
-              widgetId: event.data.widgetId,
-              kind: 'message',
-              title: 'API Key Saved',
-              body: `Successfully saved ${provider} API key and selected model \`${newModelString}\`. You can now continue your conversation.`,
-              state: 'submitted',
-              display: 'collapsed',
-              disabled: true,
-              actions: [],
-            },
-            meta: { agentId: context.state.agentId },
-          };
-
-          yield* runLLM(context, threadId);
-        } catch (error) {
-          yield {
-            type: 'agent:output',
-            data: {
-              content: `Failed to save API key: ${error instanceof Error ? error.message : 'Unknown error'
-                }`,
-            },
-            meta: { agentId: context.state.agentId },
-          };
+          saveConfig({ model: currentModelString });
+        } catch {
+          // best-effort
         }
+
+        yield {
+          type: 'agent:output',
+          data: {
+            content: `Set ${provider} API key for this session and model to \`${newModelString}\`.`,
+          },
+          meta: { agentId: context.state.agentId },
+        };
+
+        yield {
+          type: 'client:ui:widget',
+          data: {
+            widgetId: event.data.widgetId,
+            kind: 'message',
+            title: 'API Key Set',
+            body: `API key applied for this server session. Model: \`${newModelString}\`.`,
+            state: 'submitted',
+            display: 'collapsed',
+            disabled: true,
+            actions: [],
+          },
+          meta: { agentId: context.state.agentId },
+        };
+
+        yield* runLLM(context, threadId);
       });
     };

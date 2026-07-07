@@ -8,7 +8,15 @@ import {
   ThreadDetails,
 } from '../services/plugins/domain.js';
 import type { PluginRef } from '../services/plugins/types.js';
-import type { MemoryRecord } from '../plugins/memory/service.js';
+
+export interface MemoryRecord {
+  id: string;
+  scope: string;
+  content: string;
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface OpenBotState {
   agentId: string;

@@ -12,19 +12,35 @@
   <a href="https://github.com/meetopenbot/openbot/blob/main/LICENSE"><img src="https://img.shields.io/github/license/meetopenbot/openbot" alt="license" /></a>
 </p>
 
-OpenBot is a local-first harness for running AI agents. It is built around a small event API, local file storage, and a Melony-powered runtime that routes events to agents and plugins.
+## Archive notice
 
-## What It Does
+**OpenBot is no longer open source.** This repository is archived and read-only.
 
-- Runs a local agent server.
-- Stores channels, threads, agents, plugins, config, and variables under `~/.openbot`.
-- Ships with a built-in `system` agent named OpenBot (orchestrator, includes the LLM runtime).
-- Ships with a built-in `state` agent for deterministic, non-LLM handling (e.g. `/api/state` defaults).
+It preserves the **final MIT release** — a minimal, self-hosted edition you can still run locally. All active development (orchestration, cloud, plugins, and product features) continues **in private**.
+
+| | |
+|---|---|
+| **Last open release** | `v0.5.3` (MIT) |
+| **What’s in this repo** | Local server, event API, basic agent runtime, channel/thread storage |
+| **What’s not here** | Shell tools, delegation, memory, marketplace, cloud deploy, and other platform features |
+| **Contributions** | Not accepted on this repo |
+
+If you need the full product, visit **[openbot.one](https://openbot.one)**.
+
+---
+
+OpenBot is a local-first harness for running AI agents. It exposes a small event API, local file storage, and a Melony-powered runtime.
+
+## What it does
+
+- Runs a local agent server on port `4132` by default.
+- Stores channels, threads, agents, plugins, and config under `~/.openbot`.
+- Ships with a built-in `system` agent (LLM runtime + storage tools).
+- Ships with a built-in `state` agent for deterministic storage reads (no LLM).
 - Loads custom agents from `~/.openbot/agents/<agent-id>/AGENT.md`.
-- Loads shared plugins from `~/.openbot/plugins`.
 - Streams events to clients with Server-Sent Events.
 
-## Quick Start
+## Quick start
 
 Requires Node.js `>=20.12.0`.
 
@@ -33,28 +49,25 @@ npm i -g openbot
 openbot start
 ```
 
-The server listens on `http://localhost:4132` by default. Set a different port with:
-
-```bash
-openbot start --port 3000
-```
-
-For local development:
+Local development:
 
 ```bash
 npm install
 npm run dev
 ```
 
+Set an API key before starting (example for OpenAI):
+
+```bash
+export OPENAI_API_KEY=sk-...
+openbot start
+```
+
 ## API
 
-OpenBot intentionally keeps the public API small:
-
-- `GET /api/events` opens an SSE stream for a channel or thread.
-- `POST /api/publish` publishes an event into the harness (defaults to the built-in `system` agent with the OpenBot / LLM runtime).
-- `GET /api/state` runs an event and returns the resulting events without opening a stream (defaults to the built-in `state` agent: storage-oriented plugins, no LLM).
-
-You can override the agent with `agentId` (header, query, or body where applicable).
+- `GET /api/events` — SSE stream for a channel or thread.
+- `POST /api/publish` — publish an event (defaults to the `system` agent).
+- `GET /api/state` — run an event and return resulting events (defaults to the `state` agent).
 
 Example:
 
@@ -64,35 +77,24 @@ curl -X POST http://localhost:4132/api/publish \
   -d '{"type":"agent:invoke","data":{"role":"user","content":"hello"}}'
 ```
 
-Useful context can be passed as headers, query params, or body fields:
+Context headers/fields: `channelId`, `threadId`, `agentId`, `runId`.
 
-- `channelId`
-- `threadId`
-- `agentId`
-- `runId`
+## Built-in plugins (this edition)
 
-## Configuration
+| Plugin    | Role                                 |
+|-----------|--------------------------------------|
+| `openbot` | LLM agent runtime with storage tools |
+| `storage` | Channel/thread persistence           |
+| `ui`      | Interactive UI widgets               |
 
-OpenBot reads config from `~/.openbot/config.json`.
+## Custom agents
 
-```json
-{
-  "port": 4132,
-  "baseDir": "~/.openbot",
-  "model": "openai/gpt-4o-mini"
-}
-```
-
-Variables are read from `~/.openbot/variables.json` and applied to the server process environment on startup.
-
-## Agents
-
-The built-in `system` agent is always available. Add a custom agent by creating `~/.openbot/agents/<agent-id>/AGENT.md`:
+Create `~/.openbot/agents/<agent-id>/AGENT.md`:
 
 ```markdown
 ---
-name: Researcher
-description: Helps collect and summarize information.
+name: Assistant
+description: A helpful local assistant.
 plugins:
   - id: openbot
     config:
@@ -100,35 +102,9 @@ plugins:
   - id: storage
 ---
 
-You are a careful research assistant.
-Summarize findings clearly and cite sources when available.
+You are a careful assistant. Be concise and clear.
 ```
 
-Agents are discovered from disk when the server starts.
+## License
 
-## Plugins
-
-Built-in plugins include:
-
-- `storage-tools`
-- `delegation`
-- `openbot`
-
-Shared plugins can be placed in `~/.openbot/plugins` and referenced by agents.
-
-## Project Layout
-
-- `src/app`: CLI, server, event types, and app config.
-- `src/harness`: orchestration and process helpers.
-- `src/plugins`: built-in plugin implementations.
-- `src/services`: local storage service.
-- `src/registry`: plugin registry.
-- `docs`: architecture, agents, and plugin notes.
-
-## Learn More
-
-- [Architecture](./docs/architecture.md)
-- [Agents](./docs/agents.md)
-- [Plugins](./docs/plugins.md)
-
-Need help or want to share feedback? Join the community on Discord: https://discord.gg/XYYXvN2ebB
+[MIT](./LICENSE) — applies to this repository through release **v0.5.3**. Code released under MIT before this archive remains MIT; newer work is not published here.

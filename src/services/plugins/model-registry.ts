@@ -1,8 +1,3 @@
-import {
-  DEFAULT_MARKETPLACE_REGISTRY_URL,
-  loadConfig,
-} from '../../app/config.js';
-import { isCloudMode } from '../../app/cloud-mode.js';
 import type { ConfigSchema, PluginDescriptor } from './domain.js';
 
 export type RegistryProviderCatalog = Record<
@@ -24,36 +19,46 @@ export type RegistryModelOption = {
   provider: string;
 };
 
-let cachedRegistry: ModelRegistry | null = null;
-let cacheUrl: string | null = null;
-
-function getRegistryUrl(): string {
-  const { marketplaceRegistryUrl } = loadConfig();
-  return marketplaceRegistryUrl?.trim() || DEFAULT_MARKETPLACE_REGISTRY_URL;
-}
+const STATIC_PROVIDERS: RegistryProviderCatalog = {
+  openai: {
+    label: 'OpenAI',
+    models: [
+      {
+        id: 'gpt-4o-mini',
+        label: 'GPT-4o Mini',
+        description: 'Fast, cost-effective model',
+      },
+      {
+        id: 'gpt-4o',
+        label: 'GPT-4o',
+        description: 'Capable multimodal model',
+      },
+    ],
+  },
+  anthropic: {
+    label: 'Anthropic',
+    models: [
+      {
+        id: 'claude-3-5-sonnet-latest',
+        label: 'Claude 3.5 Sonnet',
+        description: 'Balanced performance',
+      },
+    ],
+  },
+  google: {
+    label: 'Google',
+    models: [
+      {
+        id: 'gemini-2.0-flash',
+        label: 'Gemini 2.0 Flash',
+        description: 'Fast Google model',
+      },
+    ],
+  },
+};
 
 export async function resolveModelRegistry(): Promise<ModelRegistry> {
-  const url = getRegistryUrl();
-  if (cachedRegistry && cacheUrl === url) return cachedRegistry;
-
-  try {
-    const res = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) {
-      throw new Error(`Registry HTTP ${res.status} ${res.statusText}`);
-    }
-    cachedRegistry = (await res.json()) as ModelRegistry;
-    cacheUrl = url;
-    return cachedRegistry;
-  } catch (err) {
-    console.warn(
-      '[model-registry] fetch failed:',
-      err instanceof Error ? err.message : err,
-    );
-    return { providers: {} };
-  }
+  return { providers: STATIC_PROVIDERS };
 }
 
 export function listModelOptionsFromRegistry(registry: ModelRegistry): RegistryModelOption[] {
@@ -92,10 +97,7 @@ export function listApiKeyProvidersFromRegistry(
 function pickDefaultModelValue(options: RegistryModelOption[]): string | undefined {
   if (options.length === 0) return undefined;
   const values = options.map((option) => option.value);
-  const preferred = isCloudMode()
-    ? values.find((value) => value.startsWith('openbot/'))
-    : values.find((value) => value.startsWith('openai/'));
-  return preferred ?? values[0];
+  return values.find((value) => value.startsWith('openai/')) ?? values[0];
 }
 
 export function enrichOpenbotPluginDescriptor(
@@ -117,7 +119,7 @@ export function enrichOpenbotPluginDescriptor(
 
   const nextModelProperty: ConfigSchema['properties'][string] = {
     ...modelProperty,
-    description: 'Model from the hosted marketplace registry.',
+    description: 'Model in provider/model-id format.',
   };
 
   if (values.length > 0) {
